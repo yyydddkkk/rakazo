@@ -293,48 +293,25 @@ describe("loadEnv", () => {
   });
 });
 
-describe("OIDC environment", () => {
-  const oidc = {
-    OIDC_ISSUER: "https://identity.example.test",
-    OIDC_CLIENT_ID: "fake-client",
-    OIDC_CLIENT_SECRET: "fake-secret",
-  };
-  it("requires all credentials and an HTTPS issuer", () => {
-    for (const [key, value] of Object.entries(oidc))
-      expect(() => loadEnv({ ...base, [key]: value })).toThrow(/configured together/);
-    expect(() =>
-      loadEnv({ ...base, ...oidc, OIDC_ISSUER: "http://identity.example.test" }),
-    ).toThrow(/HTTPS/);
+describe("administrator credentials", () => {
+  it("allows existing installations to omit bootstrap credentials", () => {
+    expect(loadEnv(base)).toMatchObject({ adminEmail: undefined, adminPassword: undefined });
   });
-  it.each(["identity.example.test", "/issuer", "https://"])(
-    "reports invalid issuer %s as a configuration error",
-    (issuer) => {
-      expect(() => loadEnv({ ...base, ...oidc, OIDC_ISSUER: issuer })).toThrow(
-        "OIDC_ISSUER must be an HTTPS issuer URL",
-      );
-    },
-  );
-  it("guards password-only lockout without contacting discovery", () => {
-    expect(() => loadEnv({ ...base, AUTH_PASSWORD_ENABLED: "false" })).toThrow(/requires OIDC/);
-    expect(loadEnv({ ...base, ...oidc, AUTH_PASSWORD_ENABLED: "false" }).passwordAuth).toBe(false);
+  it("reads credentials without changing password whitespace", () => {
+    expect(
+      loadEnv({
+        ...base,
+        RAKAZO_ADMIN_EMAIL: " admin@example.test ",
+        RAKAZO_ADMIN_PASSWORD: " password-with-spaces ",
+      }),
+    ).toMatchObject({ adminEmail: "admin@example.test", adminPassword: " password-with-spaces " });
   });
-  it("leaves the breached password check off unless explicitly enabled", () => {
-    expect(loadEnv(base).breachedPasswordCheck).toBe(false);
+  it("validates the opt-in breach check", () => {
+    expect(() => loadEnv({ ...base, AUTH_BREACHED_PASSWORD_CHECK_ENABLED: "invalid" })).toThrow(
+      "AUTH_BREACHED_PASSWORD_CHECK_ENABLED",
+    );
     expect(
       loadEnv({ ...base, AUTH_BREACHED_PASSWORD_CHECK_ENABLED: "true" }).breachedPasswordCheck,
-    ).toBe(true);
-    expect(() => loadEnv({ ...base, AUTH_BREACHED_PASSWORD_CHECK_ENABLED: "yes" })).toThrow(
-      "AUTH_BREACHED_PASSWORD_CHECK_ENABLED must be true or false",
-    );
-  });
-  it("defaults to SSO with no policy bypass", () => {
-    expect(loadEnv({ ...base, ...oidc }).oidc).toMatchObject({
-      name: "SSO",
-      allowSignupBypass: false,
-      scopes: ["openid", "email", "profile"],
-    });
-    expect(
-      loadEnv({ ...base, ...oidc, OIDC_ALLOW_SIGNUP_BYPASS: "true" }).oidc?.allowSignupBypass,
     ).toBe(true);
   });
 });

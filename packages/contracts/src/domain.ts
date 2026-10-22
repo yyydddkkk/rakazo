@@ -1010,7 +1010,6 @@ export const MessagingStatusSchema = z.object({
   /** Messaging platforms mounted on this deployment (sendblue, slack, …). */
   providers: z.array(z.string()),
   /** True when unknown senders auto-provision their own accounts. */
-  openSignup: z.boolean(),
   /** The caller's linked chat apps, one entry per (provider, address). */
   identities: z.array(MessagingLinkedIdentitySchema),
 });
@@ -1384,8 +1383,6 @@ export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
 
 export const DeploymentSettingsSchema = z.object({
   ownerUserId: Id.nullable(),
-  signupsEnabled: z.boolean(),
-  signupAllowlist: z.array(z.string()),
   hasDeploymentModelCredential: z.boolean(),
   defaultProvider: z.string().nullable(),
   defaultModel: z.string().nullable(),

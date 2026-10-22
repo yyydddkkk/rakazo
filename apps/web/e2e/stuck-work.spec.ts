@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 const EXPIRED_TAKEOVER = "Stopped. This was still waiting for you on the screen.";
 const EXPIRED_MESSAGE_ID = "msg-stuck-expired";
@@ -79,7 +79,7 @@ test("aged queued work is marked and an expired wait leaves a status line", asyn
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `stuck-${stamp}@rakazo.test`, "password12", "Stuck");
+  await setupAdmin(page, `stuck-${stamp}@rakazo.test`, "password12", "Stuck");
   await completeOnboarding(page);
 
   const agedAt = new Date(Date.now() - 50 * 60 * 60 * 1000).toISOString();

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signup } from "./helpers";
+import { setupAdmin } from "./helpers";
 
 test("onboarding cannot continue with an empty or failed model catalog", async ({ page }) => {
   let unavailable: "empty" | "failed" = "empty";
@@ -12,7 +12,7 @@ test("onboarding cannot continue with an empty or failed model catalog", async (
     unavailable === "failed" ? route.abort() : route.fulfill({ json: { json: [] } }),
   );
   const stamp = Date.now();
-  await signup(page, `catalog-${stamp}@rakazo.test`, "password12", "Model setup");
+  await setupAdmin(page, `catalog-${stamp}@rakazo.test`, "password12", "Model setup");
 
   for (const next of ["empty", "failed"] as const) {
     if (next === "failed") {

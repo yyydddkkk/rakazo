@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("command palette opens with keyboard, filters, and switches bots", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `cmdk-bots-${stamp}@rakazo.test`, "password12", "CmdK Bots");
+  await setupAdmin(page, `cmdk-bots-${stamp}@rakazo.test`, "password12", "CmdK Bots");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

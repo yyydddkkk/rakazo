@@ -10,7 +10,7 @@ import {
   expandAdvancedSection,
   openUserSettings,
   rpc,
-  signup,
+  setupAdmin,
 } from "./helpers";
 
 const LOCAL_MODEL_ID = "rakazo-e2e-local";
@@ -20,7 +20,7 @@ const LOCAL_MODEL_REPLY = "OpenAI-compatible endpoint verified end to end.";
 test("model settings cleanup frames", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const stamp = Date.now();
-  await signup(page, `model-cleanup-${stamp}@rakazo.test`, "password12", "Model Preview");
+  await setupAdmin(page, `model-cleanup-${stamp}@rakazo.test`, "password12", "Model Preview");
   await completeOnboarding(page);
 
   // Keep the account and persistence real; the scripted test runtime accepts fake keys.
@@ -109,7 +109,7 @@ test("custom connections persist reasoning support and bot thinking", async ({
 }, testInfo) => {
   const stamp = Date.now();
   const userName = `Reasoning ${stamp}`;
-  await signup(page, `reasoning-model-${stamp}@rakazo.test`, "password12", userName);
+  await setupAdmin(page, `reasoning-model-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
   await openUserSettings(page, "models");
   await page.getByPlaceholder("Search providers").fill("openai-compatible");
@@ -300,7 +300,7 @@ test("connects, lists, and uses an OpenAI-compatible endpoint", async ({ page },
     // the fake endpoint from settings instead, so skip that step on the client.
     const skipModelStep = process.env.AGENT_RUNTIME === "pi";
     if (skipModelStep) await page.route("**/rpc/me", fulfillWithoutModelStep);
-    await signup(page, `local-model-${stamp}@rakazo.test`, "password12", userName);
+    await setupAdmin(page, `local-model-${stamp}@rakazo.test`, "password12", userName);
     await completeOnboarding(page);
     if (skipModelStep) await page.unroute("**/rpc/me", fulfillWithoutModelStep);
 
@@ -420,7 +420,7 @@ test("model settings connect, replace, and cancel provider authentication", asyn
 }, testInfo) => {
   const stamp = Date.now();
   const userName = `Models ${stamp}`;
-  await signup(page, `models-${stamp}@rakazo.test`, "password12", userName);
+  await setupAdmin(page, `models-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
 
   await openUserSettings(page, "models");
@@ -613,7 +613,12 @@ test("a deployment default on server credentials says so and keeps an own key op
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `server-credentials-${stamp}@rakazo.test`, "password12", `Server ${stamp}`);
+  await setupAdmin(
+    page,
+    `server-credentials-${stamp}@rakazo.test`,
+    "password12",
+    `Server ${stamp}`,
+  );
   await completeOnboarding(page);
   // The E2E deployment runs on a scripted model, so present the active default as one that
   // authenticates from the host, the way an Amazon Bedrock deployment on an AWS role does.
@@ -652,20 +657,23 @@ test("a deployment default on server credentials says so and keeps an own key op
   await expect(serverNote).toBeVisible();
 });
 
-test("a key connected in another space can replace server credentials for the same model", async ({
+test("a connected key can replace server credentials for the same model", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `shared-model-${stamp}@rakazo.test`, "password12", "Model Owner");
+  await setupAdmin(page, `shared-model-${stamp}@rakazo.test`, "password12", "Model Owner");
   await completeOnboarding(page);
-  const otherSpace = await rpc<{ id: string }>(page, "spaces/create", { name: "Other space" });
   const provider = "amazon-bedrock";
   const modelId = "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
+  const previous = await rpc<{ defaultProvider: string; defaultModel: string }>(page, "me", {});
   const connected = await page.request.post("/rpc/models/connect", {
-    headers: { "x-rakazo-space-id": otherSpace.id },
     data: { json: { provider, modelId, apiKey: "fake-bedrock-key" } },
   });
   expect(connected.ok()).toBe(true);
+  await rpc(page, "models/setDefault", {
+    provider: previous.defaultProvider,
+    modelId: previous.defaultModel,
+  });
   await page.route("**/rpc/me", async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as { json: Record<string, unknown> };
@@ -698,7 +706,6 @@ test("a key connected in another space can replace server credentials for the sa
   await useModel.click();
   const request = await saved;
   expect(request.postDataJSON().json).toMatchObject({ provider, modelId });
-  expect(request.headers()["x-rakazo-space-id"]).not.toBe(otherSpace.id);
   await expect(page.getByText(/Now using/)).toBeVisible();
   await expect(useModel).toBeHidden();
   await expect(personalBillingNote).toBeVisible();
@@ -716,7 +723,12 @@ test("catalog models keep a space default thinking level per saved model", async
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `catalog-thinking-${stamp}@rakazo.test`, "password12", `Thinking ${stamp}`);
+  await setupAdmin(
+    page,
+    `catalog-thinking-${stamp}@rakazo.test`,
+    "password12",
+    `Thinking ${stamp}`,
+  );
   await completeOnboarding(page);
 
   await openUserSettings(page, "models");
@@ -774,7 +786,7 @@ test("catalog models keep a space default thinking level per saved model", async
 
 test("chat settings search a long model list", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `chat-model-search-${stamp}@rakazo.test`, "password12", `Search ${stamp}`);
+  await setupAdmin(page, `chat-model-search-${stamp}@rakazo.test`, "password12", `Search ${stamp}`);
   await completeOnboarding(page);
 
   const catalog = await rpc<

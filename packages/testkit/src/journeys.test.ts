@@ -5,7 +5,6 @@ import { runJobKey } from "@rakazo/adapter-kit";
 import {
   ComposioConnector,
   createScheduleFromTool,
-  DesktopSandboxProvider,
   DestinationEmulator,
   FakeComposioClient,
   FakeSandboxProvider,
@@ -26,6 +25,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import type { BotIntroHarness } from "./discard-bot-intro.js";
 import { discardBotIntroFromCreate } from "./discard-bot-intro.js";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 import { asSystem } from "./system-db.js";
 
@@ -1488,7 +1488,7 @@ describeJourneys("required product journeys", () => {
     expect(messages.map((row) => row.seq)).toEqual(Array.from({ length: 40 }, (_, i) => i));
   });
 
-  it("6: fake and desktop executor run the same graphical task", async () => {
+  it("6: fake sandbox executes a task and streams its output", async () => {
     const ctx = {
       operationId: "1",
       traceId: "1",
@@ -1497,18 +1497,13 @@ describeJourneys("required product journeys", () => {
       signal: new AbortController().signal,
     };
     const fake = new FakeSandboxProvider();
-    const desktop = new DesktopSandboxProvider();
     const a = await fake.provision({ botId: "ja", homePath: "/tmp/ja" }, ctx);
-    const c = await desktop.provision({ botId: "jc", homePath: "/tmp/jc" }, ctx);
     let out = "";
     for await (const event of fake.execute(a, { argv: ["echo", "same-task"] }, ctx)) {
       if (event.type === "stdout") out += event.data;
     }
-    for await (const event of desktop.execute(c, { argv: ["echo", "same-task"] }, ctx)) {
-      if (event.type === "stdout") out += event.data;
-    }
-    expect(out.match(/same-task/g)?.length).toBe(2);
-    await desktop.destroy(c, ctx);
+    expect(out).toContain("same-task");
+    await fake.destroy(a, ctx);
   });
 
   it("7: destination write is independently inspectable and credentials stay out of the thread", async () => {
@@ -3035,71 +3030,6 @@ describeJourneys("required product journeys", () => {
     await expect(prisma.run.count({ where: { routineId: routine.id } })).resolves.toBe(0);
   });
 
-  it("24: chat creates a space only after explicit approval", async () => {
-    const cookie = await signup(app, `space-chat-j-${stamp}@rakazo.test`, "Space Chat");
-    const me = await rpc<Me>(app, cookie, "me");
-    const bot = await rpc<Bot>(app, cookie, "bots/create", {
-      name: "Chief",
-      title: "",
-      description: "",
-      instructions: "",
-      notifyOnFinish: true,
-    });
-    const membershipsBefore = await prisma.spaceMember.count({ where: { userId: me.userId } });
-    const sent = await rpc<{ runId: string }>(app, cookie, "threads/send", {
-      botId: bot.id,
-      text: "create a space named Customer support",
-    });
-    const waiting = await waitFor(
-      app,
-      cookie,
-      bot.id,
-      (snap) => snap.run?.id === sent.runId && snap.run.status === "waiting_input",
-    );
-    const approval = JSON.stringify(waiting.messages);
-    expect(approval).toContain("Create space");
-    expect(approval).toContain("Customer support");
-    expect(approval).toContain("Cancel");
-    expect(approval).not.toContain("Always allow this tool");
-    expect(await prisma.spaceMember.count({ where: { userId: me.userId } })).toBe(
-      membershipsBefore,
-    );
-
-    await answerPendingApproval(app, cookie, bot.id, sent.runId, "allow", waiting);
-    await waitFor(
-      app,
-      cookie,
-      bot.id,
-      (snap) => !snap.run || ["completed", "failed", "cancelled"].includes(snap.run.status),
-    );
-    const navigation = await rpc<{ spaces: Array<{ name: string }> }>(app, cookie, "spaces/list");
-    expect(navigation.spaces.map((space) => space.name)).toContain("Customer support");
-    expect(await prisma.spaceMember.count({ where: { userId: me.userId } })).toBe(
-      membershipsBefore + 1,
-    );
-
-    const denied = await rpc<{ runId: string }>(app, cookie, "threads/send", {
-      botId: bot.id,
-      text: "create a space named Finance",
-    });
-    const deniedWaiting = await waitFor(
-      app,
-      cookie,
-      bot.id,
-      (snap) => snap.run?.id === denied.runId && snap.run.status === "waiting_input",
-    );
-    await answerPendingApproval(app, cookie, bot.id, denied.runId, "deny", deniedWaiting);
-    await waitFor(
-      app,
-      cookie,
-      bot.id,
-      (snap) => !snap.run || ["completed", "failed", "cancelled"].includes(snap.run.status),
-    );
-    expect(await prisma.spaceMember.count({ where: { userId: me.userId } })).toBe(
-      membershipsBefore + 1,
-    );
-  });
-
   describe("bot management", () => {
     async function fleetOwner(label: string) {
       const cookie = await signup(
@@ -3913,15 +3843,18 @@ type Snap = {
   activeRuns?: Array<{ id: string; status: string }>;
 };
 
-async function signup(app: App, email: string, name: string) {
-  const res = await app.request("/api/auth/sign-up/email", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: "http://127.0.0.1:5173",
+async function signup(_app: App, email: string, name: string) {
+  const res = await fixtureAccountResponse(
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://127.0.0.1:5173",
+      },
+      body: JSON.stringify({ email, password: "password12", name }),
     },
-    body: JSON.stringify({ email, password: "password12", name }),
-  });
+    botIntroHarness?.prisma,
+  );
   if (res.status >= 400) {
     throw new Error(`signup failed ${res.status}: ${await res.text()}`);
   }

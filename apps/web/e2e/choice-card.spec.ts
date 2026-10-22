@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("onboarding choices show borderless rows in both themes", async ({ page }, testInfo) => {
-  await signup(page, `onboarding-rows-${Date.now()}@rakazo.test`, "password12", "Sample");
+  await setupAdmin(page, `onboarding-rows-${Date.now()}@rakazo.test`, "password12", "Sample");
   await completeOnboarding(page);
   const question = page.getByText("What do you want me on first?", { exact: true });
   await expect(question).toBeVisible();
@@ -32,7 +32,7 @@ test("renders tappable choice buttons and submits the offered action id", async 
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `choice-card-${stamp}@rakazo.test`, "password12", "Choice Card");
+  await setupAdmin(page, `choice-card-${stamp}@rakazo.test`, "password12", "Choice Card");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);
@@ -139,7 +139,7 @@ test("renders tappable choice buttons and submits the offered action id", async 
 test("a typed reply answers the latest question and resumes its run", async ({
   page,
 }, testInfo) => {
-  await signup(page, `typed-choice-${Date.now()}@rakazo.test`, "password12", "Typed Choice");
+  await setupAdmin(page, `typed-choice-${Date.now()}@rakazo.test`, "password12", "Typed Choice");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   const composer = page.getByPlaceholder(/Message/);

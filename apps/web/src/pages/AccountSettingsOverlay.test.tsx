@@ -81,10 +81,6 @@ vi.mock("../components/AccountAccess", () => ({
         onSecurity({
           hasPassword: true,
           passwordChangeEnabled: accountPolicy.passwordChangeEnabled,
-          freshOidcAuth: false,
-          ssoLinked: false,
-          emailDeletion: false,
-          sso: null,
         }),
       [onSecurity],
     );

@@ -51,10 +51,6 @@ import {
   AvatarStyleProvider,
   BotAvatar,
   Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   GroupAvatar,
   InputGroup,
   InputGroupAddon,
@@ -65,18 +61,7 @@ import {
   toast,
 } from "@rakazo/ui-web";
 import { useIsMobile } from "@rakazo/ui-web/hooks/use-mobile";
-import {
-  Menu,
-  Monitor,
-  Pencil,
-  Phone,
-  Plus,
-  Search,
-  Settings,
-  SlidersHorizontal,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Menu, Monitor, Phone, Plus, Search, Settings, SlidersHorizontal, X } from "lucide-react";
 import type { MutableRefObject } from "react";
 import {
   Suspense,
@@ -97,19 +82,13 @@ import { CallCard, CallReturnBar } from "../components/call/CallCard";
 import { IncomingCall } from "../components/call/IncomingCall";
 import { lazyOverlay } from "../components/ErrorBoundary";
 import { IconTooltip } from "../components/IconTooltip";
-import { PasskeyOffer } from "../components/PasskeyOffer";
 import { SidebarFooter } from "../components/SidebarFooter";
 import type { ActivityListFilters } from "../lib/activity-list-filters";
 import { emptyActivityFilters } from "../lib/activity-list-filters";
 import { readActivityMode, writeActivityMode } from "../lib/activity-mode";
 import type { ArtifactTarget } from "../lib/artifact-open";
 import { authClient } from "../lib/auth";
-import {
-  discardPrimedBootstrap,
-  primeSpaceBootstrap,
-  takeInitialBootstrap,
-} from "../lib/bootstrap";
-import { initialBootstrapTarget } from "../lib/bootstrap-target";
+import { takeInitialBootstrap } from "../lib/bootstrap";
 import type { BotsSidebarDensity } from "../lib/bots-sidebar-density-pref";
 import {
   getBotsSidebarDensity,
@@ -121,12 +100,7 @@ import {
   requestBrowserNotificationPermission,
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
-import {
-  getSnapshot as getCallSnapshot,
-  setCallMinimized,
-  startCall,
-  useCallSession,
-} from "../lib/call-session";
+import { setCallMinimized, startCall, useCallSession } from "../lib/call-session";
 import { newClientId } from "../lib/client-id";
 import { setComposerUnsavedWork } from "../lib/composer-draft";
 import {
@@ -161,16 +135,10 @@ import {
   rightPanelStorageKey,
   writeRightPanelState,
 } from "../lib/right-panel-state";
-import { clearSpaceSelection, createSpaceRpc, selectedSpaceId, selectSpace } from "../lib/rpc";
+import { clearSpaceSelection, createSpaceRpc, selectedSpaceId } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
+import { guardShellNavigate } from "../lib/shell-navigation";
 import { useSignOut } from "../lib/sign-out";
-import {
-  guardShellNavigate,
-  markShellReady,
-  remountShellForSpace,
-  spaceSwitchDecision,
-  useSpaceEpoch,
-} from "../lib/space-switch";
 import {
   activeThreadRuns,
   applyThreadSendReceipt,
@@ -210,17 +178,15 @@ import {
   DeleteBotDialog,
   DeleteItemDialog,
   NewBotSectionDialog,
-  NewSpaceDialog,
   PickerInfoDialog,
   RenameBotSectionDialog,
-  RenameSpaceDialog,
 } from "./shell/dialogs";
 import type { RosterDropTarget } from "./shell/roster-drop";
 import { resolveRosterDrop } from "./shell/roster-drop";
 import { SidebarHeader } from "./shell/sidebar-header";
 import { BotsSidebarLayout } from "./shell/sidebar-layout";
 import { SidebarRoster } from "./shell/sidebar-roster";
-import { commitSpaceRename, sidebarGroupsForSpaces } from "./shell/space-sidebar";
+import { sidebarGroupsForSpaces } from "./shell/space-sidebar";
 import { Transcript } from "./shell/transcript";
 import { useRoutineEditor } from "./shell/use-routine-editor";
 import { useSidebarExpansion } from "./shell/use-sidebar-expansion";
@@ -278,12 +244,6 @@ function voiceStatusRefreshTimeout(): Promise<never> {
 }
 
 export function ShellPage() {
-  // A new key per space switch, so nothing from the previous space survives it.
-  const spaceEpoch = useSpaceEpoch();
-  return <SpaceShell key={spaceEpoch} />;
-}
-
-function SpaceShell() {
   const { t } = useLingui();
   const { botId, groupId } = useParams();
   const [rpc] = useState(() => createSpaceRpc(selectedSpaceId()));
@@ -520,8 +480,7 @@ function SpaceShell() {
   const focusPromptBotIdRef = useRef<string | null>(null);
   const isMobileSidebar = useIsMobile();
   const miniSidebar = botsSidebarCollapsed && !isMobileSidebar;
-  const [newSpaceOpen, setNewSpaceOpen] = useState(false);
-  const [pickerInfoTopic, setPickerInfoTopic] = useState<"group" | "space" | null>(null);
+  const [pickerInfoTopic, setPickerInfoTopic] = useState<"group" | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -554,22 +513,6 @@ function SpaceShell() {
   const [botMenu, setBotMenu] = useState<{ kind: "bot" | "group"; id: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Bot | null>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
-  const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<Space | null>(null);
-  const [renameSpaceTarget, setRenameSpaceTarget] = useState<Space | null>(null);
-  const [spaceMenu, setSpaceMenu] = useState<{
-    id: string;
-    position: { x: number; y: number };
-  } | null>(null);
-  const spaceMenuAnchor = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (spaceMenu || !spaceMenuAnchor.current) return;
-    spaceMenuAnchor.current.focus();
-    spaceMenuAnchor.current = null;
-  }, [spaceMenu]);
-  const closeSpaceMenu = useCallback(() => setSpaceMenu(null), []);
-  const spaceMenuTarget = spaceMenu
-    ? (spaces.find((space) => space.id === spaceMenu.id) ?? null)
-    : null;
   const [clearTarget, setClearTarget] = useState<
     { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group } | null
   >(null);
@@ -595,21 +538,7 @@ function SpaceShell() {
   useEffect(() => {
     callsEnabledRef.current = bootstrapMe?.phoneCallsEnabled === true;
   }, [bootstrapMe?.phoneCallsEnabled]);
-  const currentSpaceId = selectedSpaceId() ?? bootstrapMe?.spaceId ?? null;
-  // null: settings follow the space the app is showing.
-  const [settingsSpaceId, setSettingsSpaceId] = usePreloadRecoveryState<string | null>(
-    "settingsSpaceId",
-    null,
-  );
-  const settingsSpace =
-    spaces.find((space) => space.id === (settingsSpaceId ?? currentSpaceId)) ?? null;
-  // Never fall back to another space's settings when the edited space goes away.
-  const settingsSpaceGone = initialBotsLoaded && settingsSpaceId !== null && !settingsSpace;
-  useEffect(() => {
-    if (!settingsSpaceGone) return;
-    setSettingsOpen(false);
-    setSettingsSpaceId(null);
-  }, [settingsSpaceGone]);
+  const settingsSpace = spaces.find((space) => space.id === bootstrapMe?.spaceId) ?? null;
   const [keepComputerRecovery, setKeepComputerRecovery] = useState(false);
   const recoveryHoldTimer = useRef<number | undefined>(undefined);
   const showComputerRecoveryHint =
@@ -1548,9 +1477,9 @@ function SpaceShell() {
   const sidebarSpaces = useMemo(
     () =>
       spaces.length > 0
-        ? spaces.map((space) =>
-            space.id === bootstrapMe?.spaceId ? { ...space, bots, groups, botSections } : space,
-          )
+        ? spaces
+            .filter((space) => space.id === bootstrapMe?.spaceId)
+            .map((space) => ({ ...space, bots, groups, botSections }))
         : bootstrapMe
           ? [
               {
@@ -1558,8 +1487,6 @@ function SpaceShell() {
                 name: "Personal",
                 isDefault: true,
                 hasContent: true,
-                canRename: false,
-                canDelete: false,
                 bots,
                 groups,
                 botSections,
@@ -1576,87 +1503,12 @@ function SpaceShell() {
       }),
     [sidebarSpaces, query, miniSidebar, t],
   );
-  const spaceSwitchRequest = useRef(0);
-  useEffect(
-    () => () => {
-      // A switch still loading when this shell goes away (another page, or a
-      // newer switch) must not pull the user back to its space afterwards.
-      spaceSwitchRequest.current += 1;
-    },
-    [],
-  );
   const openSpaceChat = useCallback(
-    (spaceId: string, path: string) => {
+    (_spaceId: string, path: string) => {
       setMobileSidebarOpen(false);
-      const request = ++spaceSwitchRequest.current;
-      const previousEffective = selectedSpaceId() ?? bootstrapMe?.spaceId;
-      // Persist the active space (including primary) so voice/RPC headers match the chat.
-      if (previousEffective === spaceId) {
-        if (selectSpace(spaceId)) navigate(path);
-        return;
-      }
-      const reload = () => {
-        if (selectSpace(spaceId)) window.location.assign(path);
-      };
-      // Another space is an auth boundary: its bootstrap is loaded first, under that
-      // space's header, then the shell remounts so none of this space's state survives.
-      // A call in progress, or a page outside the shell, still reloads.
-      const target = initialBootstrapTarget(path);
-      if (!target || getCallSnapshot()) {
-        reload();
-        return;
-      }
-      const startedAt = window.location.pathname;
-      const decision = () =>
-        spaceSwitchDecision(
-          request === spaceSwitchRequest.current,
-          startedAt,
-          window.location.pathname,
-          Boolean(getCallSnapshot()),
-        );
-      const current = () => decision() !== "abandon";
-      const primed = primeSpaceBootstrap(spaceId, target.botId);
-      primed.then(
-        () => {
-          if (!current()) {
-            discardPrimedBootstrap(primed);
-            return;
-          }
-          // A call started while the bootstrap loaded belongs to this space.
-          if (getCallSnapshot()) {
-            discardPrimedBootstrap(primed);
-            reload();
-            return;
-          }
-          remountShellForSpace(() => {
-            const action = decision();
-            if (action !== "commit") {
-              discardPrimedBootstrap(primed);
-              if (action === "reload") {
-                // Leave the view-transition update before starting a full navigation.
-                window.setTimeout(() => {
-                  if (current()) reload();
-                }, 0);
-              }
-              return false;
-            }
-            if (!selectSpace(spaceId)) {
-              discardPrimedBootstrap(primed);
-              return false;
-            }
-            // Playback belongs to the conversation being left.
-            speaker.stop();
-            navigate(path);
-            return true;
-          });
-        },
-        () => {
-          discardPrimedBootstrap(primed);
-          if (current()) reload();
-        },
-      );
+      navigate(path);
     },
-    [bootstrapMe?.spaceId, navigate],
+    [navigate],
   );
   const flushBotOrder = useCallback(async () => {
     if (savingBotOrderRef.current) return;
@@ -2078,7 +1930,6 @@ function SpaceShell() {
       markAfterPaint("rk:renderer:thread-painted");
     }
     if (shellReady) {
-      markShellReady();
       markOnce("rk:renderer:shell-ready");
       markAfterPaint("rk:renderer:shell-painted");
     }
@@ -2510,16 +2361,8 @@ function SpaceShell() {
   }
 
   function openSettings(section: SettingsSection = "general") {
-    setSettingsSpaceId(null);
     setSettingsSection(section);
     setSettingsOpen(true);
-  }
-
-  // Space-scoped sections bind their own rpc client to this space, so another
-  // space's settings open in place without switching the app or reloading.
-  function openSpaceSettings(spaceId: string) {
-    openSettings("models");
-    setSettingsSpaceId(spaceId);
   }
 
   async function createBot(input: {
@@ -3096,7 +2939,6 @@ function SpaceShell() {
         collapsible={isMobileSidebar ? "none" : "icon"}
         side={document.documentElement.dir === "rtl" ? "right" : "left"}
         data-testid="bots-sidebar"
-        data-space-switch="sidebar"
         inert={isMobileSidebar && !mobileSidebarOpen ? true : undefined}
         aria-hidden={isMobileSidebar && !mobileSidebarOpen ? true : undefined}
         data-bots-sidebar-density={botsSidebarDensity}
@@ -3119,7 +2961,6 @@ function SpaceShell() {
           setMobileSidebarOpen={setMobileSidebarOpen}
           setPanel={setPanel}
           navigate={navigate}
-          setNewSpaceOpen={setNewSpaceOpen}
           setPickerInfoTopic={setPickerInfoTopic}
         />
         {miniSidebar ? (
@@ -3215,14 +3056,11 @@ function SpaceShell() {
                 collapsedRosterParents={collapsedRosterParents}
                 bootstrapMe={bootstrapMe}
                 botSections={botSections}
-                spaces={spaces}
                 rosterDropKey={rosterDropKey}
                 setRosterDropKey={setRosterDropKey}
                 rosterDropAction={rosterDropAction}
                 applyRosterDrop={applyRosterDrop}
                 openSpaceChat={openSpaceChat}
-                spaceMenuAnchor={spaceMenuAnchor}
-                setSpaceMenu={setSpaceMenu}
                 setRenameSectionTarget={setRenameSectionTarget}
                 setDeleteSectionTarget={setDeleteSectionTarget}
                 toggleSidebarSection={toggleSidebarSection}
@@ -3255,9 +3093,7 @@ function SpaceShell() {
             />
           </div>
         </div>
-        <div className={miniSidebar ? "hidden" : "contents"}>
-          <PasskeyOffer />
-        </div>
+        <div className={miniSidebar ? "hidden" : "contents"}></div>
         <SidebarFooter
           mini={miniSidebar}
           logos={footerLogos}
@@ -3307,7 +3143,6 @@ function SpaceShell() {
 
       {/* Keep the composer's z-index inside the chat so phone overlays like the side panel cover it. */}
       <main
-        data-space-switch="main"
         aria-hidden={mobileSidebarOpen || undefined}
         inert={mobileSidebarOpen}
         className="isolate flex min-w-0 flex-1 flex-col bg-background"
@@ -3695,69 +3530,6 @@ function SpaceShell() {
       </ResizableSidePanel>
 
       <Suspense fallback={null}>
-        {spaceMenu ? (
-          <DropdownMenu
-            open
-            onOpenChange={(open) => {
-              if (!open) closeSpaceMenu();
-            }}
-          >
-            {/* Invisible anchor at the pointer position, mirroring the bot menu. */}
-            <DropdownMenuTrigger
-              render={
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-hidden
-                  className="fixed size-0 p-0 opacity-0"
-                  style={{ left: spaceMenu.position.x, top: spaceMenu.position.y }}
-                />
-              }
-            />
-            <DropdownMenuContent
-              aria-label={t`Actions for space`}
-              align="start"
-              sideOffset={0}
-              className="w-[220px]"
-            >
-              {spaceMenuTarget ? (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setSpaceMenu(null);
-                    openSpaceSettings(spaceMenuTarget.id);
-                  }}
-                >
-                  <Settings />
-                  {t`Settings`}
-                </DropdownMenuItem>
-              ) : null}
-              {spaceMenuTarget?.canRename ? (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setRenameSpaceTarget(spaceMenuTarget);
-                    setSpaceMenu(null);
-                  }}
-                >
-                  <Pencil />
-                  {t`Rename space`}
-                </DropdownMenuItem>
-              ) : null}
-              {spaceMenuTarget?.canDelete ? (
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => {
-                    setDeleteSpaceTarget(spaceMenuTarget);
-                    setSpaceMenu(null);
-                  }}
-                >
-                  <Trash2 />
-                  {t`Delete space`}
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-
         {deleteTarget ? (
           <DeleteBotDialog
             bot={deleteTarget}
@@ -3780,55 +3552,6 @@ function SpaceShell() {
               await rpc.groups.remove({ groupId: deleteGroupTarget.id });
               setDeleteGroupTarget(null);
               setPanel(null);
-              await refreshBots(true);
-            }}
-          />
-        ) : null}
-
-        {renameSpaceTarget ? (
-          <RenameSpaceDialog
-            space={renameSpaceTarget}
-            onCancel={() => setRenameSpaceTarget(null)}
-            onConfirm={async (name) => {
-              const spaceId = renameSpaceTarget.id;
-              await commitSpaceRename({
-                rename: async () => {
-                  await rpc.spaces.rename({ spaceId, name });
-                },
-                apply: () => {
-                  setSpaces((current) =>
-                    current.map((space) => (space.id === spaceId ? { ...space, name } : space)),
-                  );
-                },
-                refresh: () => refreshBots(),
-              });
-              setRenameSpaceTarget(null);
-            }}
-          />
-        ) : null}
-
-        {deleteSpaceTarget ? (
-          <DeleteItemDialog
-            item={deleteSpaceTarget}
-            noun="space"
-            description={
-              <Trans>Only empty spaces can be deleted. Delete its bots and groups first.</Trans>
-            }
-            onCancel={() => setDeleteSpaceTarget(null)}
-            onConfirm={async () => {
-              const targetId = deleteSpaceTarget.id;
-              const result = await rpc.spaces.remove({ spaceId: targetId });
-              if (!alive.current) return;
-              setDeleteSpaceTarget(null);
-              setPanel(null);
-              const effectiveSpaceId = selectedSpaceId() ?? bootstrapMe?.spaceId;
-              if (effectiveSpaceId === targetId) {
-                // The auth boundary changed, so reload like a space switch.
-                if (selectSpace(result.activeSpaceId)) {
-                  window.location.assign("/app");
-                  return;
-                }
-              }
               await refreshBots(true);
             }}
           />
@@ -3895,25 +3618,7 @@ function SpaceShell() {
           }}
         />
 
-        {newSpaceOpen ? (
-          <NewSpaceDialog
-            onCancel={() => setNewSpaceOpen(false)}
-            onConfirm={async (name) => {
-              const space = await rpc.spaces.create({ name });
-              if (!alive.current) return;
-              if (!selectSpace(space.id)) {
-                setNewSpaceOpen(false);
-                await refreshBots();
-                return;
-              }
-              window.location.assign("/onboarding");
-            }}
-          />
-        ) : null}
-
-        {pickerInfoTopic ? (
-          <PickerInfoDialog topic={pickerInfoTopic} onClose={() => setPickerInfoTopic(null)} />
-        ) : null}
+        {pickerInfoTopic ? <PickerInfoDialog onClose={() => setPickerInfoTopic(null)} /> : null}
 
         {clearTarget ? (
           <ClearConversationDialog
@@ -3962,12 +3667,9 @@ function SpaceShell() {
       </Suspense>
 
       <Suspense fallback={null}>
-        {settingsOpen && (settingsSpaceId === null || settingsSpace) ? (
+        {settingsOpen ? (
           <SettingsOverlay
             space={settingsSpace}
-            spaces={spaces}
-            currentSpaceId={currentSpaceId}
-            onSpaceChange={setSettingsSpaceId}
             name={userName}
             email={session.data?.user.email}
             usage={usage}

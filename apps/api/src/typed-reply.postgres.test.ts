@@ -1,16 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Actor, MessageBlock } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
-import {
-  answerRunInput,
-  asSystem,
-  createDb,
-  createThreadMessage,
-  provisionMessagingIdentity,
-  runAsSystem,
-  runAsTenant,
-} from "@rakazo/db";
+import { answerRunInput, asSystem, createDb, createThreadMessage, runAsTenant } from "@rakazo/db";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { fixtureAccountResponse } from "../../../packages/testkit/src/fixture-account.js";
 import type { ThreadTarget } from "./thread-target.js";
 import { sendThreadMessage } from "./thread-target.js";
 
@@ -50,15 +43,31 @@ describe.skipIf(!enabled)("typed replies to waiting cards (PostgreSQL)", () => {
   });
   beforeEach(async () => {
     vi.clearAllMocks();
-    const identity = await runAsSystem("test fixture", () =>
-      provisionMessagingIdentity(
-        prisma,
-        { provider: "test", address: `typed-reply-${randomUUID()}` },
-        { signupsEnabled: undefined, signupAllowlist: undefined },
-      ),
+    const response = await fixtureAccountResponse(
+      {
+        body: JSON.stringify({
+          email: `typed-reply-${randomUUID()}@example.test`,
+          password: "test-password-123",
+          name: "Typed replies",
+        }),
+      },
+      prisma,
     );
-    ({ botId, threadId } = identity);
-    actor = { spaceId: identity.spaceId, userId: identity.userId } as Actor;
+    const { user } = (await response.json()) as { user: { id: string } };
+    const membership = await system.spaceMember.findFirstOrThrow({ where: { userId: user.id } });
+    actor = { spaceId: membership.spaceId, userId: user.id } as Actor;
+    const bot = await system.bot.create({
+      data: {
+        spaceId: actor.spaceId,
+        userId: actor.userId,
+        name: "Alpha",
+        color: "primary",
+        thread: { create: { spaceId: actor.spaceId, userId: actor.userId } },
+      },
+      include: { thread: true },
+    });
+    botId = bot.id;
+    threadId = bot.thread!.id;
     const peer = await system.bot.create({
       data: {
         spaceId: actor.spaceId,

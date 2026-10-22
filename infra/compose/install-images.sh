@@ -226,6 +226,9 @@ create_env() {
       "POSTGRES_APP_PASSWORD=")
         printf 'POSTGRES_APP_PASSWORD=%s\n' "$(openssl rand -hex 16)"
         ;;
+      "RAKAZO_ADMIN_PASSWORD="|"RAKAZO_ADMIN_PASSWORD=replace-with-a-strong-password")
+        printf 'RAKAZO_ADMIN_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+        ;;
       "BETTER_AUTH_SECRET=")
         printf 'BETTER_AUTH_SECRET=%s\n' "$(openssl rand -hex 32)"
         ;;

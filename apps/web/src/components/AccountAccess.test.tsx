@@ -4,9 +4,8 @@ import type { ComponentProps, ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { fetchAccountSecurity, requestAccountDeletionCode } from "../lib/account-security";
+import { fetchAccountSecurity } from "../lib/account-security";
 import { authClient } from "../lib/auth";
-import { runSsoFlow } from "../lib/sso-flow";
 import { AccountAccess } from "./AccountAccess";
 
 vi.mock("@lingui/react/macro", () => ({
@@ -26,34 +25,18 @@ vi.mock("@rakazo/ui-web", () => ({
 }));
 vi.mock("../lib/account-security", () => ({
   fetchAccountSecurity: vi.fn(),
-  requestAccountDeletionCode: vi.fn(),
 }));
 vi.mock("../lib/auth", () => ({
-  authClient: { linkSocial: vi.fn(), signIn: { social: vi.fn() }, deleteUser: vi.fn() },
-}));
-vi.mock("../lib/sso-flow", () => ({
-  runSsoFlow: vi.fn(async (begin) => begin(true, (url: string) => `popup:${url}`)),
+  authClient: { deleteUser: vi.fn() },
 }));
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const security: AccountSecurity = {
   hasPassword: false,
-  freshOidcAuth: false,
-  ssoLinked: false,
-  emailDeletion: false,
-  sso: { name: "SSO" },
 };
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchAccountSecurity).mockResolvedValue(security);
-  vi.mocked(authClient.linkSocial).mockResolvedValue({
-    data: { url: "https://identity.example.test/authorize", redirect: true },
-    error: null,
-  });
-  vi.mocked(authClient.signIn.social).mockResolvedValue({
-    data: { url: "https://identity.example.test/authorize", redirect: true },
-    error: null,
-  });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -72,81 +55,45 @@ async function click(label: string) {
   expect(button).toBeDefined();
   await act(async () => button!.click());
 }
-it("uses the shared SSO flow for linking", async () => {
-  await render();
-  await click("Link SSO");
-  expect(runSsoFlow).toHaveBeenCalledWith(expect.any(Function), [window.location.href]);
-  expect(authClient.linkSocial).toHaveBeenCalledWith(
-    expect.objectContaining({
-      provider: "oidc",
-      disableRedirect: true,
-      callbackURL: `popup:${window.location.href}`,
-      errorCallbackURL: `popup:${window.location.href}`,
-    }),
-  );
-});
-it("uses the shared SSO flow for account-bound deletion reauthentication", async () => {
-  await render();
-  await click("Delete account");
-  await click("Sign in again");
-  expect(runSsoFlow).toHaveBeenCalledWith(expect.any(Function), [window.location.href]);
-  expect(authClient.signIn.social).toHaveBeenCalledWith(
-    expect.objectContaining({
-      disableRedirect: true,
-      additionalData: { reauthenticate: true },
-      callbackURL: `popup:${window.location.href}`,
-      errorCallbackURL: `popup:${window.location.href}`,
-    }),
-  );
-});
-it("shows the password deletion path for legacy account security", async () => {
-  vi.mocked(fetchAccountSecurity).mockResolvedValue({ ...security, hasPassword: true, sso: null });
-  await render();
-  await click("Delete account");
-  expect(host.querySelector('input[type="password"]')).not.toBeNull();
-  expect(host.textContent).not.toContain("Link SSO");
-  expect(host.textContent).not.toContain("Sign in again");
-  expect(host.textContent).not.toContain("Send deletion code");
-});
-
 function deleteButton() {
-  return Array.from(host.querySelectorAll("button")).filter(
+  return [...host.querySelectorAll("button")].filter(
     (button) => button.textContent === "Delete account",
   )[1]!;
 }
-it("disables passwordless deletion without a proof or nonempty code", async () => {
+it("requires a password for account deletion", async () => {
+  vi.mocked(fetchAccountSecurity).mockResolvedValue({ hasPassword: true });
   await render();
   await click("Delete account");
+  expect(host.querySelector('input[type="password"]')).not.toBeNull();
   expect(deleteButton().disabled).toBe(true);
 });
-it("refreshes an expired proof before submitting and offers reauthentication", async () => {
+it("refuses deletion if password credentials disappear before submission", async () => {
   vi.mocked(fetchAccountSecurity)
-    .mockResolvedValueOnce({ ...security, freshOidcAuth: true })
-    .mockResolvedValue(security);
+    .mockResolvedValueOnce({ hasPassword: true })
+    .mockResolvedValue({ hasPassword: false });
   await render();
   await click("Delete account");
+  const input = host.querySelector<HTMLInputElement>("#delete-password")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "example-password",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   expect(deleteButton().disabled).toBe(false);
   await act(async () => deleteButton().click());
-  expect(fetchAccountSecurity).toHaveBeenCalledTimes(2);
   expect(authClient.deleteUser).not.toHaveBeenCalled();
   expect(deleteButton().disabled).toBe(true);
-  expect(host.textContent).toContain("Sign in again");
 });
-it("keeps account SSO actions available for retry", async () => {
-  vi.mocked(runSsoFlow).mockReturnValue(new Promise(() => undefined));
+it("does not allow passwordless account deletion", async () => {
   await render();
-  await click("Link SSO");
-  await click("Link SSO");
-  expect(runSsoFlow).toHaveBeenCalledTimes(2);
   await click("Delete account");
-  await click("Sign in again");
-  await click("Sign in again");
-  expect(runSsoFlow).toHaveBeenCalledTimes(4);
+  expect(deleteButton().disabled).toBe(true);
 });
 
-it("requires a nonempty code and allows it after the proof expires", async () => {
-  vi.mocked(fetchAccountSecurity).mockResolvedValue({ ...security, emailDeletion: true });
-  vi.mocked(requestAccountDeletionCode).mockResolvedValue(undefined);
+it("sends the current password when deleting the account", async () => {
+  vi.mocked(fetchAccountSecurity).mockResolvedValue({ hasPassword: true });
   vi.mocked(authClient.deleteUser).mockResolvedValue({
     data: null,
     error: {
@@ -158,19 +105,15 @@ it("requires a nonempty code and allows it after the proof expires", async () =>
   });
   await render();
   await click("Delete account");
-  await click("Send deletion code");
-  const input = host.querySelector<HTMLInputElement>("#deletion-code")!;
-  async function enter(value: string) {
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  }
-  await enter("   ");
-  expect(deleteButton().disabled).toBe(true);
-  await enter(" 123456 ");
-  expect(deleteButton().disabled).toBe(false);
+  const input = host.querySelector<HTMLInputElement>("#delete-password")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "example-password",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   await act(async () => deleteButton().click());
-  expect(fetchAccountSecurity).toHaveBeenCalledTimes(2);
-  expect(authClient.deleteUser).toHaveBeenCalledWith({ token: "123456" });
+  expect(authClient.deleteUser).toHaveBeenCalledWith({ password: "example-password" });
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe("Sign in again");
 });

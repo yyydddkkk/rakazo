@@ -83,7 +83,7 @@ describe.skipIf(!enabled)("product history clarification eval boundary", () => {
               runtime: new PiAgentRuntime(),
               contextStrategy: "snapshots",
               wakeupDriver: "memory",
-              signupsEnabled: "true",
+
               composio,
               encryptionKey: "synthetic-clarification-encryption-key",
             }),

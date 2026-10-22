@@ -1,11 +1,16 @@
 import { expect, type Route, test } from "@playwright/test";
 import type { McpServer } from "@rakazo/contracts";
 import { MCP_OAUTH_CHANNEL } from "../src/lib/mcp-oauth-channel";
-import { captureScreenshot, completeOnboarding, expandAdvancedSection, signup } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  expandAdvancedSection,
+  setupAdmin,
+} from "./helpers";
 
 test("connects an MCP server through the OAuth popup callback", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `mcp-oauth-${stamp}@rakazo.test`, "password12", "MCP OAuth");
+  await setupAdmin(page, `mcp-oauth-${stamp}@rakazo.test`, "password12", "MCP OAuth");
   await completeOnboarding(page);
 
   let oauthStatus: McpServer["oauthStatus"] = "none";
@@ -125,7 +130,7 @@ test("connects an MCP server through the OAuth popup callback", async ({ page },
 
 test("adds an MCP server with a pre-registered OAuth client", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `mcp-oauth-client-${stamp}@rakazo.test`, "password12", "MCP OAuth");
+  await setupAdmin(page, `mcp-oauth-client-${stamp}@rakazo.test`, "password12", "MCP OAuth");
   await completeOnboarding(page);
 
   const browserOrigin = new URL(page.url()).origin;

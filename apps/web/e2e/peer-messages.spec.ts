@@ -1,10 +1,10 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("shows peer chips in transcript and opens view-only peer chat", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `peer-msg-${stamp}@rakazo.test`, "password12", "Peer Msg");
+  await setupAdmin(page, `peer-msg-${stamp}@rakazo.test`, "password12", "Peer Msg");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -111,7 +111,7 @@ const foldedReplyText = "on it. i will work this in the background";
 
 /** Chief messages Researcher; Researcher's reply comes back to Chief folded under its marker. */
 async function openFoldedPeerReply(page: Page, name: string) {
-  await signup(page, `${name}-${Date.now()}@rakazo.test`, "password12", "Peer Fold");
+  await setupAdmin(page, `${name}-${Date.now()}@rakazo.test`, "password12", "Peer Fold");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

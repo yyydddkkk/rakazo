@@ -9,7 +9,6 @@ import {
   secretStoreOptionsFromEnv,
   telegramBotsFromEnv,
 } from "@rakazo/adapters";
-import type { OidcConfig } from "@rakazo/auth";
 import type { MinimumClientBuilds } from "@rakazo/contracts";
 import { parseMinimumClientBuilds } from "@rakazo/contracts";
 import {
@@ -26,10 +25,10 @@ import { monitoringPseudonymSecret } from "@rakazo/logging";
 export { resolveCloudAgentProvider, resolveSandboxProvider } from "@rakazo/adapters";
 
 export interface AppEnv {
-  passwordAuth?: boolean;
+  adminEmail?: string;
+  adminPassword?: string;
   /** Opt-in Have I Been Pwned check for new passwords. Default off: it calls an outside service. */
   breachedPasswordCheck?: boolean;
-  oidc?: OidcConfig;
   nodeEnv: string;
   databaseUrl: string;
   realtimeDatabaseUrl: string;
@@ -43,8 +42,6 @@ export interface AppEnv {
   trustedProxies: string[];
   /** The header those proxies set. */
   clientIpHeader: string;
-  signupsEnabled: string | undefined;
-  signupAllowlist: string | undefined;
   encryptionKey: string;
   /** CONTENT_ENCRYPTION: whether new content is encrypted at rest. */
   contentEncryption: boolean;
@@ -105,8 +102,6 @@ export interface AppEnv {
   larkVerificationToken: string | undefined;
   larkEncryptKey: string | undefined;
   larkDomain: string | undefined;
-  /** Unknown chat senders auto-provision their own accounts when true. */
-  messagingOpenSignup: boolean;
   /** Bot that owns team/external chat rooms on the messaging surface. */
   teamChatBotId: string | undefined;
   /** Optional model override for ambient engagement judging. */
@@ -139,49 +134,12 @@ export interface AppEnv {
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   secretStoreOptionsFromEnv(source);
-  const issuer = optional(source.OIDC_ISSUER);
-  const clientId = optional(source.OIDC_CLIENT_ID);
-  const clientSecret = optional(source.OIDC_CLIENT_SECRET);
-  const credentials = [issuer, clientId, clientSecret];
-  if (credentials.some(Boolean) && !credentials.every(Boolean)) {
-    throw new Error(
-      "OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET must be configured together",
-    );
+  if (
+    source.AUTH_BREACHED_PASSWORD_CHECK_ENABLED &&
+    !["true", "false"].includes(source.AUTH_BREACHED_PASSWORD_CHECK_ENABLED)
+  ) {
+    throw new Error("AUTH_BREACHED_PASSWORD_CHECK_ENABLED must be true or false");
   }
-  if (issuer) {
-    try {
-      const url = new URL(issuer);
-      if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
-        throw new Error();
-    } catch {
-      throw new Error("OIDC_ISSUER must be an HTTPS issuer URL");
-    }
-  }
-  for (const key of [
-    "AUTH_PASSWORD_ENABLED",
-    "AUTH_BREACHED_PASSWORD_CHECK_ENABLED",
-    "OIDC_ALLOW_SIGNUP_BYPASS",
-  ]) {
-    const value = source[key];
-    if (value && !["true", "false"].includes(value))
-      throw new Error(`${key} must be true or false`);
-  }
-  const passwordAuth = source.AUTH_PASSWORD_ENABLED !== "false";
-  if (!passwordAuth && !issuer)
-    throw new Error("AUTH_PASSWORD_ENABLED=false requires OIDC configuration");
-  const oidc =
-    issuer && clientId && clientSecret
-      ? {
-          issuer,
-          clientId,
-          clientSecret,
-          name: optional(source.OIDC_NAME) ?? "SSO",
-          scopes: (optional(source.OIDC_SCOPES) ?? "openid email profile")
-            .split(/[\s,]+/)
-            .filter(Boolean),
-          allowSignupBypass: source.OIDC_ALLOW_SIGNUP_BYPASS === "true",
-        }
-      : undefined;
   const authSecret = resolveAuthSecret(source);
   const sandboxProvider = resolveSandboxProvider(source);
   const cloudAgentProvider = resolveCloudAgentProvider(source);
@@ -189,9 +147,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const updaterUrl = optional(source.RAKAZO_UPDATER_URL);
   const updaterToken = optional(source.RAKAZO_UPDATER_TOKEN);
   return {
-    passwordAuth,
+    adminEmail: optional(source.RAKAZO_ADMIN_EMAIL),
+    adminPassword: source.RAKAZO_ADMIN_PASSWORD || undefined,
     breachedPasswordCheck: source.AUTH_BREACHED_PASSWORD_CHECK_ENABLED === "true",
-    oidc,
     nodeEnv: source.NODE_ENV ?? "",
     databaseUrl: required(source, "DATABASE_URL"),
     realtimeDatabaseUrl: source.REALTIME_DATABASE_URL ?? required(source, "DATABASE_URL"),
@@ -206,8 +164,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       .map((value) => value.trim())
       .filter(Boolean),
     clientIpHeader: optional(source.CLIENT_IP_HEADER)?.toLowerCase() ?? "x-forwarded-for",
-    signupsEnabled: source.SIGNUPS_ENABLED,
-    signupAllowlist: source.SIGNUP_ALLOWLIST,
     encryptionKey: resolveEncryptionKey(source),
     contentEncryption: resolveContentEncryption(source),
     dataDir: source.DATA_DIR ?? "./data",
@@ -263,7 +219,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     larkVerificationToken: optional(source.LARK_VERIFICATION_TOKEN),
     larkEncryptKey: optional(source.LARK_ENCRYPT_KEY),
     larkDomain: optional(source.LARK_DOMAIN),
-    messagingOpenSignup: source.MESSAGING_OPEN_SIGNUP === "true",
     teamChatBotId: optional(source.TEAM_CHAT_BOT_ID) ?? optional(source.SLACK_RAKAZO_BOT_ID),
     teamChatJudgeProvider: optional(source.TEAM_CHAT_JUDGE_PROVIDER),
     teamChatJudgeModel: optional(source.TEAM_CHAT_JUDGE_MODEL),

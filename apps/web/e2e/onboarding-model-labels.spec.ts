@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, signup } from "./helpers";
+import { captureScreenshot, setupAdmin } from "./helpers";
 
 test("onboarding requires a model and uses compact model selects without misleading latest labels", async ({
   page,
@@ -21,7 +21,12 @@ test("onboarding requires a model and uses compact model selects without mislead
   });
 
   const stamp = Date.now();
-  await signup(page, `model-labels-${stamp}@rakazo.test`, "password12", `Model labels ${stamp}`);
+  await setupAdmin(
+    page,
+    `model-labels-${stamp}@rakazo.test`,
+    "password12",
+    `Model labels ${stamp}`,
+  );
   await expect(page.getByRole("heading", { name: "Connect a model" })).toBeVisible({
     timeout: 20_000,
   });

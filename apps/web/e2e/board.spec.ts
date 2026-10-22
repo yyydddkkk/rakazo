@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, createNamedBot, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, createNamedBot, setupAdmin } from "./helpers";
 
 test("board creates a ticket and opens it", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const stamp = Date.now();
   const title = "Ship the board";
   const description = "Track the kanban launch.";
-  await signup(page, `board-${stamp}@rakazo.test`, "password12", "Board QA");
+  await setupAdmin(page, `board-${stamp}@rakazo.test`, "password12", "Board QA");
   await completeOnboarding(page);
   await createNamedBot(page, "Planner");
 

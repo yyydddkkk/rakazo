@@ -7,7 +7,6 @@ import { ChatSdkMessagingSurface } from "./chat-sdk-surface.js";
 import {
   enrichSlackTeamRoom,
   isMessagingEnabled,
-  isMessagingSurfaceEnabled,
   type MessagingEnvironmentValues,
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
@@ -497,24 +496,6 @@ describe("isMessagingEnabled", () => {
   it.each(["0", "false"])("does not treat VITEST=%s as an active test runner", (value) => {
     vi.stubEnv("VITEST", value);
     expect(isMessagingEnabled(messagingPlatformsFromEnv(fullEnv))).toBe(true);
-    vi.unstubAllEnvs();
-  });
-});
-
-describe("isMessagingSurfaceEnabled", () => {
-  it("requires a configured deployment model only for open signup", () => {
-    vi.stubEnv("VITEST", "");
-    const platforms = messagingPlatformsFromEnv(fullEnv);
-    const options = (deploymentModelConfigured: boolean, openSignup: boolean) => ({
-      deploymentModelConfigured,
-      openSignup,
-    });
-    // Open signup provisions users with no credentials of their own.
-    expect(isMessagingSurfaceEnabled(platforms, options(true, true))).toBe(true);
-    expect(isMessagingSurfaceEnabled(platforms, options(false, true))).toBe(false);
-    // Linking-only deployments run linked users on their own credentials.
-    expect(isMessagingSurfaceEnabled(platforms, options(false, false))).toBe(true);
-    expect(isMessagingSurfaceEnabled([], options(true, true))).toBe(false);
     vi.unstubAllEnvs();
   });
 });

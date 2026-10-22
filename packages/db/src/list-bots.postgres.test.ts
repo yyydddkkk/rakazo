@@ -2,9 +2,9 @@ import type { Pool, QueryResult } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "./client.js";
 import { createDb } from "./client.js";
-import { provisionMessagingIdentity } from "./messaging.js";
 import { createRepos } from "./repos.js";
 import { asSystem, runAsSystem, runAsTenant } from "./row-security.js";
+import { seedMessagingFixture } from "./test-support/messaging-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -58,7 +58,6 @@ describePostgres("listBots sidebar previews (PostgreSQL)", () => {
   const provider = "sendblue";
   const stamp = String(Date.now()).slice(-7);
   const ownerAddress = `+1555${stamp}`;
-  const signup = { signupsEnabled: undefined, signupAllowlist: undefined };
   const window = 16;
   let prisma: PrismaClient;
   let pool: Pool;
@@ -93,7 +92,7 @@ describePostgres("listBots sidebar previews (PostgreSQL)", () => {
       await db.pool.end();
     };
     const provisioned = await runAsSystem("test fixture", () =>
-      provisionMessagingIdentity(prisma, { provider, address: ownerAddress }, signup),
+      seedMessagingFixture(prisma, { provider, address: ownerAddress }),
     );
     owner = provisioned;
     const actor = actorFor(owner);

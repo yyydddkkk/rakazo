@@ -13,31 +13,10 @@ type SidebarChat = {
 type SidebarSpace<TBot extends SidebarChat, TGroup extends SidebarChat> = {
   id: string;
   name: string;
-  canRename?: boolean;
-  canDelete?: boolean;
   bots: readonly TBot[];
   groups: readonly TGroup[];
   botSections: readonly { id: string; name: string }[];
 };
-
-function spaceHeaderMenu(space: { canRename?: boolean; canDelete?: boolean }, hostsMenu: boolean) {
-  return {
-    canRenameSpace: hostsMenu && space.canRename === true,
-    canDeleteSpace: hostsMenu && space.canDelete === true,
-    // Every member can open a space's settings, so the menu does not depend on rename or delete.
-    canOpenSpaceSettings: hostsMenu,
-  };
-}
-
-export async function commitSpaceRename(input: {
-  rename: () => Promise<void>;
-  apply: () => void;
-  refresh: () => Promise<void>;
-}): Promise<void> {
-  await input.rename();
-  input.apply();
-  await input.refresh().catch(() => undefined);
-}
 
 export function sidebarGroupsForSpaces<TBot extends SidebarChat, TGroup extends SidebarChat>(
   spaces: readonly SidebarSpace<TBot, TGroup>[],
@@ -45,7 +24,6 @@ export function sidebarGroupsForSpaces<TBot extends SidebarChat, TGroup extends 
   labels?: { pinned: string; unassigned: string },
 ) {
   const needle = query.toLowerCase();
-  const showSpaceNames = spaces.length > 1;
   return spaces.flatMap((space) => {
     const visibleBots = space.bots.filter((bot) =>
       `${bot.name} ${bot.title ?? ""} ${bot.preview ?? ""}`.toLowerCase().includes(needle),
@@ -86,60 +64,25 @@ export function sidebarGroupsForSpaces<TBot extends SidebarChat, TGroup extends 
       ];
       grouped.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
     }
-    const sections = grouped.map((group, index) => ({
+    const sections = grouped.map((group) => ({
       ...group,
       sectionId: group.key.startsWith("section:") ? group.key.slice("section:".length) : null,
-      key: showSpaceNames ? `space:${space.id}:${group.key}` : group.key,
-      // A header holding the space menu is never blank, even for the only space.
-      title: showSpaceNames
-        ? group.title
-          ? `${space.name} · ${group.title}`
-          : space.name
-        : index === 0 && !group.title
-          ? space.name
-          : group.title,
-      showLock: showSpaceNames,
-      emptySpaceId: undefined as string | undefined,
+      key: group.key,
       spaceId: space.id,
       spaceName: space.name,
-      ...spaceHeaderMenu(space, index === 0),
     }));
     if (sections.length > 0) return sections;
-    // Keep empty spaces selectable; chat clicks are the only switch control.
-    if (needle && (space.bots.length > 0 || space.groups.length > 0)) return [];
-    // Saved sections stay listed under the placeholder so they can still be
-    // renamed or deleted after their last chat leaves.
+    // Saved sections remain editable after their last chat leaves.
     const emptySections = needle
       ? []
       : space.botSections.map((section) => ({
-          key: showSpaceNames ? `space:${space.id}:section:${section.id}` : `section:${section.id}`,
-          title: showSpaceNames ? `${space.name} · ${section.name}` : section.name,
+          key: `section:${section.id}`,
+          title: section.name,
           bots: [] as (typeof sections)[number]["bots"],
           sectionId: section.id as string | null,
-          showLock: showSpaceNames,
-          emptySpaceId: undefined as string | undefined,
           spaceId: space.id,
           spaceName: space.name,
-          ...spaceHeaderMenu(space, false),
         }));
-    // A lone space is the selected one, so its settings stay in the account menu too.
-    const lone = !showSpaceNames && !space.canRename && !space.canDelete;
-    if (lone && (needle || emptySections.length > 0)) {
-      return emptySections;
-    }
-    return [
-      {
-        key: showSpaceNames ? `space:${space.id}:empty` : `space:${space.id}:actions`,
-        title: space.name,
-        bots: [],
-        sectionId: null,
-        showLock: showSpaceNames,
-        emptySpaceId: showSpaceNames ? space.id : undefined,
-        spaceId: space.id,
-        spaceName: space.name,
-        ...spaceHeaderMenu(space, true),
-      },
-      ...emptySections,
-    ];
+    return emptySections;
   });
 }

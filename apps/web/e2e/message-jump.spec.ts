@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("a ?m= deep link jumps while the thread is streaming", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `jump-${stamp}@rakazo.test`, "password12", "Jump Tester");
+  await setupAdmin(page, `jump-${stamp}@rakazo.test`, "password12", "Jump Tester");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);

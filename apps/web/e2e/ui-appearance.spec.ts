@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 async function captureSidebarSearchSelected(
   page: Page,
@@ -47,7 +47,7 @@ async function captureSidebarSearchSelected(
 
 test("account settings appearance control switches to light mode", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `ui-appearance-${stamp}@rakazo.test`, "password12", "Appearance QA");
+  await setupAdmin(page, `ui-appearance-${stamp}@rakazo.test`, "password12", "Appearance QA");
   await completeOnboarding(page, testInfo);
 
   await page.getByTestId("user-menu-trigger").click();
@@ -101,7 +101,7 @@ test("account settings appearance control switches to light mode", async ({ page
 });
 
 test("sidebar footer opens integrations and the account menu", async ({ page }, testInfo) => {
-  await signup(page, `footer-web-${Date.now()}@rakazo.test`, "password12", "Footer Demo");
+  await setupAdmin(page, `footer-web-${Date.now()}@rakazo.test`, "password12", "Footer Demo");
   await completeOnboarding(page);
   const footer = page.getByTestId("sidebar-footer");
   await expect(footer).toBeVisible();
@@ -150,7 +150,7 @@ test("sidebar footer opens integrations and the account menu", async ({ page }, 
 
 test("sidebar footer keeps the account identity readable", async ({ page }, testInfo) => {
   const email = `footer-${Date.now()}@rakazo.test`;
-  await signup(page, email, "password12", "Footer Demo");
+  await setupAdmin(page, email, "password12", "Footer Demo");
   await completeOnboarding(page);
   await page.request.post("/api/auth/update-user", { data: { name: "Footer Demo" } });
   await page.reload();
@@ -253,7 +253,7 @@ test("sidebar footer keeps the account identity readable", async ({ page }, test
 });
 
 test("footer app marks follow the integrations overlay", async ({ page }) => {
-  await signup(page, `footer-apps-${Date.now()}@rakazo.test`, "password12", "Footer Demo");
+  await setupAdmin(page, `footer-apps-${Date.now()}@rakazo.test`, "password12", "Footer Demo");
   await completeOnboarding(page);
   let connected = true;
   let listed = true;
@@ -351,7 +351,7 @@ test("sidebar list fades above the transparent footer and keeps the last row rea
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await signup(page, `footer-scroll-${Date.now()}@rakazo.test`, "password12", "Demo User");
+  await setupAdmin(page, `footer-scroll-${Date.now()}@rakazo.test`, "password12", "Demo User");
   await completeOnboarding(page);
   for (let index = 0; index < 20; index++) {
     await rpc(page, "bots/create", {

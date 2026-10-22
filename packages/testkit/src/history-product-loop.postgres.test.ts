@@ -184,7 +184,7 @@ describe.skipIf(!enabled)("product history diagnostic loop", () => {
               },
             }),
             wakeupDriver: "memory",
-            signupsEnabled: "true",
+
             composio,
             encryptionKey: "synthetic-product-loop-encryption-key",
           }),

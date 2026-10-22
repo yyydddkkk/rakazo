@@ -5,6 +5,7 @@ import type { ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { computerTestSandbox } from "./computer-test-config.js";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 
 const live = process.env.RUN_COMPUTER_E2E === "1";
@@ -83,15 +84,18 @@ describeLive("real model and sandbox computer journey", () => {
 
   it("observes and clicks a real browser, then uses terminal and files", async () => {
     const stamp = Date.now();
-    const signup = await handles.app.request("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
-      body: JSON.stringify({
-        email: `computer-${stamp}@rakazo.test`,
-        password: "password12",
-        name: "Computer E2E",
-      }),
-    });
+    const signup = await fixtureAccountResponse(
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+        body: JSON.stringify({
+          email: `computer-${stamp}@rakazo.test`,
+          password: "password12",
+          name: "Computer E2E",
+        }),
+      },
+      handles.prisma,
+    );
     expect(signup.status).toBeLessThan(400);
     const cookie = sessionCookieHeader(signup);
     const bot = await rpc<{ id: string }>(handles.app, cookie, "bots/create", {

@@ -1,10 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("a group a bot creates after approval appears in the sidebar without a reload", async ({
   page,
 }, testInfo) => {
-  await signup(page, `bot-management-groups-${Date.now()}@rakazo.test`, "password12", "Bot Groups");
+  await setupAdmin(
+    page,
+    `bot-management-groups-${Date.now()}@rakazo.test`,
+    "password12",
+    "Bot Groups",
+  );
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
   const chiefId = activeBotId(page);
@@ -51,7 +56,12 @@ test("a group a bot creates after approval appears in the sidebar without a relo
 test("model approvals use catalog labels and fit wide and narrow chats", async ({
   page,
 }, testInfo) => {
-  await signup(page, `bot-management-model-${Date.now()}@rakazo.test`, "password12", "Bot Models");
+  await setupAdmin(
+    page,
+    `bot-management-model-${Date.now()}@rakazo.test`,
+    "password12",
+    "Bot Models",
+  );
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
   const chiefId = activeBotId(page);

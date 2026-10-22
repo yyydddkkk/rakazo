@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 test("asks before fetching a site the message did not name", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `fetch-approval-${stamp}@rakazo.test`, "password12", "Fetch Approval");
+  await setupAdmin(page, `fetch-approval-${stamp}@rakazo.test`, "password12", "Fetch Approval");
   await completeOnboarding(page);
 
   const composer = page.getByPlaceholder(/Message/);

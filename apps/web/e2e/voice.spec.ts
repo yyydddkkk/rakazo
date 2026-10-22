@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openUserSettings, rpc, signup } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  openUserSettings,
+  rpc,
+  setupAdmin,
+} from "./helpers";
 
 test.use({
   launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] },
@@ -13,7 +19,7 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   });
   const stamp = Date.now();
   const userName = `Voice ${stamp}`;
-  await signup(page, `voice-${stamp}@rakazo.test`, "password12", userName);
+  await setupAdmin(page, `voice-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
 
   await expect(
@@ -143,7 +149,7 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
 
 test("voice settings take a self-hosted speech server by URL", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `voice-local-${stamp}@rakazo.test`, "password12", `Voice Local ${stamp}`);
+  await setupAdmin(page, `voice-local-${stamp}@rakazo.test`, "password12", `Voice Local ${stamp}`);
   await completeOnboarding(page);
 
   await openUserSettings(page, "voice");

@@ -1,6 +1,6 @@
 import type { Route } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 async function patchJson(route: Route, patch: (body: { json?: Record<string, unknown> }) => void) {
   const response = await route.fetch();
@@ -23,7 +23,7 @@ function stopComputer(computer: unknown) {
 test("unavailable computers explain setup and open computer settings", async ({
   page,
 }, testInfo) => {
-  await signup(page, `computers-off-${Date.now()}@rakazo.test`, "password12", "Computers Off");
+  await setupAdmin(page, `computers-off-${Date.now()}@rakazo.test`, "password12", "Computers Off");
   await completeOnboarding(page);
   await page.route("**/rpc/me", (route) =>
     patchJson(route, (body) => {

@@ -12,12 +12,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 const capability = {
-  passwordAuth: false,
-  sso: { name: "Example", availability: "unavailable" },
   passwordReset: false,
   resetUrl: null,
 };
-it("validates configured SSO even during discovery downtime", async () => {
+it("validates password recovery capabilities", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => Response.json(capability)),
@@ -26,13 +24,8 @@ it("validates configured SSO even during discovery downtime", async () => {
 });
 it.each([
   {},
-  { passwordReset: false, resetUrl: null, sso: null },
-  { passwordReset: false, resetUrl: null, passwordAuth: false },
   { passwordReset: "false", resetUrl: null },
   { passwordReset: false, resetUrl: "invalid" },
-  { passwordAuth: true },
-  { ...capability, sso: {} },
-  { ...capability, passwordAuth: "false" },
 ])("rejects malformed successful capabilities", async (body) => {
   vi.stubGlobal(
     "fetch",
@@ -48,41 +41,15 @@ it("rejects HTTP errors", async () => {
   await expect(fetchAuthCapabilities()).rejects.toThrow();
 });
 
-it("accepts old capabilities from the server", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => Response.json({ passwordReset: false, resetUrl: null })),
-  );
-  await expect(fetchAuthCapabilities()).resolves.toEqual({
-    passwordAuth: true,
-    sso: null,
-    passwordReset: false,
-    resetUrl: null,
-  });
+it("shares a successful deployment lookup across callers", async () => {
+  const fetch = vi.fn(async () => Response.json(capability));
+  vi.stubGlobal("fetch", fetch);
+  const first = fetchAuthCapabilities();
+  expect(fetchAuthCapabilities()).toBe(first);
+  await expect(first).resolves.toEqual(capability);
+  await expect(fetchAuthCapabilities()).resolves.toEqual(capability);
+  expect(fetch).toHaveBeenCalledOnce();
 });
-
-it.each([null, { ...capability.sso, availability: "available" }])(
-  "shares the pending and successful deployment lookup across callers with SSO %j",
-  async (sso) => {
-    const available = { ...capability, sso };
-    let resolve!: (response: Response) => void;
-    const fetch = vi.fn(
-      () =>
-        new Promise<Response>((done) => {
-          resolve = done;
-        }),
-    );
-    vi.stubGlobal("fetch", fetch);
-    const auth = fetchAuthCapabilities();
-    const gate = fetchAuthCapabilities();
-    expect(gate).toBe(auth);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    resolve(Response.json(available));
-    await expect(auth).resolves.toEqual(available);
-    await expect(fetchAuthCapabilities()).resolves.toEqual(available);
-    expect(fetch).toHaveBeenCalledTimes(1);
-  },
-);
 
 it("retries a failed deployment lookup", async () => {
   const fetch = vi
@@ -94,19 +61,6 @@ it("retries a failed deployment lookup", async () => {
   await expect(fetchAuthCapabilities()).resolves.toEqual(capability);
   expect(fetch).toHaveBeenCalledTimes(2);
 });
-
-it.each(["checking", "unavailable"])(
-  "refreshes %s SSO discovery on the next lookup",
-  async (availability) => {
-    const fetch = vi.fn(async () =>
-      Response.json({ ...capability, sso: { ...capability.sso, availability } }),
-    );
-    vi.stubGlobal("fetch", fetch);
-    await fetchAuthCapabilities();
-    await fetchAuthCapabilities();
-    expect(fetch).toHaveBeenCalledTimes(2);
-  },
-);
 
 function networkResponse(body: string, headers: Record<string, string>) {
   const response = new Response(body, { headers });

@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("opens Artifacts from the account menu and lists created files", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `artifacts-tab-${stamp}@rakazo.test`, "password12", "Artifacts Tab");
+  await setupAdmin(page, `artifacts-tab-${stamp}@rakazo.test`, "password12", "Artifacts Tab");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/(?!artifacts(?:\/|$))[^/]+$/);

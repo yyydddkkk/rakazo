@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { fixtureAccountResponse } from "../../../packages/testkit/src/fixture-account.js";
 import { sessionCookieHeader } from "../../../packages/testkit/src/index.js";
 import { createApp } from "./app.js";
 
@@ -20,20 +21,22 @@ describePostgres("ticket board app wiring", () => {
       sandboxProvider: "fake",
       agentRuntime: "scripted",
       wakeupDriver: "memory",
-      signupsEnabled: "true",
       webOrigin: "http://127.0.0.1:5173",
       authUrl: "http://127.0.0.1:5173",
     });
     try {
-      const signup = await handles.app.request("/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
-        body: JSON.stringify({
-          email: `board-${enabled}-${Date.now()}@rakazo.test`,
-          password: "test-password-123",
-          name: "Board tester",
-        }),
-      });
+      const signup = await fixtureAccountResponse(
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+          body: JSON.stringify({
+            email: `board-${enabled}-${Date.now()}@rakazo.test`,
+            password: "test-password-123",
+            name: "Board tester",
+          }),
+        },
+        handles.prisma,
+      );
       expect(signup.status).toBeLessThan(400);
       const cookie = sessionCookieHeader(signup);
       const call = (procedure: string) =>

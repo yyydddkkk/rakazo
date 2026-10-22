@@ -49,7 +49,7 @@ import {
   InstalledConnectorProvider,
   IntegrationProviderSettings,
   isComposioEnabled,
-  isMessagingSurfaceEnabled,
+  isMessagingEnabled,
   isPipedreamEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
@@ -72,10 +72,9 @@ import {
   toTeamChatInbound,
   withSecretPersistence,
 } from "@rakazo/adapters";
-import { createAuth, isBlockedAuthPath, loopbackTwinOrigins } from "@rakazo/auth";
+import { bootstrapAdmin, createAuth, isBlockedAuthPath, loopbackTwinOrigins } from "@rakazo/auth";
 import type { Actor, AuthCapabilities } from "@rakazo/contracts";
 import { SERVER_BUILD_HEADER } from "@rakazo/contracts";
-import { signupAllowlistBootUpdate, signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import {
   contentEncryptionOf,
@@ -88,7 +87,6 @@ import {
   IsolationError,
   installSecurityEventStore,
   parsePositiveInteger,
-  provisionMessagingIdentity,
   pushSessionExpiresAt,
   requireMembership,
   rowSecurityWarning,
@@ -214,6 +212,13 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         encryptContent: env.contentEncryption,
       });
   let { prisma } = created;
+  try {
+    await bootstrapAdmin(prisma, { email: env.adminEmail, password: env.adminPassword });
+  } catch (error) {
+    await prisma.$disconnect().catch(() => undefined);
+    await created.pool?.end().catch(() => undefined);
+    throw error;
+  }
   // Built before anything listens, so a bad TRUSTED_PROXIES entry stops startup.
   const clientIp = createClientIpResolver({
     // Unset trusts the proxies a stack is built with: on loopback or on the API's own networks.
@@ -249,45 +254,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   });
   const ticketBoardEnabled = env.ticketBoardEnabled;
   const boardEvents = createBoardEvents(realtime);
-  const environmentSignupPolicy = signupPolicyFromEnv(env);
-  const deploymentSettings = await prisma.deploymentSettings.upsert({
-    where: { id: "default" },
-    create: {
-      id: "default",
-      signupsEnabled: environmentSignupPolicy.enabled,
-      signupAllowlist: environmentSignupPolicy.allowlist.join(","),
-      signupPolicyInitialized: true,
-    },
-    update: {},
-  });
-  if (!deploymentSettings.signupPolicyInitialized) {
-    // Older versions created this row with schema defaults even though auth
-    // still enforced the environment policy. Copy that effective policy once
-    // so upgrades preserve behavior. Later starts reapply a non-empty
-    // SIGNUP_ALLOWLIST; a blank value leaves the stored list alone.
-    await prisma.deploymentSettings.updateMany({
-      where: { id: "default", signupPolicyInitialized: false },
-      data: {
-        signupsEnabled: environmentSignupPolicy.enabled,
-        signupAllowlist: environmentSignupPolicy.allowlist.join(","),
-        signupPolicyInitialized: true,
-      },
-    });
-  } else {
-    const signupAllowlist = signupAllowlistBootUpdate(
-      deploymentSettings.signupAllowlist,
-      env.signupAllowlist,
-      true,
-    );
-    if (signupAllowlist !== null) {
-      await prisma.deploymentSettings.update({
-        where: { id: "default" },
-        data: { signupAllowlist },
-      });
-      logger.info("applied SIGNUP_ALLOWLIST from the environment");
-    }
-  }
-
   const jobKind = env.wakeupDriver;
   const inMemoryJobs = jobKind === "memory" ? new InMemoryJobQueue() : undefined;
   // prismaOverride skips createDb, so there is no shared pool. The previous
@@ -363,10 +329,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   const messagingPlatforms = messagingPlatformsFromEnv(env, { pollInboundMessages: true });
   const messaging =
     messagingOverride ??
-    (isMessagingSurfaceEnabled(messagingPlatforms, {
-      deploymentModelConfigured: env.deploymentModelConfigured,
-      openSignup: env.messagingOpenSignup,
-    })
+    (isMessagingEnabled(messagingPlatforms)
       ? new ChatSdkMessagingSurface(messagingPlatforms)
       : undefined);
   const localEmailEmulator =
@@ -424,14 +387,10 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     });
   const auth = createAuth(prisma, {
     analytics,
-    passwordAuth: env.passwordAuth,
     breachedPasswordCheck: env.breachedPasswordCheck,
-    oidc: env.oidc,
     secret: env.authSecret,
     baseURL: env.authUrl,
     webOrigin: env.webOrigin,
-    signupsEnabled: env.signupsEnabled,
-    signupAllowlist: env.signupAllowlist,
     email,
     logger: {
       level: "error",
@@ -481,9 +440,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       );
     },
   });
-  const oauthTokenUpgrade = auth
-    .encryptStoredOAuthTokens()
-    .catch((error) => getLogger().error("oauth token encryption upgrade failed", error));
   // One provider instance so emulator launches and polls share the same Map.
   const cloudAgent = createCloudAgentConnection({
     CLOUD_AGENT_PROVIDER: env.cloudAgentProvider,
@@ -607,7 +563,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     messaging: {
       enabled: Boolean(messaging),
       providers: messaging?.platforms().map((platform) => platform.provider) ?? [],
-      openSignup: env.messagingOpenSignup,
     },
     env: {
       phoneCallsEnabled: env.phoneCallsEnabled,
@@ -658,15 +613,8 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   }
   app.get("/api/auth/capabilities", (c) => {
     return c.json({
-      sso: env.oidc
-        ? { name: env.oidc.name, availability: auth.ssoAvailability() ?? "checking" }
-        : null,
-      passwordAuth: env.passwordAuth !== false,
-      passwordReset: env.passwordAuth !== false && Boolean(email),
-      resetUrl:
-        env.passwordAuth !== false && email ? new URL("/reset-password", env.webOrigin).href : null,
-      emailCode: auth.emailCodeSignIn,
-      passkeyRpId: auth.passkeyRpId,
+      passwordReset: Boolean(email),
+      resetUrl: email ? new URL("/reset-password", env.webOrigin).href : null,
     } satisfies AuthCapabilities);
   });
   if (localEmailEmulator && env.nodeEnv === "development") {
@@ -776,12 +724,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       prisma,
       events,
       jobs,
-      provision: (request, policyEnv) => provisionMessagingIdentity(prisma, request, policyEnv),
-      openSignup: env.messagingOpenSignup,
-      signupPolicy: {
-        signupsEnabled: env.signupsEnabled,
-        signupAllowlist: env.signupAllowlist,
-      },
       acknowledge: receipts?.acknowledge,
     } satisfies Parameters<typeof createMessagingInboundHandler>[0];
     const inbound = createMessagingInboundHandler(inboundDeps);
@@ -1067,7 +1009,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     stop: async () => {
       // Abort in-flight continueRun boot waits before draining jobs so stop() cannot sit
       // on waitForComputerReady for the full boot-wait window during shared Postgres journeys.
-      auth.disposeOidcDiscovery();
       shutdown.abort();
       oauthLogins.abortAll();
       messagingStopped = true;
@@ -1087,7 +1028,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       await teamChatBridge?.stop();
       await email?.drain?.();
       await reconciler?.stop();
-      await oauthTokenUpgrade;
       await jobs.close();
       await secrets.close();
       await realtime.close();

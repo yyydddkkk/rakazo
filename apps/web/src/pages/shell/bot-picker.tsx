@@ -9,7 +9,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@rakazo/ui-web";
-import { Info, Lock, Plus, Users } from "lucide-react";
+import { Info, Plus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { IconTooltip } from "../../components/IconTooltip";
 
@@ -18,17 +18,13 @@ export function BotCreatePicker({
   onCreateBot,
   onOpenBot,
   onCreateGroup,
-  onCreateSpace,
   onShowGroupInfo,
-  onShowSpaceInfo,
 }: {
   bots: Bot[];
   onCreateBot: () => void;
   onOpenBot: (botId: string) => void;
   onCreateGroup: () => void;
-  onCreateSpace: () => void;
   onShowGroupInfo: () => void;
-  onShowSpaceInfo: () => void;
 }) {
   const { t } = useLingui();
   const [query, setQuery] = useState("");
@@ -111,35 +107,6 @@ export function BotCreatePicker({
                     event.stopPropagation();
                     event.preventDefault();
                     onShowGroupInfo();
-                  }}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  className="-mr-2 shrink-0 rounded p-1 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-focus-within/command-item:opacity-100 group-hover/command-item:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
-                >
-                  <Info size={14} strokeWidth={1.8} aria-hidden="true" />
-                </button>
-              </IconTooltip>
-            </CommandItem>
-            <CommandItem
-              value="create-space"
-              data-testid="create-new-space"
-              onSelect={() => onCreateSpace()}
-              className="gap-2"
-            >
-              <Lock size={14} strokeWidth={1.8} aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate">
-                <Trans>Create new Space</Trans>
-              </span>
-              <IconTooltip label={t`About spaces`}>
-                <button
-                  type="button"
-                  data-testid="picker-info-space"
-                  aria-label={t`About spaces`}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    event.preventDefault();
-                    onShowSpaceInfo();
                   }}
                   onKeyDown={(event) => event.stopPropagation()}
                   className="-mr-2 shrink-0 rounded p-1 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-focus-within/command-item:opacity-100 group-hover/command-item:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"

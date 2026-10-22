@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("composer / picker lists skills above actions", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `slash-skills-${stamp}@rakazo.test`, "password12", "Slash Skills");
+  await setupAdmin(page, `slash-skills-${stamp}@rakazo.test`, "password12", "Slash Skills");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 // Harness pins CLOUD_AGENT_PROVIDER=emulator (see packages/testkit); do not point at a live Cursor key.
 // cloud_agent_launch is consequential but runs without a confirmation by default (optional in settings).
 test("renders a compact cloud agent card from an emulator launch", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `cloud-agent-${stamp}@rakazo.test`, "password12", "Cloud Agent");
+  await setupAdmin(page, `cloud-agent-${stamp}@rakazo.test`, "password12", "Cloud Agent");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);

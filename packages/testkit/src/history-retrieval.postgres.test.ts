@@ -5,6 +5,7 @@ import path from "node:path";
 import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
 import { describe, expect, it } from "vitest";
 import { discardBotIntroRun } from "./discard-bot-intro.js";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
@@ -176,7 +177,7 @@ describe.skipIf(!enabled)("history retrieval through executor", () => {
           sandboxProvider: "fake",
           agentRuntime: "pi",
           wakeupDriver: "memory",
-          signupsEnabled: "true",
+
           composio: new ComposioConnector({ client: new FakeComposioClient() }),
           encryptionKey: "history-fixture-encryption-key",
           deploymentModelKey: fakeSecrets[0],
@@ -185,15 +186,18 @@ describe.skipIf(!enabled)("history retrieval through executor", () => {
         });
         stop = handles.stop;
         const db = asSystem(handles.prisma);
-        const signup = await handles.app.request("/api/auth/sign-up/email", {
-          method: "POST",
-          headers: { "content-type": "application/json", origin },
-          body: JSON.stringify({
-            email: `history-${randomUUID()}@rakazo.test`,
-            password: "password12",
-            name: "History fixture",
-          }),
-        });
+        const signup = await fixtureAccountResponse(
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", origin },
+            body: JSON.stringify({
+              email: `history-${randomUUID()}@rakazo.test`,
+              password: "password12",
+              name: "History fixture",
+            }),
+          },
+          handles.prisma,
+        );
         expect(signup.status).toBeLessThan(400);
         const cookie = sessionCookieHeader(signup);
         const rpc = async <T>(procedure: string, input: unknown): Promise<T> => {

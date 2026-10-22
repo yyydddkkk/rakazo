@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("a short reply thread shows one time separator and navigates to its parent", async ({
   page,
 }, testInfo) => {
-  await signup(page, `time-replies-${Date.now()}@rakazo.test`, "password12", "Reply Tester");
+  await setupAdmin(page, `time-replies-${Date.now()}@rakazo.test`, "password12", "Reply Tester");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await rpc(page, "threads/clear", { botId });
@@ -52,7 +52,7 @@ test("a short reply thread shows one time separator and navigates to its parent"
 test("replying to a photo shows authenticated thumbnails before and after sending", async ({
   page,
 }, testInfo) => {
-  await signup(page, `photo-replies-${Date.now()}@rakazo.test`, "password12", "Reply Tester");
+  await setupAdmin(page, `photo-replies-${Date.now()}@rakazo.test`, "password12", "Reply Tester");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await rpc(page, "threads/clear", { botId });

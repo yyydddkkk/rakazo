@@ -263,7 +263,6 @@ function messagingDeps(
     messaging: {
       enabled: overrides.enabled ?? true,
       providers: ["sendblue"],
-      openSignup: false,
     },
     dataDir: "/tmp/rakazo-router-test",
   } as unknown as RouterDeps;
@@ -304,7 +303,6 @@ describe("messaging.status", () => {
       json: {
         enabled: true,
         providers: ["sendblue"],
-        openSignup: false,
         identities: [
           {
             id: "mi-1",
@@ -322,7 +320,7 @@ describe("messaging.status", () => {
     const { handler, actor } = messagingDeps({ identity: null });
     const response = await call(handler, actor, "messaging/status");
     await expect(response.json()).resolves.toEqual({
-      json: { enabled: true, providers: ["sendblue"], openSignup: false, identities: [] },
+      json: { enabled: true, providers: ["sendblue"], identities: [] },
     });
   });
 });

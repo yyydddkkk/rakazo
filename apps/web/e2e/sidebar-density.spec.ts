@@ -5,7 +5,7 @@ import {
   completeOnboarding,
   openUserSettings,
   rpc,
-  signup,
+  setupAdmin,
 } from "./helpers";
 
 const DENSITY_KEY = "rakazo.botsSidebarDensity";
@@ -14,7 +14,7 @@ test("compact bot sidebar hides previews and preserves roster status accessibly"
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `sidebar-density-${stamp}@rakazo.test`, "password12", "Sidebar Density");
+  await setupAdmin(page, `sidebar-density-${stamp}@rakazo.test`, "password12", "Sidebar Density");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

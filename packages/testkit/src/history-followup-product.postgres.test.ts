@@ -129,7 +129,7 @@ describe.skipIf(!enabled)("persisted source-verified history followups", () => {
                 agentRuntime: "pi",
                 contextStrategy: strategy,
                 wakeupDriver: "memory",
-                signupsEnabled: "true",
+
                 composio,
                 encryptionKey: "synthetic-history-followup-encryption-key",
               }),

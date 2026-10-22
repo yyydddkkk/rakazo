@@ -6,8 +6,6 @@ import {
   createAuth,
   isBlockedAuthPath,
   passwordResetEmail,
-  resolveSignupPolicy,
-  signInCodeEmail,
 } from "./index.js";
 
 describe("auth policy", () => {
@@ -30,7 +28,6 @@ describe("auth policy", () => {
 
   it("keeps the account routes the apps call", () => {
     for (const path of [
-      "/sign-up/email",
       "/sign-in/email",
       "/sign-out",
       "/get-session",
@@ -42,56 +39,6 @@ describe("auth policy", () => {
       expect(isBlockedAuthPath(path), path).toBe(false);
     }
   });
-
-  it.each(["sign-in/email", "sign-up/email"])("logs internal failures from %s", async (path) => {
-    const error = new Error("database unavailable");
-    const log = vi.fn();
-    const auth = createAuth(
-      { deploymentSettings: { findUnique: vi.fn().mockRejectedValue(error) } } as never,
-      {
-        secret: "offline-auth-secret-at-least-32-characters",
-        baseURL: "https://api.example.test",
-        webOrigin: "https://app.example.test",
-        signupsEnabled: "true",
-        signupAllowlist: "",
-        logger: { level: "error", log },
-      },
-    );
-    const response = await auth.handler(
-      new Request(`https://api.example.test/api/auth/${path}`, {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: "https://app.example.test" },
-        body: JSON.stringify({
-          email: "test@example.test",
-          password: "test-password-123",
-          name: "Test",
-        }),
-      }),
-    );
-    expect(response.status).toBe(500);
-    expect(log).toHaveBeenCalledWith("error", expect.any(String), error);
-  });
-
-  it("disables organization deletion inside Better Auth as well", async () => {
-    const auth = createAuth({} as never, {
-      secret: "test-secret-that-is-long-enough-for-better-auth",
-      baseURL: "http://127.0.0.1:3100",
-      webOrigin: "http://127.0.0.1:5173",
-      signupsEnabled: undefined,
-      signupAllowlist: undefined,
-    });
-
-    const res = await auth.handler(
-      new Request("http://127.0.0.1:3100/api/auth/organization/delete", {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
-        body: JSON.stringify({ organizationId: "space-1" }),
-      }),
-    );
-
-    expect(res.status).toBe(404);
-    expect(await res.json()).toMatchObject({ code: "ORGANIZATION_DELETION_DISABLED" });
-  });
 });
 
 describe("authRateLimitOptions", () => {
@@ -100,15 +47,8 @@ describe("authRateLimitOptions", () => {
       enabled: true,
       storage: "database",
       customRules: {
-        "/request-account-deletion": { window: 600, max: 3 },
         "/sign-in/email": { window: 15 * 60, max: 10 },
-        "/sign-up/email": { window: 15 * 60, max: 10 },
         "/request-password-reset": { window: 15 * 60, max: 10 },
-        "/email-otp/send-verification-otp": { window: 15 * 60, max: 10 },
-        "/sign-in/email-otp": { window: 15 * 60, max: 10 },
-        "/passkey/verify-authentication": { window: 15 * 60, max: 10 },
-        "/passkey/verify-registration": { window: 15 * 60, max: 10 },
-        "/passkey/generate-authenticate-options": { window: 60, max: 30 },
       },
     });
   });
@@ -161,84 +101,16 @@ describe("passwordResetEmail", () => {
   });
 });
 
-describe("signInCodeEmail", () => {
-  it("puts the code in plain text and HTML without links", () => {
-    const message = signInCodeEmail("ada@example.test", "042517");
-    expect(message).toMatchObject({ to: "ada@example.test", subject: "Your Rakazo sign-in code" });
-    expect(message.text).toContain("042517");
-    expect(message.html).toContain("042517");
-    expect(`${message.text}${message.html}`).not.toMatch(/https?:/);
-  });
-});
-
-describe("resolveSignupPolicy", () => {
-  it("uses environment defaults before deployment settings exist", async () => {
-    const prisma = {
-      deploymentSettings: { findUnique: vi.fn().mockResolvedValue(null) },
-    };
-    await expect(
-      resolveSignupPolicy(prisma as never, {
-        signupsEnabled: "false",
-        signupAllowlist: "you@example.com,@company.test",
-      }),
-    ).resolves.toEqual({
-      enabled: false,
-      allowlist: ["you@example.com", "@company.test"],
-    });
-  });
-
-  it("keeps using the environment policy for a pre-upgrade uninitialized row", async () => {
-    const prisma = {
-      deploymentSettings: {
-        findUnique: vi.fn().mockResolvedValue({
-          signupsEnabled: true,
-          signupAllowlist: "",
-          signupPolicyInitialized: false,
-        }),
-      },
-    };
-    await expect(
-      resolveSignupPolicy(prisma as never, {
-        signupsEnabled: "false",
-        signupAllowlist: "existing-policy@example.com",
-      }),
-    ).resolves.toEqual({ enabled: false, allowlist: ["existing-policy@example.com"] });
-  });
-
-  it("uses live deployment settings as the effective policy after initial seeding", async () => {
-    const prisma = {
-      deploymentSettings: {
-        findUnique: vi.fn().mockResolvedValue({
-          signupsEnabled: false,
-          signupAllowlist: "approved@example.com",
-          signupPolicyInitialized: true,
-        }),
-      },
-    };
-    await expect(
-      resolveSignupPolicy(prisma as never, {
-        signupsEnabled: "false",
-        signupAllowlist: "environment-only@example.com",
-      }),
-    ).resolves.toEqual({ enabled: false, allowlist: ["approved@example.com"] });
-  });
-});
-
 describe("stored account names", () => {
   const auth = createAuth({} as never, {
     secret: "offline-auth-secret-at-least-32-characters",
     baseURL: "https://api.example.test",
     webOrigin: "https://app.example.test",
-    signupsEnabled: "true",
-    signupAllowlist: "",
   });
   it.each(["", " ", "__TestTok1__", "550e8400-e29b-41d4-a716-446655440000"])(
-    "normalizes unusable names on creation and updates: %s",
+    "normalizes unusable names on updates: %s",
     async (name) => {
       const hooks = auth.options.databaseHooks!.user!;
-      expect(
-        await hooks.create!.before!({ name, email: "demo@example.com" } as never),
-      ).toMatchObject({ data: { name: "" } });
       expect(await hooks.update!.before!({ name })).toMatchObject({ data: { name: "" } });
     },
   );
@@ -248,22 +120,6 @@ describe("stored account names", () => {
     const result = await hook({ emailVerified: true });
     expect(result).toEqual({ data: { emailVerified: true } });
   });
-});
-
-it("preserves readable numbered account names on writes", async () => {
-  const auth = createAuth({} as never, {
-    secret: "offline-auth-secret-at-least-32-characters",
-    baseURL: "https://api.example.test",
-    webOrigin: "https://app.example.test",
-    signupsEnabled: "true",
-    signupAllowlist: "",
-  });
-  expect(
-    await auth.options.databaseHooks!.user!.create!.before!({
-      name: "CustomerSupportBot2026",
-      email: "demo@example.com",
-    } as never),
-  ).toMatchObject({ data: { name: "CustomerSupportBot2026" } });
 });
 
 describe("bearer sessions", () => {
@@ -287,8 +143,6 @@ describe("bearer sessions", () => {
       secret,
       baseURL: "https://api.example.test",
       webOrigin: "https://app.example.test",
-      signupsEnabled: "true",
-      signupAllowlist: "",
     });
     return { auth, lookups };
   }

@@ -4,14 +4,14 @@ import {
   captureScreenshot,
   completeOnboarding,
   rpc,
-  signup,
+  setupAdmin,
   waitForSidebarTransitions,
 } from "./helpers";
 
 test("drag bots into collapsed sections, another section's row, and group chats", async ({
   page,
 }, testInfo) => {
-  await signup(page, `sidebar-drop-${Date.now()}@rakazo.test`, "password12", "Sidebar Drop");
+  await setupAdmin(page, `sidebar-drop-${Date.now()}@rakazo.test`, "password12", "Sidebar Drop");
   await completeOnboarding(page);
   const chiefId = activeBotId(page);
   const alpha = await rpc<{ id: string }>(page, "bots/create", {

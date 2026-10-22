@@ -1,11 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, createBotFromPicker, rpc, signup } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  createBotFromPicker,
+  rpc,
+  setupAdmin,
+} from "./helpers";
 
 test("create opens form, then empty chat; picker lists bots; sidebar collapses", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `new-bot-ux-${stamp}@rakazo.test`, "password12", "New Bot UX");
+  await setupAdmin(page, `new-bot-ux-${stamp}@rakazo.test`, "password12", "New Bot UX");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -89,19 +95,6 @@ test("create opens form, then empty chat; picker lists bots; sidebar collapses",
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(dialog).toBeHidden();
 
-  await page.getByTestId("create-menu-trigger").click();
-  const spaceInfo = picker.getByTestId("picker-info-space");
-  await expect.poll(() => spaceInfo.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
-  await picker.getByTestId("create-new-space").hover();
-  await expect.poll(() => spaceInfo.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
-  await spaceInfo.click();
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("Spaces", { exact: true })).toBeVisible();
-  await expect(dialog).toContainText("own bots and groups");
-  await captureScreenshot(page, testInfo, "picker-space-info-dialog");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-
   await createBotFromPicker(page, { name: "Private Bot", computerMode: "dedicated" });
   await expect(page.getByPlaceholder("Message Private Bot")).toBeVisible();
   await captureScreenshot(page, testInfo, "create-private-computer-bot");
@@ -114,7 +107,7 @@ test("create opens form, then empty chat; picker lists bots; sidebar collapses",
 test("a stale roster refresh started before creation keeps the new bot selected", async ({
   page,
 }, testInfo) => {
-  await signup(page, `stale-create-${Date.now()}@rakazo.test`, "password12", "Stale Create");
+  await setupAdmin(page, `stale-create-${Date.now()}@rakazo.test`, "password12", "Stale Create");
   await completeOnboarding(page);
   await expect(page.getByPlaceholder("Message Chief")).toBeVisible();
 
@@ -178,7 +171,7 @@ test("a stale roster refresh started before creation keeps the new bot selected"
 
 test("later bot waits before showing the focus card; sending cancels it", async ({ page }) => {
   const stamp = Date.now();
-  await signup(page, `focus-delay-${stamp}@rakazo.test`, "password12", "Focus Delay");
+  await setupAdmin(page, `focus-delay-${stamp}@rakazo.test`, "password12", "Focus Delay");
   await completeOnboarding(page);
   // First bot from onboarding shows the focus card immediately.
   await expect(page.getByText("What do you want me on first?", { exact: true })).toBeVisible();

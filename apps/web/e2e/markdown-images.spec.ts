@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 const imageHost = "https://images.example.test/";
 const remoteImage = `${imageHost}chart.png?d=conversation-data`;
@@ -23,7 +23,12 @@ test("remote markdown images in bot replies load only after the reader asks", as
   page,
 }, testInfo) => {
   const requests = await serveFakeImages(page);
-  await signup(page, `markdown-image-${Date.now()}@rakazo.test`, "password12", "Markdown Image");
+  await setupAdmin(
+    page,
+    `markdown-image-${Date.now()}@rakazo.test`,
+    "password12",
+    "Markdown Image",
+  );
   await completeOnboarding(page);
   const composer = page.getByRole("combobox", { name: /^Message/ });
   await expect(composer).toBeVisible();

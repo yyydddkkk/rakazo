@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { runAutoReviewJudge } from "../../adapters/src/auto-review.js";
 import { compactHistory } from "../../adapters/src/history-compaction.js";
 import { discardBotIntroRun } from "./discard-bot-intro.js";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 import { startModelEmulator } from "./model-emulator.js";
 import { asSystem } from "./system-db.js";
@@ -94,21 +95,24 @@ describe.skipIf(!enabled)("persisted Pi usage accounting", () => {
         agentRuntime: "pi",
         contextStrategy: "current",
         wakeupDriver: "memory",
-        signupsEnabled: "true",
+
         composio: new ComposioConnector({ client: new FakeComposioClient() }),
         encryptionKey: "usage-fixture-encryption-key",
       });
       stop = handles.stop;
       const db = asSystem(handles.prisma);
-      const signup = await handles.app.request("/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "content-type": "application/json", origin },
-        body: JSON.stringify({
-          email: `usage-${randomUUID()}@rakazo.test`,
-          password: "password12",
-          name: "Usage fixture",
-        }),
-      });
+      const signup = await fixtureAccountResponse(
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", origin },
+          body: JSON.stringify({
+            email: `usage-${randomUUID()}@rakazo.test`,
+            password: "password12",
+            name: "Usage fixture",
+          }),
+        },
+        handles.prisma,
+      );
       expect(signup.status).toBeLessThan(400);
       const cookie = sessionCookieHeader(signup);
       const rpc = async <T>(procedure: string, input: unknown = {}): Promise<T> => {

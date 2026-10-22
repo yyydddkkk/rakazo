@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("keeps the approved MCP card state after the thread remounts", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `mcp-approval-${stamp}@rakazo.test`, "password12", "MCP Approval");
+  await setupAdmin(page, `mcp-approval-${stamp}@rakazo.test`, "password12", "MCP Approval");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);

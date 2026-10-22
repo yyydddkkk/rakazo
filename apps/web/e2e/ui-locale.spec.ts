@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, openUserSettings, setupAdmin } from "./helpers";
 
 test("account settings language picker includes Hebrew and mirrors the UI right-to-left", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `ui-locale-he-${stamp}@rakazo.test`, "password12", "Locale QA");
+  await setupAdmin(page, `ui-locale-he-${stamp}@rakazo.test`, "password12", "Locale QA");
   await completeOnboarding(page, testInfo);
 
   const settings = await openUserSettings(page);

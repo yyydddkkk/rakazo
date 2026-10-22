@@ -1,6 +1,6 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { signupRequiresEmailVerification } from "@rakazo/core";
+import { resetAdminFixture } from "../../../packages/testkit/src/fixture-account";
 
 export function isRealSandboxProvider(provider = process.env.SANDBOX_PROVIDER) {
   return provider === "e2b" || provider === "daytona" || provider === "boat";
@@ -52,53 +52,51 @@ export async function completeOnboarding(page: Page, testInfo?: TestInfo) {
   }
 }
 
-/**
- * Creates the account through the auth API, as the sign-up form does, and opens
- * the page the form would land on. Passing testInfo goes through the form to
- * capture it; tests of the form itself use signupThroughForm.
- */
-export async function signup(
+/** Private DB bootstrap followed by the production password sign-in flow. */
+export async function setupAdmin(
   page: Page,
   email: string,
   password: string,
   name: string,
   testInfo?: TestInfo,
 ) {
-  if (testInfo) return signupThroughForm(page, email, password, name, testInfo);
+  await resetAdminFixture(email, password, name);
+  if (testInfo) {
+    await signInThroughForm(page, email, password, testInfo);
+    return;
+  }
   const baseURL = test.info().project.use.baseURL;
-  if (!baseURL) throw new Error("signup needs a baseURL");
-  const response = await page.request.post("/api/auth/sign-up/email", {
-    data: { email, password, name },
-    // Better Auth checks the origin of credential requests that carry cookies.
+  if (!baseURL) throw new Error("Admin sign-in needs a baseURL");
+  const response = await page.request.post("/api/auth/sign-in/email", {
+    data: { email, password },
     headers: { origin: new URL(baseURL).origin },
   });
-  if (!response.ok()) throw new Error(`sign-up ${response.status()}: ${await response.text()}`);
-  const verify = signupRequiresEmailVerification(await response.json());
-  await page.goto(verify ? "/sign-up?verify=email" : "/onboarding");
+  if (!response.ok()) throw new Error(`sign-in ${response.status()}: ${await response.text()}`);
+  await page.goto("/onboarding");
 }
 
-export async function signupThroughForm(
+export async function setupAdminThroughForm(
   page: Page,
   email: string,
   password: string,
   name: string,
   testInfo?: TestInfo,
 ) {
-  await page.goto("/sign-up");
-  await expect(page.getByRole("heading", { name: "Create your Rakazo" })).toBeVisible();
-  if (testInfo) await captureScreenshot(page, testInfo, "01-sign-up");
-  await page.getByPlaceholder("Your name").fill(name);
-  await page.getByPlaceholder("Your email address").fill(email);
-  await showPasswordForm(page);
-  await page.getByPlaceholder("Password").fill(password);
-  await page.getByRole("button", { name: "Create account" }).click();
+  await resetAdminFixture(email, password, name);
+  await signInThroughForm(page, email, password, testInfo);
 }
 
-/** With email delivery the auth form opens on the emailed-code flow; switch to the password form. */
+async function signInThroughForm(page: Page, email: string, password: string, testInfo?: TestInfo) {
+  await page.goto("/sign-in");
+  await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
+  await page.getByPlaceholder("Your email address").fill(email);
+  await page.getByPlaceholder("Password").fill(password);
+  if (testInfo) await captureScreenshot(page, testInfo, "01-sign-in");
+  await page.getByRole("button", { name: "Continue with email" }).click();
+}
+
 export async function showPasswordForm(page: Page) {
-  const usePassword = page.getByRole("button", { name: "Use password" });
-  await expect(usePassword.or(page.getByPlaceholder("Password"))).toBeVisible();
-  if (await usePassword.isVisible()) await usePassword.click();
+  await expect(page.getByPlaceholder("Password")).toBeVisible();
 }
 
 /** Open Advanced through its trigger, preserving an already-expanded section. */
@@ -155,11 +153,6 @@ export async function openNewBot(page: Page) {
 export async function openNewGroup(page: Page) {
   await page.getByTestId("create-menu-trigger").click();
   await page.getByTestId("create-new-group").click();
-}
-
-export async function openNewSpace(page: Page) {
-  await page.getByTestId("create-menu-trigger").click();
-  await page.getByTestId("create-new-space").click();
 }
 
 /** Open the create form from the + picker, submit, and wait for the new chat. */

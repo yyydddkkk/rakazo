@@ -421,6 +421,8 @@ async function main() {
     const databaseUrl = postgres.getConnectionUri();
     Object.assign(process.env, {
       DATABASE_URL: databaseUrl,
+      DATABASE_MIGRATION_URL: databaseUrl,
+      VERIFY_DATABASE: "1",
       REALTIME_DATABASE_URL: databaseUrl,
       WAKEUP_DRIVER: "memory",
       BETTER_AUTH_SECRET: "synthetic-eval-auth-secret-at-least-32-characters",
@@ -429,8 +431,8 @@ async function main() {
       SCREEN_PROXY_SECRET: "synthetic-eval-screen-secret-at-least-32-characters",
       BETTER_AUTH_URL: "http://127.0.0.1:5173",
       WEB_ORIGIN: "http://127.0.0.1:5173",
-      SIGNUPS_ENABLED: "true",
-      SIGNUP_ALLOWLIST: "",
+      RAKAZO_ADMIN_EMAIL: "admin@example.test",
+      RAKAZO_ADMIN_PASSWORD: "test-admin-password-12",
       SANDBOX_PROVIDER: "fake",
       AGENT_RUNTIME: "pi",
       DATA_DIR: dataDir,
@@ -553,15 +555,13 @@ async function main() {
               composio,
               messaging,
               ...(scenario.routine ? witnesses : {}),
-              messagingOpenSignup: false,
               defaultProvider: connection.provider,
               defaultModel: connection.modelId!,
               deploymentModelKey: undefined,
               composioApiKey: undefined,
               cursorApiKey: undefined,
               cloudAgentProvider: "none",
-              signupsEnabled: "true",
-              signupAllowlist: "",
+
               // The operator runs evals against the model server they chose, often on loopback.
               mcpAllowPrivateEndpoint: true,
               emailEmulator: true,

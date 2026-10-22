@@ -12,6 +12,7 @@ import {
 import { listSpaceBackupModels, replaceSpaceBackupModels, runAsSystem } from "@rakazo/db";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 import { asSystem } from "./system-db.js";
 
@@ -25,6 +26,7 @@ process.env.AGENT_RUNTIME = "scripted";
 
 const hasDb = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 const describeWithDatabase = hasDb ? describe : describe.skip;
+let fixturePrisma: AppHandles["prisma"] | undefined;
 const TEST_ENCRYPTION_KEY = "offline-connector-test-encryption-key";
 
 describeWithDatabase("Composio catalog reconciliation", () => {
@@ -64,9 +66,9 @@ describeWithDatabase("Composio catalog reconciliation", () => {
         resolveHostname: thirdParties.resolveHostname,
       },
       encryptionKey: TEST_ENCRYPTION_KEY,
-      signupsEnabled: "true",
     });
     app = handles.app;
+    fixturePrisma = handles.prisma;
   });
 
   afterAll(async () => {
@@ -690,15 +692,18 @@ async function connectRemote(composio: ComposioConnector, actor: Actor, provider
   );
 }
 
-async function signup(app: App, email: string, name: string) {
-  const response = await app.request("/api/auth/sign-up/email", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: "http://127.0.0.1:5173",
+async function signup(_app: App, email: string, name: string) {
+  const response = await fixtureAccountResponse(
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://127.0.0.1:5173",
+      },
+      body: JSON.stringify({ email, password: "password12", name }),
     },
-    body: JSON.stringify({ email, password: "password12", name }),
-  });
+    fixturePrisma,
+  );
   if (!response.ok) throw new Error(`signup failed ${response.status}: ${await response.text()}`);
   return sessionCookieHeader(response);
 }

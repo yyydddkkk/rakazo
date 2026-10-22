@@ -11,6 +11,7 @@ import {
 } from "@rakazo/adapters";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { afterAll, describe, expect, it } from "vitest";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 
 if (process.env.VERIFY_PROVIDERS) loadRootEnv({ allowInTests: true });
@@ -50,15 +51,18 @@ describeLive("live release-watch eval (GPT 5.6 Luna + GitHub emulator)", () => {
     stop = handles.stop;
 
     const stamp = Date.now();
-    const signup = await handles.app.request("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
-      body: JSON.stringify({
-        email: `release-watch-${stamp}@rakazo.test`,
-        password: "password12",
-        name: "Release Watch",
-      }),
-    });
+    const signup = await fixtureAccountResponse(
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+        body: JSON.stringify({
+          email: `release-watch-${stamp}@rakazo.test`,
+          password: "password12",
+          name: "Release Watch",
+        }),
+      },
+      handles.prisma,
+    );
     expect(signup.status).toBeLessThan(400);
     const cookie = sessionCookieHeader(signup);
 

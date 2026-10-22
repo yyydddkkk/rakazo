@@ -6,7 +6,7 @@ import {
   createNamedBot,
   expandAdvancedSection,
   rpc,
-  signup,
+  setupAdmin,
 } from "./helpers";
 
 // Fake values only: this spec proves the UI and API never echo a saved credential.
@@ -23,7 +23,7 @@ test("bot and command credentials add, replace and remove without leaking values
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `bot-credentials-${stamp}@rakazo.test`, "password12", "Bot Credentials");
+  await setupAdmin(page, `bot-credentials-${stamp}@rakazo.test`, "password12", "Bot Credentials");
   await completeOnboarding(page);
   const botName = `Credentials ${stamp}`;
   const botId = await createNamedBot(page, botName);

@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("renders masked secret card and saves without putting the value in chat", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `secret-card-${stamp}@rakazo.test`, "password12", "Secret Card");
+  await setupAdmin(page, `secret-card-${stamp}@rakazo.test`, "password12", "Secret Card");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);
@@ -134,7 +134,7 @@ test("dismisses a secret card, resumes the bot and frees the composer", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `secret-dismiss-${stamp}@rakazo.test`, "password12", "Secret Dismiss");
+  await setupAdmin(page, `secret-dismiss-${stamp}@rakazo.test`, "password12", "Secret Dismiss");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);

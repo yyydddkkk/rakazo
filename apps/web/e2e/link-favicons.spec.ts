@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 // Icons the API would have fetched; the test stands in for it so CI never contacts a real site.
 const icons: Record<string, string> = {
@@ -27,7 +27,7 @@ test("links in a bot reply show the site icon the API resolved", async ({ page }
     await route.abort();
   });
 
-  await signup(page, `link-favicons-${Date.now()}@rakazo.test`, "password12", "Link Icons");
+  await setupAdmin(page, `link-favicons-${Date.now()}@rakazo.test`, "password12", "Link Icons");
   await completeOnboarding(page);
   const composer = page.getByRole("combobox", { name: /^Message/ });
   await expect(composer).toBeVisible();

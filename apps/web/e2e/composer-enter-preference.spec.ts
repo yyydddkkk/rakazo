@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 test.describe("touch composer", () => {
   test.use({ hasTouch: true, isMobile: true });
@@ -7,7 +7,12 @@ test.describe("touch composer", () => {
   test("Settings controls Enter behavior and persists the preference", async ({
     page,
   }, testInfo) => {
-    await signup(page, `enter-pref-true-${Date.now()}@rakazo.test`, "password12", "Composer QA");
+    await setupAdmin(
+      page,
+      `enter-pref-true-${Date.now()}@rakazo.test`,
+      "password12",
+      "Composer QA",
+    );
     await completeOnboarding(page);
     const composer = page.getByRole("combobox", { name: /^Message/ });
     await expect(page.getByTestId("composer-enter-to-send-toggle")).toBeHidden();

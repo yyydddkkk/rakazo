@@ -76,35 +76,23 @@ export function buildApprovalAskBlock(
   return {
     kind: "ask",
     approvalEffectId: effectId,
-    text: truncate(
-      redactSecrets(
-        toolName === "create_space" ? `${summary}?` : `Review before ${summary}`,
-        secrets,
-      ),
-      MAX_APPROVAL_SUMMARY_LENGTH,
-    ),
+    text: truncate(redactSecrets(`Review before ${summary}`, secrets), MAX_APPROVAL_SUMMARY_LENGTH),
     detail: safeDetail ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH) : undefined,
     ...(fetchSite ? { site: fetchSite } : {}),
     status: "pending",
-    actions:
-      toolName === "create_space"
-        ? [
-            { id: "allow", label: "Create space", outcome: "created" },
-            { id: "deny", label: "Cancel", outcome: "cancelled" },
-          ]
-        : toolRequiresExplicitApproval(toolName)
-          ? [
-              { id: "allow", label: "Allow once" },
-              { id: "deny", label: "Deny" },
-            ]
-          : [
-              { id: "allow", label: "Allow once" },
-              {
-                id: "always",
-                label: fetchSite ? `Always allow ${fetchSite}` : "Always allow this tool",
-              },
-              { id: "deny", label: "Deny" },
-            ],
+    actions: toolRequiresExplicitApproval(toolName)
+      ? [
+          { id: "allow", label: "Allow once" },
+          { id: "deny", label: "Deny" },
+        ]
+      : [
+          { id: "allow", label: "Allow once" },
+          {
+            id: "always",
+            label: fetchSite ? `Always allow ${fetchSite}` : "Always allow this tool",
+          },
+          { id: "deny", label: "Deny" },
+        ],
   };
 }
 
@@ -116,10 +104,6 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
   if (toolName === "delete_bot" || toolName === "archive_bot") {
     const name = args.confirm_name ?? args.confirmName;
     return name ? `${toolName.replace("_", " ")} (${String(name)})` : toolName.replace("_", " ");
-  }
-  if (toolName === "create_space") {
-    const name = args.name ? String(args.name) : "Untitled";
-    return `Create space “${name}”`;
   }
   const target = webFetchSite(toolName, args) ?? pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
@@ -133,11 +117,6 @@ function formatApprovalDetail(
   const lines: string[] = [];
   if (reviewReason?.trim()) {
     lines.push(reviewReason.trim().replace(/\u2014|\u2013/g, "-"));
-  }
-  if (toolName === "create_space") {
-    lines.push(
-      "Bots, groups, chats, files, memory, and integrations in this space stay separate from other spaces.",
-    );
   }
   // A fetch carries data in its path and query, so the card shows the whole URL.
   const keys =

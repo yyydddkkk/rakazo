@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("saves a website login from a username and password card without echoing either", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `login-card-${stamp}@rakazo.test`, "password12", "Login Card");
+  await setupAdmin(page, `login-card-${stamp}@rakazo.test`, "password12", "Login Card");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);

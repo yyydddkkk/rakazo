@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, openUserSettings, setupAdmin } from "./helpers";
 
 test("changing language updates settings overflow without resizing", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `settings-language-${stamp}@rakazo.test`, "password12", "Settings");
+  await setupAdmin(page, `settings-language-${stamp}@rakazo.test`, "password12", "Settings");
   await completeOnboarding(page);
   const settings = await openUserSettings(page);
   await page.setViewportSize({ width: 740, height: 700 });
@@ -30,7 +30,7 @@ test("narrow settings reveals the active section and offers scroll controls", as
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `settings-narrow-${stamp}@rakazo.test`, "password12", "Settings");
+  await setupAdmin(page, `settings-narrow-${stamp}@rakazo.test`, "password12", "Settings");
   await completeOnboarding(page);
   const settings = await openUserSettings(page, "usage");
   const nav = settings.getByTestId("settings-nav");
@@ -92,7 +92,7 @@ test("settings shell is two-pane and deep-links Models Memory Voice Usage", asyn
 }, testInfo) => {
   const stamp = Date.now();
   const userName = `Settings shell ${stamp}`;
-  await signup(page, `settings-shell-${stamp}@rakazo.test`, "password12", userName);
+  await setupAdmin(page, `settings-shell-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
 
   await page.getByTestId("user-menu-trigger").click();
@@ -185,7 +185,7 @@ test("settings shell is two-pane and deep-links Models Memory Voice Usage", asyn
 test("Honcho memory settings empty and filled", async ({ page }, testInfo) => {
   // These screenshots never submit credentials or contact Honcho.
   const stamp = Date.now();
-  await signup(page, `memory-honcho-${stamp}@rakazo.test`, "password12", "Memory settings");
+  await setupAdmin(page, `memory-honcho-${stamp}@rakazo.test`, "password12", "Memory settings");
   await completeOnboarding(page);
   const settings = await openUserSettings(page, "memory");
   const memory = settings.getByTestId("memory-settings");

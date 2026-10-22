@@ -1,8 +1,7 @@
 import { Trans } from "@lingui/react/macro";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export function WelcomePage() {
-  const navigate = useNavigate();
   return (
     <div className="flex min-h-full flex-col bg-background" data-rakazo-surface="welcome">
       <main className="flex flex-1 flex-col items-center justify-center gap-11 px-5 pb-[90px]">
@@ -23,14 +22,6 @@ export function WelcomePage() {
           </Trans>
         </p>
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate("/sign-up")}
-            className="rounded-full bg-accent px-[34px] py-[15px] text-[19px] text-foreground transition hover:scale-[1.04] hover:bg-accent"
-          >
-            <Trans>Sign up</Trans>
-            <span aria-hidden="true">&nbsp;&nbsp;→</span>
-          </button>
           <Link
             to="/sign-in"
             className="rounded-full px-[34px] py-[15px] text-[19px] text-foreground/75 transition hover:text-foreground"

@@ -1,10 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("instruction proposals support edit, approval, undo and mandatory human approval", async ({
   page,
 }, testInfo) => {
-  await signup(page, `instruction-update-${Date.now()}@rakazo.test`, "password12", "Instructions");
+  await setupAdmin(
+    page,
+    `instruction-update-${Date.now()}@rakazo.test`,
+    "password12",
+    "Instructions",
+  );
   await completeOnboarding(page);
   const botId = await activeBotId(page);
   const original = (await rpc<{ instructions: string }>(page, "bots/get", { botId })).instructions;

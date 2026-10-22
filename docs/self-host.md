@@ -34,7 +34,7 @@ Signup and local Docker computers work without an E2B account. Optional remote p
 `SANDBOX_PROVIDER` to `e2b`, `daytona`, `createos`, or `boat` and add the matching API key. The published-images
 Compose stack requires `SANDBOX_SUPERVISOR_TOKEN` for every provider; leave it empty and `compose up` fails closed.
 
-Optional: set `OPENROUTER_API_KEY` or connect a model in the UI after signup.
+Optional: set `OPENROUTER_API_KEY` or connect a model in the UI after signing in.
 A provider that authenticates from the host needs no key: for Amazon Bedrock with an ECS task,
 IRSA or EC2 instance role, opt in with `PI_DEFAULT_CREDENTIALS=host` and set
 `PI_DEFAULT_PROVIDER=amazon-bedrock`, `PI_DEFAULT_MODEL` and `AWS_REGION`. With an instance
@@ -230,102 +230,20 @@ WEB_ORIGIN=https://app.example.com
 API_URL=https://app.example.com
 ```
 
-Cookies and CORS follow those origins. `SIGNUPS_ENABLED` seeds whether registration is open
-when the API starts for the first time and is not reapplied on restart. A non-empty
-`SIGNUP_ALLOWLIST` is applied on every API start, replacing the allowlist stored for the deployment.
-Leave it empty to keep that stored list.
+Cookies and CORS follow those origins.
 
-With a nonempty signup allowlist and SMTP configured, users—including existing accounts—must
-verify their email to sign in. Without an allowlist, verification never blocks: a password signup
-signs in at once and is sent a verification link that only marks the address verified.
+### Administrator account
 
-SMTP also enables sign-in with a six-digit emailed code, which expires after ten minutes and allows
-three attempts. A code can create an account, so it follows the same registration and allowlist
-rules as password signup. Signing in with a code to an existing unverified account removes that
-account's password, SSO links and sessions, since nothing proved they belonged to the mailbox
-owner. This is what stops someone who registered another person's address from keeping access.
+Before the first start, set `RAKAZO_ADMIN_EMAIL` and `RAKAZO_ADMIN_PASSWORD` in `.env`.
+The API creates one password account, Organization and Space in a single transaction when the
+database is empty. The installer generates an initial password; replace the example email with
+your own address before starting. Sign in with these credentials; public registration is closed.
+Existing credentials are never changed by restarting with different environment values.
 
-On a fresh instance with no SMTP, the first allowlisted account can register without verification.
-That signup does not prove mailbox ownership, so create the account before exposing the service.
-Further accounts still need SMTP.
-
-For a public deployment, configure SMTP and an allowlist before the API's first start.
-Keep an installation without email on a trusted local network.
-
-### Optional OpenID Connect SSO
-
-SSO works with a self-hosted or hosted OpenID Connect provider. Leave its settings unset to
-keep password authentication alone. Configure all three credentials together on the API:
-
-```env
-OIDC_ISSUER=https://identity.example.com
-OIDC_CLIENT_ID=replace-with-client-id
-OIDC_CLIENT_SECRET=replace-with-client-secret
-OIDC_NAME=SSO
-OIDC_SCOPES=openid email profile
-AUTH_PASSWORD_ENABLED=true
-OIDC_ALLOW_SIGNUP_BYPASS=false
-```
-
-The issuer must be HTTPS and exactly match the discovery document's issuer. Rakazo loads
-`<issuer>/.well-known/openid-configuration`, verifies ID tokens against discovery JWKS with
-issuer, audience and nonce checks, and uses authorization codes with PKCE. Additional scopes
-may be space- or comma-separated; `openid email profile` are always requested. `OIDC_NAME`
-is the button label, defaulting to “SSO”. Secrets remain on the API; Compose clears the worker's
-OIDC credentials. The capabilities endpoint exposes only the label, discovery availability,
-and enabled authentication methods.
-
-Register this redirect URI at the provider (using your public `BETTER_AUTH_URL` origin):
-
-```text
-https://app.example.com/api/auth/callback/oidc
-```
-
-Provider emails are verified only when `email_verified` is the boolean `true`. False or missing
-claims stay unverified, including on subsequent sign-ins. Sign-in never links accounts by email.
-If an email belongs to another account, sign in to that existing account and choose **Link SSO**
-in account settings. Linking requires an authenticated session, a verified provider email and
-matching email addresses. The issuer and provider subject identify the linked account thereafter. Changing issuers does
-not reuse an old identity. Old-issuer links remain stored but do not count as linked to the
-current provider, so **Link SSO** becomes available again. Link the new identity from the
-existing signed-in account; authenticated-session, verified-email and matching-email checks
-still apply. Restoring the old issuer makes its existing links usable again.
-
-Ordinary SSO sign-in and linking may reuse the identity provider's existing session. They
-do not grant fresh authentication proof for account deletion. The account settings' explicit
-reauthentication flow requests `prompt=login` and `max_age=0`, binds the callback to the
-same linked issuer and subject, and requires the initiating session to remain valid. Only
-that callback grants proof to the resulting session, expiring five minutes after provider
-authentication (callback delays do not extend it). Its verified
-ID token must contain an `auth_time` consistent with that request (allowing 60 seconds of
-clock skew) and less than five minutes old. Missing, stale or invalid claims fail closed.
-OAuth callbacks are single-use, including concurrent requests. Password verification and
-emailed deletion codes remain available. Submit deletion codes through the account settings
-or the CSRF-protected `POST /api/auth/delete-user` endpoint; the GET deletion callback is disabled.
-
-SSO signup follows closed registration and the deployment allowlist before creating an account.
-Allowlisted provider emails must be verified; the password signup's first-account exemption
-never upgrades an OIDC email. `OIDC_ALLOW_SIGNUP_BYPASS=true` explicitly admits IdP identities
-without applying the allowlist or its email-verification admission requirement. Enable it only
-when the IdP controls who may join this deployment. It does **not** reopen closed registration,
-and does not change email verification claims or linking rules. Existing admitted accounts can
-sign in while registration is closed.
-
-Set `AUTH_PASSWORD_ENABLED=false` for SSO-only operation. Password sign-in, signup, password
-reset and password mutation endpoints are disabled server-side, and sign-in forms are hidden.
-The API refuses to start in this mode unless all OIDC credentials are configured. It can still
-start while discovery is temporarily unavailable: the provider remains registered, sign-in
-returns a temporary error, and background retries recover without restarting. Discovery is lazy
-on first use, refreshed in the background, and failures back off up to one minute. Availability
-reflects discovery, not a guarantee that the provider's token endpoint is currently reachable.
-
-Account deletion keeps the existing password confirmation for password users. Users without a
-password may delete after explicit provider reauthentication within five minutes; **Sign in again** starts a fresh
-provider round-trip bound to the signed-in account. Choosing a different identity cannot confirm
-deletion or create another account in that flow. A stale or borrowed session alone cannot authorize deletion. With transactional
-email configured, **Send deletion code** sends a single-use code to the account email, valid for ten
-minutes. Enter it in account settings to confirm deletion. Email-code requests are rate-limited;
-invalid, expired or wrong-account codes fail. No password needs to be created for deletion.
+Existing installations must already contain one administrator with a password and one Organization
+and Space. Ambiguous or incomplete data stops startup without deletion or automatic migration.
+The web UI uses this Space and has no invitation, member management or space-switching controls.
+Model and MCP OAuth connections remain available independently of account authentication.
 
 ### Mobile push notifications
 
@@ -373,7 +291,7 @@ metadata, never reset tokens. The inbox route is not registered in test, staging
 
 ### Password policy
 
-New passwords (signup, reset and change) must be 8 to 128 characters, with no composition rules.
+New passwords (initial setup, reset and change) must be 8 to 128 characters, with no composition rules.
 Optionally reject new passwords that appear in known breaches:
 
 ```env
@@ -511,8 +429,6 @@ child commands do not receive them.
 Optional:
 
 ```env
-SIGNUPS_ENABLED=true
-SIGNUP_ALLOWLIST=you@example.com,@company.com
 SANDBOX_PROVIDER=docker   # or none, e2b, daytona, createos, boat. Keep fake only for pnpm test.
 AGENT_RUNTIME=pi          # Keep scripted only for pnpm test.
 WAKEUP_DRIVER=graphile
@@ -641,7 +557,7 @@ for it to find the origins to add.
 The API and worker append a row to `security_events` and write a `security.event` log line for:
 
 - sign-up, sign-in, sign-out, and failed sign-in or sign-up
-- session revocation, password and passkey changes, and account deletion
+- session revocation, password changes, and account deletion
 - model, MCP, connector, voice, memory, and secret credentials created, changed, or removed
 - deployment settings changes, approval decisions, and approval policy changes
 - refused private or internal destinations (`egress.refused`) and auth rate-limit hits
@@ -1004,8 +920,6 @@ RAKAZO_HOST=app.example.com
 BETTER_AUTH_URL=https://app.example.com
 WEB_ORIGIN=https://app.example.com
 API_URL=https://app.example.com
-SIGNUPS_ENABLED=true
-SIGNUP_ALLOWLIST=owner@example.com,reviewer@example.com
 # e2b, daytona, or boat
 SANDBOX_PROVIDER=e2b
 AGENT_RUNTIME=pi
@@ -1534,8 +1448,7 @@ shared filesystem; an object-storage adapter is not available yet.
 
 Use the same HTTPS origin for the web app, `/api`, and `/rpc`. Preserve the authenticated screen
 proxy routes. Choose a [computer provider](#choosing-a-computer-provider) appropriate to the
-service's trust boundary. `SIGNUPS_ENABLED` applies on the API's first start. A non-empty
-`SIGNUP_ALLOWLIST` applies on every API start.
+service's trust boundary. Account registration stays closed; configure the administrator before first start.
 
 ## Image and video generation
 

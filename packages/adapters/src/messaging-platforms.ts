@@ -307,20 +307,6 @@ export function isMessagingEnabled(platforms: MessagingPlatform[]): boolean {
   return platforms.length > 0 && !isVitestRuntime();
 }
 
-/**
- * Linked users run on their own credentials, so linking-only deployments
- * need no deployment model. Open signup provisions users with no credential
- * of their own, so that mode requires a configured deployment model — without
- * it their runs cannot execute.
- */
-export function isMessagingSurfaceEnabled(
-  platforms: MessagingPlatform[],
-  options: { deploymentModelConfigured: boolean; openSignup: boolean },
-): boolean {
-  if (!isMessagingEnabled(platforms)) return false;
-  return options.openSignup ? options.deploymentModelConfigured : true;
-}
-
 /** Bounds one vendor send so a hung request cannot stall the sequential outbox drain. */
 const MESSAGING_SEND_TIMEOUT_MS = 10_000;
 

@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openNewSpace, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 test("a failed overlay chunk keeps the shell and the draft, and Refresh loads it", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `overlay-load-${stamp}@rakazo.test`, "password12", "Overlay Load");
+  await setupAdmin(page, `overlay-load-${stamp}@rakazo.test`, "password12", "Overlay Load");
   await completeOnboarding(page);
 
   const composer = page.getByRole("combobox", { name: "Message Chief" });
@@ -32,7 +32,7 @@ test("a failed overlay chunk keeps the shell and the draft, and Refresh loads it
 
 test("a failed page chunk shows Refresh instead of a blank app", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `page-load-${stamp}@rakazo.test`, "password12", "Page Load");
+  await setupAdmin(page, `page-load-${stamp}@rakazo.test`, "password12", "Page Load");
   await completeOnboarding(page);
 
   const artifactsChunk = /\/pages\/Artifacts\.tsx/;
@@ -54,7 +54,7 @@ for (const [failing, intact] of [
 ] as const) {
   test(`a failed ${failing} chunk keeps the rest of the bot settings panel`, async ({ page }) => {
     const stamp = Date.now();
-    await signup(page, `section-load-${stamp}@rakazo.test`, "password12", "Section Load");
+    await setupAdmin(page, `section-load-${stamp}@rakazo.test`, "password12", "Section Load");
     await completeOnboarding(page);
 
     const composer = page.getByRole("combobox", { name: "Message Chief" });
@@ -81,7 +81,7 @@ for (const overlay of ["settings", "integrations"] as const) {
   test(`preload recovery reopens ${overlay} once after an automatic reload`, async ({
     page,
   }, testInfo) => {
-    await signup(
+    await setupAdmin(
       page,
       `preload-${overlay}-${Date.now()}@rakazo.test`,
       "password12",
@@ -125,44 +125,10 @@ for (const overlay of ["settings", "integrations"] as const) {
   });
 }
 
-test("preload recovery keeps Settings bound to another space", async ({ page }, testInfo) => {
-  await signup(page, `preload-space-${Date.now()}@rakazo.test`, "password12", "Preload Recovery");
-  await completeOnboarding(page);
-  const personalUrl = page.url();
-  await openNewSpace(page);
-  const dialog = page.getByRole("dialog", { name: "New space" });
-  await dialog.getByLabel("Name").fill("Support");
-  await dialog.getByRole("button", { name: "Create space", exact: true }).click();
-  await completeOnboarding(page);
-  await page.waitForURL((url) => url.pathname.startsWith("/app/") && url.href !== personalUrl);
-  const originalUrl = page.url();
-  const selected = await page.evaluate(() => localStorage.getItem("rakazo:space-id"));
-  await page.route(
-    /\/pages\/SettingsOverlay\.tsx/,
-    async (route) => {
-      await route.fulfill({ status: 404 });
-      await page
-        .evaluate(() => window.dispatchEvent(new Event("vite:preloadError", { cancelable: true })))
-        .catch(() => undefined);
-    },
-    { times: 1 },
-  );
-  const reloaded = page.waitForEvent("load");
-  await page.locator("aside").first().getByRole("button", { name: "Actions for Personal" }).click();
-  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
-  await reloaded;
-  const settings = page.getByTestId("user-settings");
-  await expect(settings).toHaveAttribute("data-settings-section", "models");
-  await expect(settings.getByTestId("settings-space")).toHaveText("Personal");
-  await expect(page).toHaveURL(originalUrl);
-  expect(await page.evaluate(() => localStorage.getItem("rakazo:space-id"))).toBe(selected);
-  await captureScreenshot(page, testInfo, "preload-recovered-space-settings");
-});
-
 test("a failed integrations load offers Retry instead of an empty catalog", async ({
   page,
 }, testInfo) => {
-  await signup(page, `catalog-load-${Date.now()}@rakazo.test`, "password12", "Catalog Load");
+  await setupAdmin(page, `catalog-load-${Date.now()}@rakazo.test`, "password12", "Catalog Load");
   await completeOnboarding(page);
 
   // A 502 is what the proxy answers while the API restarts.

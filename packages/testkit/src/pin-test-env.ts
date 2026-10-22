@@ -1,3 +1,7 @@
+// Isolated test apps use the same private production bootstrap as deployments.
+process.env.RAKAZO_ADMIN_EMAIL = "admin@example.test";
+process.env.RAKAZO_ADMIN_PASSWORD = "test-admin-password-12";
+
 import { afterAll } from "vitest";
 
 /**

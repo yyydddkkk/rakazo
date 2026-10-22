@@ -47,9 +47,8 @@ async function main() {
     await waitForComposeHealth(compose, "web", 60_000);
 
     compose(["stop", "worker"]);
-    cookie = await signup(baseUrl);
+    cookie = await signin(baseUrl);
     const bot = await rpc<{ id: string }>(baseUrl, cookie, "bots/create", {
-      name: "Topology",
       title: "Topology smoke bot",
       description: "Exercises the production-shaped test topology",
       instructions: "Use the file tool when asked to write a file.",
@@ -141,22 +140,21 @@ async function main() {
   }
 }
 
-async function signup(baseUrl: string) {
-  const response = await fetch(`${baseUrl}/api/auth/sign-up/email`, {
+async function signin(baseUrl: string) {
+  const response = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: baseUrl },
     body: JSON.stringify({
-      email: `topology-${Date.now()}@rakazo.test`,
-      password: "password12",
-      name: "Topology",
+      email: process.env.RAKAZO_ADMIN_EMAIL,
+      password: process.env.RAKAZO_ADMIN_PASSWORD,
     }),
   });
-  if (!response.ok) throw new Error(`signup failed ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`sign-in failed ${response.status}: ${await response.text()}`);
   const cookies = response.headers.getSetCookie?.() ?? [];
   const cookie = cookies.length
     ? cookies.map((value) => value.split(";")[0]).join("; ")
     : response.headers.get("set-cookie")?.split(";")[0];
-  if (!cookie) throw new Error("signup response did not include a session cookie");
+  if (!cookie) throw new Error("sign-in response did not include a session cookie");
   return cookie;
 }
 

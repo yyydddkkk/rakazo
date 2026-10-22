@@ -3,10 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "./client.js";
 import { createDb } from "./client.js";
 import { createGroupRepos } from "./groups.js";
-import { provisionMessagingIdentity } from "./messaging.js";
 import { createRepos } from "./repos.js";
 import { asSystem, runAsSystem, runAsTenant } from "./row-security.js";
-import { createSpaceForMember } from "./spaces.js";
+import { seedMessagingFixture } from "./test-support/messaging-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -76,7 +75,6 @@ describePostgres("group sidebar previews (PostgreSQL)", () => {
   const provider = "sendblue";
   const stamp = String(Date.now()).slice(-7);
   const ownerAddress = `+1556${stamp}`;
-  const signup = { signupsEnabled: undefined, signupAllowlist: undefined };
   let prisma: PrismaClient;
   let close: () => Promise<void>;
   let owner: { userId: string; spaceId: string };
@@ -98,7 +96,7 @@ describePostgres("group sidebar previews (PostgreSQL)", () => {
       await db.pool.end();
     };
     const provisioned = await runAsSystem("test fixture", () =>
-      provisionMessagingIdentity(prisma, { provider, address: ownerAddress }, signup),
+      seedMessagingFixture(prisma, { provider, address: ownerAddress }),
     );
     owner = provisioned;
     actor = {
@@ -119,13 +117,27 @@ describePostgres("group sidebar previews (PostgreSQL)", () => {
     beta = await seedGroup(groups, actor, "Beta", [ada.id, ben.id], 40, false, "2026-04-02");
     gamma = await seedGroup(groups, actor, "Gamma", [ada.id, ben.id], 5, true, "2026-04-01");
 
-    const other = await runAsSystem("test fixture", () =>
-      createSpaceForMember(prisma, {
-        currentSpaceId: owner.spaceId,
-        userId: owner.userId,
-        name: "Other space",
-      }),
-    );
+    const other = await runAsSystem("test fixture", async () => {
+      const space = await prisma.space.create({
+        data: {
+          id: `group-preview-other-${stamp}`,
+          organizationId: owner.spaceId,
+          createdByUserId: owner.userId,
+          name: "Other space",
+        },
+      });
+      await prisma.spaceMember.create({
+        data: {
+          id: `group-preview-member-${stamp}`,
+          spaceId: space.id,
+          organizationId: owner.spaceId,
+          userId: owner.userId,
+          role: "owner",
+          createdAt: new Date(),
+        },
+      });
+      return space;
+    });
     otherSpaceId = other.id;
     const otherActor = { ...actor, spaceId: other.id };
     const cy = await bot(otherActor, "Cy");

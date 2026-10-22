@@ -50,10 +50,6 @@ export const AUDITED_PROCEDURES: Record<string, AuditedProcedure> = {
   "voice.disconnect": { type: "credential.deleted", kind: "voice", fields: ["provider"] },
   "memory.connectProvider": { type: "credential.created", kind: "memory" },
   "memory.disconnectProvider": { type: "credential.deleted", kind: "memory" },
-  "deployment.update": {
-    type: "deployment.settings.changed",
-    fields: ["signupsEnabled"],
-  },
   "mcp.assignments.approve": {
     type: "approval.decided",
     kind: "mcp",
@@ -119,7 +115,6 @@ export function procedureSecurityEvent(
 const FAILED_CREDENTIAL_PATHS: Record<string, SecurityEventType> = {
   "/sign-in/email": "auth.sign_in.failed",
   "/sign-in/email-otp": "auth.sign_in.failed",
-  "/passkey/verify-authentication": "auth.sign_in.failed",
   "/sign-up/email": "auth.sign_up.failed",
 };
 const RATE_LIMIT_EVENT_WINDOW_MS = 60_000;

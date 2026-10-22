@@ -5,10 +5,8 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 
 /** Routes that set a new password, and the body field that carries it. Sign-in is never checked. */
 const NEW_PASSWORD_FIELDS = new Map([
-  ["/sign-up/email", "password"],
   ["/change-password", "newPassword"],
   ["/reset-password", "newPassword"],
-  ["/set-password", "newPassword"],
 ]);
 
 const CHECK_TIMEOUT_MS = 3_000;
@@ -17,7 +15,7 @@ const CHECK_TIMEOUT_MS = 3_000;
  * Rejects new passwords found in the Have I Been Pwned corpus. Only a five-character SHA-1
  * prefix leaves the server. The check fails open: when the service is slow or unreachable the
  * request is aborted, the password accepted and the failure logged, so an outside service never
- * blocks sign-up.
+ * blocks a password change.
  */
 export function breachedPasswordCheck() {
   return {

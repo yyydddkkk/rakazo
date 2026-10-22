@@ -48,20 +48,6 @@ describe("procedureSecurityEvent", () => {
     expect(JSON.stringify(event)).not.toContain("ghp_secretvalue");
   });
 
-  it("lists which deployment settings changed without the allowlist itself", () => {
-    const event = procedureSecurityEvent(
-      ["deployment", "update"],
-      { signupsEnabled: true, signupAllowlist: ["owner@example.test"] },
-      actor,
-    );
-    expect(event?.type).toBe("deployment.settings.changed");
-    expect(event?.metadata).toMatchObject({
-      changed: "signupAllowlist,signupsEnabled",
-      signupsEnabled: true,
-    });
-    expect(JSON.stringify(event)).not.toContain("owner@example.test");
-  });
-
   it("records an MCP approval as a decision", () => {
     expect(
       procedureSecurityEvent(
@@ -93,14 +79,6 @@ describe("createAuthResponseAudit", () => {
       ip: "203.0.113.5",
       metadata: { path: "/sign-in/email", status: 401, reason: "INVALID_EMAIL_OR_PASSWORD" },
     });
-  });
-
-  it("records a refused sign-up", async () => {
-    const audit = createAuthResponseAudit();
-    await audit("/sign-up/email", "203.0.113.5", json(400, { code: "REGISTRATION_CLOSED" }));
-    expect(recordSecurityEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "auth.sign_up.failed" }),
-    );
   });
 
   it("does not record successes or unrelated failures here", async () => {

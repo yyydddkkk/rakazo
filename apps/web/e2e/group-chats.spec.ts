@@ -5,7 +5,7 @@ import {
   createNamedBot,
   openNewGroup,
   rpc,
-  signup,
+  setupAdmin,
 } from "./helpers";
 
 async function createBot(page: Page, name: string) {
@@ -14,7 +14,7 @@ async function createBot(page: Page, name: string) {
 
 test("create group from + and see two bots in one transcript", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `group-${stamp}@rakazo.test`, "password12", "Group E2E");
+  await setupAdmin(page, `group-${stamp}@rakazo.test`, "password12", "Group E2E");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

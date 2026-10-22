@@ -7,13 +7,13 @@ import {
   completeOnboarding,
   openUserSettings,
   rpc,
-  signup,
+  setupAdmin,
 } from "./helpers";
 
 test("memory and skills are readable and editable in the app", async ({ page }, testInfo) => {
   const stamp = Date.now();
   const userName = `Knowledge ${stamp}`;
-  await signup(page, `knowledge-${stamp}@rakazo.test`, "password12", userName);
+  await setupAdmin(page, `knowledge-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { Bot, Routine } from "@rakazo/contracts";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 async function addScheduleTrigger(page: Page, freq: string) {
   await page.getByRole("button", { name: "Add trigger" }).click();
@@ -24,7 +24,7 @@ test("routine editing updates in place, preserves timezone, deletion persists, a
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `routine-crud-${stamp}@rakazo.test`, "password12", "Routine CRUD");
+  await setupAdmin(page, `routine-crud-${stamp}@rakazo.test`, "password12", "Routine CRUD");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
@@ -146,7 +146,7 @@ test("routine editing updates in place, preserves timezone, deletion persists, a
 
 test("invalid advanced cron is rejected without creating a routine", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `routine-invalid-${stamp}@rakazo.test`, "password12", "Invalid Routine");
+  await setupAdmin(page, `routine-invalid-${stamp}@rakazo.test`, "password12", "Invalid Routine");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
@@ -167,7 +167,7 @@ test("a successful routine create is not reported as failed when refresh fails",
   page,
 }) => {
   const stamp = Date.now();
-  await signup(page, `routine-refresh-${stamp}@rakazo.test`, "password12", "Routine Refresh");
+  await setupAdmin(page, `routine-refresh-${stamp}@rakazo.test`, "password12", "Routine Refresh");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
@@ -205,7 +205,7 @@ test("switching bots while a routine save is pending does not reopen stale state
   page,
 }) => {
   const stamp = Date.now();
-  await signup(page, `routine-switch-${stamp}@rakazo.test`, "password12", "Routine Switch");
+  await setupAdmin(page, `routine-switch-${stamp}@rakazo.test`, "password12", "Routine Switch");
   await completeOnboarding(page);
   const firstBotId = activeBotId(page);
   const secondBot = await rpc<Bot>(page, "bots/create", {
@@ -337,7 +337,7 @@ function localSchedule(iso: string, timezone: string) {
 test("change-trigger screenshot walkthrough", async ({ page }, testInfo) => {
   await page.emulateMedia({ colorScheme: "light" });
   const stamp = Date.now();
-  await signup(page, `routine-walkthrough-${stamp}@rakazo.test`, "password12", "Routine Watch");
+  await setupAdmin(page, `routine-walkthrough-${stamp}@rakazo.test`, "password12", "Routine Watch");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 

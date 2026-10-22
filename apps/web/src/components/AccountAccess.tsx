@@ -2,9 +2,8 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { AccountSecurity } from "@rakazo/contracts";
 import { Button, Input, Label } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
-import { fetchAccountSecurity, requestAccountDeletionCode } from "../lib/account-security";
+import { fetchAccountSecurity } from "../lib/account-security";
 import { authClient } from "../lib/auth";
-import { runSsoFlow } from "../lib/sso-flow";
 import { authErrorText } from "../lib/user-error";
 
 export function AccountAccess({
@@ -16,8 +15,6 @@ export function AccountAccess({
   const [security, setSecurity] = useState<AccountSecurity | null>(null);
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(() => {
     const code = new URLSearchParams(window.location.search).get("error");
@@ -40,42 +37,19 @@ export function AccountAccess({
       active = false;
     };
   }, [attempt, onSecurity]);
-  async function action(run: () => Promise<unknown>, sso = false) {
-    if (!sso) setPending(true);
+  async function action(run: () => Promise<unknown>) {
+    setPending(true);
     setError(null);
     try {
       await run();
     } catch (error) {
       setError(error instanceof Error ? error.message : t`Could not continue`);
     } finally {
-      if (!sso) setPending(false);
+      setPending(false);
     }
   }
   return (
     <div className="space-y-3">
-      {security?.sso && !security.ssoLinked ? (
-        <Button
-          variant="outline"
-          disabled={pending}
-          onClick={() =>
-            void action(async () => {
-              const result = await runSsoFlow(
-                (disableRedirect, callbackURL) =>
-                  authClient.linkSocial({
-                    disableRedirect,
-                    provider: "oidc",
-                    callbackURL: callbackURL(window.location.href),
-                    errorCallbackURL: callbackURL(window.location.href),
-                  }),
-                [window.location.href],
-              );
-              if (result.error) throw new Error(authErrorText(result.error, t`Could not continue`));
-            }, true)
-          }
-        >
-          <Trans>Link SSO</Trans>
-        </Button>
-      ) : null}
       <Button
         variant="outline"
         className="text-destructive hover:text-destructive"
@@ -105,80 +79,17 @@ export function AccountAccess({
                 onChange={(event) => setPassword(event.target.value)}
               />
             </div>
-          ) : (
-            <>
-              {security.sso ? (
-                <Button
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() =>
-                    void action(async () => {
-                      const result = await runSsoFlow(
-                        (disableRedirect, callbackURL) =>
-                          authClient.signIn.social({
-                            disableRedirect,
-                            provider: "oidc",
-                            additionalData: { reauthenticate: true },
-                            callbackURL: callbackURL(window.location.href),
-                            errorCallbackURL: callbackURL(window.location.href),
-                          }),
-                        [window.location.href],
-                      );
-                      if (result.error)
-                        throw new Error(authErrorText(result.error, t`Could not continue`));
-                    }, true)
-                  }
-                >
-                  <Trans>Sign in again</Trans>
-                </Button>
-              ) : null}
-              {security.emailDeletion ? (
-                <Button
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() =>
-                    void action(async () => {
-                      await requestAccountDeletionCode();
-                      setSent(true);
-                    })
-                  }
-                >
-                  <Trans>Send deletion code</Trans>
-                </Button>
-              ) : null}
-              {sent ? (
-                <div>
-                  <Label htmlFor="deletion-code">
-                    <Trans>Deletion code</Trans>
-                  </Label>
-                  <Input
-                    id="deletion-code"
-                    autoComplete="one-time-code"
-                    value={code}
-                    onChange={(event) => setCode(event.target.value)}
-                  />
-                </div>
-              ) : null}
-            </>
-          )}
+          ) : null}
           <Button
             variant="destructive"
-            disabled={
-              pending ||
-              !security ||
-              (security.hasPassword && !password) ||
-              (!security.hasPassword && !security.freshOidcAuth && !code.trim())
-            }
+            disabled={pending || !security?.hasPassword || !password}
             onClick={() =>
               void action(async () => {
                 const current = await fetchAccountSecurity();
                 setSecurity(current);
                 onSecurity?.(current);
-                if (!current.hasPassword && !current.freshOidcAuth && !code.trim()) return;
-                if (current.hasPassword && !password) return;
-                const result = await authClient.deleteUser(
-                  current.hasPassword ? { password } : code.trim() ? { token: code.trim() } : {},
-                );
+                if (!current.hasPassword || !password) return;
+                const result = await authClient.deleteUser({ password });
                 if (result.error)
                   throw new Error(authErrorText(result.error, t`Could not continue`));
                 window.location.assign("/sign-in");

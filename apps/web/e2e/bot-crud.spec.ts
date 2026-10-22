@@ -4,12 +4,12 @@ import {
   completeOnboarding,
   createBotFromPicker,
   openNewBot,
-  signup,
+  setupAdmin,
 } from "./helpers";
 
 test("bot creation, editing, and deletion persist", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `bot-crud-${stamp}@rakazo.test`, "password12", "Bot CRUD");
+  await setupAdmin(page, `bot-crud-${stamp}@rakazo.test`, "password12", "Bot CRUD");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -196,7 +196,7 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
 test("bot management switch persists and settings help is accessible", async ({
   page,
 }, testInfo) => {
-  await signup(
+  await setupAdmin(
     page,
     `bot-management-${Date.now()}@rakazo.test`,
     "password12",

@@ -4,6 +4,7 @@ import path from "node:path";
 import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
@@ -31,7 +32,6 @@ describeWithDatabase("structured @ mention targets", () => {
       sandboxProvider: "fake",
       agentRuntime: "scripted",
       composio: new ComposioConnector({ client: new FakeComposioClient() }),
-      signupsEnabled: "true",
     });
     app = handles.app;
     prisma = handles.prisma;
@@ -308,8 +308,8 @@ describeWithDatabase("structured @ mention targets", () => {
   });
 });
 
-async function signup(app: App, email: string, name: string) {
-  const res = await app.request("/api/auth/sign-up/email", {
+async function signup(_app: App, email: string, name: string) {
+  const res = await fixtureAccountResponse({
     method: "POST",
     headers: {
       "content-type": "application/json",

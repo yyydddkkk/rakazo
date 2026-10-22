@@ -7,8 +7,12 @@ import {
   createEmulatedSendbluePlatform,
   SendBlueEmulator,
 } from "@rakazo/adapters";
-import { formatMessagingLinkCode, issueMessagingLinkCode } from "@rakazo/db";
+import { asSystem, formatMessagingLinkCode, issueMessagingLinkCode } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { createApp } from "../../../apps/api/src/app.ts";
+import { discardBotIntroRun } from "./discard-bot-intro.js";
+import { fixtureAccountResponse } from "./fixture-account.js";
+import { sessionCookieHeader } from "./index.js";
 
 process.env.WAKEUP_DRIVER = "memory";
 process.env.SANDBOX_PROVIDER = "fake";
@@ -24,6 +28,9 @@ describeMessaging("messaging surface journeys", () => {
   let app: App;
   let stop: () => Promise<void>;
   let prisma: any;
+  let handles: Awaited<ReturnType<typeof createApp>>;
+  let cookie: string;
+  let actor: { userId: string; spaceId: string };
   const emulator = new SendBlueEmulator();
   const platform = createEmulatedSendbluePlatform(emulator);
   const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-messaging-"));
@@ -46,26 +53,64 @@ describeMessaging("messaging surface journeys", () => {
 
   beforeAll(async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
-    const handles = await createApp({
+    handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
       dataDir,
       sandboxProvider: "fake",
       agentRuntime: "scripted",
-      // These journeys exercise the Poke-style open line; the linking journey
-      // below covers the default (linking-only) posture explicitly.
-      messagingOpenSignup: true,
       messaging: new ChatSdkMessagingSurface([platform]),
     });
     app = handles.app;
     stop = handles.stop;
-    prisma = handles.prisma;
+    prisma = asSystem(handles.prisma);
+    cookie = sessionCookieHeader(
+      await fixtureAccountResponse(
+        {
+          body: JSON.stringify({
+            email: "messaging@example.test",
+            password: "password12",
+            name: "Messaging",
+          }),
+        },
+        handles.prisma,
+      ),
+    );
+    const response = await app.request("/rpc/me", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie, origin: "http://127.0.0.1:5173" },
+      body: JSON.stringify({ json: {} }),
+    });
+    actor = (await response.json()).json;
+    await seedLinkedAddress(sender);
   });
 
   afterAll(async () => {
     await stop?.();
   });
 
-  it("provisions on first text, runs the bot, and mirrors the reply back out", async () => {
+  async function seedLinkedAddress(address: string) {
+    const response = await app.request("/rpc/bots/create", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie, origin: "http://127.0.0.1:5173" },
+      body: JSON.stringify({
+        json: { name: "Assistant", title: "", description: "", notifyOnFinish: true },
+      }),
+    });
+    expect(response.status).toBe(200);
+    const bot = (await response.json()).json;
+    await discardBotIntroRun(handles, cookie, bot.id);
+    return prisma.messagingIdentity.create({
+      data: {
+        provider: "sendblue",
+        address,
+        userId: actor.userId,
+        spaceId: actor.spaceId,
+        botId: bot.id,
+      },
+    });
+  }
+
+  it("runs a linked administrator bot and mirrors its reply back out", async () => {
     const res = await app.request(
       emulator.buildInboundRequest({
         fromNumber: sender,
@@ -232,8 +277,7 @@ describeMessaging("messaging surface journeys", () => {
       where: { threadId, kind: "group", status: "sent" },
     });
     expect(posts).toHaveLength(1);
-    // Messaging-provisioned users default to "<Provider> <last4>".
-    expect(posts[0].body).toMatch(/^Sendblue's agent: /);
+    expect(posts[0].body).toMatch(/^Messaging's agent: /);
     expect(await prisma.run.count({ where: { botId: identity.botId } })).toBeGreaterThan(
       runsBefore,
     );
@@ -256,6 +300,7 @@ describeMessaging("messaging surface journeys", () => {
 
   it("declines a channel invite on NO without waking the bot", async () => {
     const owner = uniqueNumber();
+    await seedLinkedAddress(owner);
     const stranger = uniqueNumber();
     const groupId = `grp-no-${stamp}`;
 
@@ -315,6 +360,7 @@ describeMessaging("messaging surface journeys", () => {
 
   it("leaves an approved channel on LEAVE and can rejoin via a later invite", async () => {
     const owner = uniqueNumber();
+    await seedLinkedAddress(owner);
     const stranger = uniqueNumber();
     const groupId = `grp-leave-${stamp}`;
 
@@ -392,6 +438,7 @@ describeMessaging("messaging surface journeys", () => {
 
   it("marks a mirrored reply failed when the outbound status webhook reports ERROR", async () => {
     const texter = uniqueNumber();
+    await seedLinkedAddress(texter);
     const handle = `fail-status-dm-${stamp}`;
     const res = await app.request(
       emulator.buildInboundRequest({
@@ -427,6 +474,7 @@ describeMessaging("messaging surface journeys", () => {
 
   it("still accepts sendblue inbound on the legacy phone webhook path", async () => {
     const texter = uniqueNumber();
+    await seedLinkedAddress(texter);
     const source = emulator.buildInboundRequest({
       fromNumber: texter,
       content: "legacy path",
@@ -441,8 +489,9 @@ describeMessaging("messaging surface journeys", () => {
       body: await source.text(),
     });
     expect(res.status).toBe(200);
-    // Provisioning proves the legacy route reached the sendblue platform.
-    await waitForDatabase(async () => findIdentity(texter));
+    await waitForDatabase(
+      async () => (await findIdentity(texter))?.dmThreadId === dmThreadId(texter),
+    );
   });
 
   it("ignores a nested vendor envelope that is not a flat inbound message", async () => {
@@ -502,9 +551,7 @@ describeMessaging("messaging surface journeys", () => {
         (message) => message.to === newAddress && message.body.startsWith("Linked"),
       ),
     );
-    // The code is single-use: a replay never binds another address to the
-    // issuer's account. (This suite runs the open line, so the replayer
-    // auto-provisions a fresh account of their own instead.)
+    // The code is single-use and an unknown sender cannot create an account.
     const replayAddress = uniqueNumber();
     const replay = await app.request(
       emulator.buildInboundRequest({
@@ -513,9 +560,9 @@ describeMessaging("messaging surface journeys", () => {
       }),
     );
     expect(replay.status).toBe(200);
-    const replayIdentity = await waitForDatabase(() => findIdentity(replayAddress));
-    expect(replayIdentity.userId).not.toBe(owner.userId);
-    expect(replayIdentity.botId).not.toBe(owner.botId);
+    await handles.awaitIdle?.();
+    expect(await findIdentity(replayAddress)).toBeNull();
+    expect(await prisma.user.count()).toBe(1);
   });
 });
 

@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { commitBotUpdate } from "./bot-update.js";
 import type { PrismaClient } from "./client.js";
 import { createDb } from "./client.js";
-import { provisionMessagingIdentity } from "./messaging.js";
 import { createRepos } from "./repos.js";
 import { runAsSystem, runAsTenant } from "./row-security.js";
+import { seedMessagingFixture } from "./test-support/messaging-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -40,11 +40,7 @@ describePostgres("bot fleetManagement (PostgreSQL)", () => {
       await db.pool.end();
     };
     owner = await runAsSystem("test fixture", () =>
-      provisionMessagingIdentity(
-        prisma,
-        { provider, address },
-        { signupsEnabled: undefined, signupAllowlist: undefined },
-      ),
+      seedMessagingFixture(prisma, { provider, address }),
     );
   });
 

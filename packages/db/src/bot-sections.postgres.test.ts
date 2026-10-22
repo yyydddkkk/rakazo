@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "./client.js";
 import { createDb } from "./client.js";
 import { createGroupRepos } from "./groups.js";
-import { provisionMessagingIdentity } from "./messaging.js";
 import { createRepos } from "./repos.js";
 import { asSystem, runAsSystem, runAsTenant } from "./row-security.js";
 import { IsolationError } from "./scope.js";
+import { seedMessagingFixture } from "./test-support/messaging-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -35,7 +35,6 @@ describePostgres("deleteBotSection (PostgreSQL)", () => {
     instructions: "",
     notifyOnFinish: true,
   });
-  const signup = { signupsEnabled: undefined, signupAllowlist: undefined };
 
   beforeAll(async () => {
     const db = createDb(databaseUrl!);
@@ -46,10 +45,10 @@ describePostgres("deleteBotSection (PostgreSQL)", () => {
     };
     const system = asSystem(prisma);
     owner = await runAsSystem("test fixture", () =>
-      provisionMessagingIdentity(prisma, { provider, address: ownerAddress }, signup),
+      seedMessagingFixture(prisma, { provider, address: ownerAddress }),
     );
     stranger = await runAsSystem("test fixture", () =>
-      provisionMessagingIdentity(prisma, { provider, address: strangerAddress }, signup),
+      seedMessagingFixture(prisma, { provider, address: strangerAddress }),
     );
     await system.user.create({
       data: {

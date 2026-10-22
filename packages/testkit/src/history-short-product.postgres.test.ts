@@ -69,7 +69,7 @@ describe.skipIf(!enabled)("short original product history", () => {
                 agentRuntime: "pi",
                 contextStrategy: strategy,
                 wakeupDriver: "memory",
-                signupsEnabled: "true",
+
                 composio,
                 encryptionKey: "synthetic-short-history-encryption-key",
               }),

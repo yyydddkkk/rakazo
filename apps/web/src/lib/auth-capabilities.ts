@@ -1,5 +1,5 @@
 import type { AuthCapabilities } from "@rakazo/contracts";
-import { authCapabilitiesSchema, legacyAuthCapabilitiesSchema } from "@rakazo/contracts";
+import { authCapabilitiesSchema } from "@rakazo/contracts";
 import { ResponseBodyTooLargeError, readBoundedJsonResponse } from "@rakazo/core";
 
 export type { AuthCapabilities } from "@rakazo/contracts";
@@ -13,9 +13,6 @@ export function fetchAuthCapabilities(): Promise<AuthCapabilities> {
   // Auth can briefly remount during session refresh; share the deployment lookup.
   capabilitiesRequest ??= loadAuthCapabilities().then(
     (capabilities) => {
-      if (capabilities.sso && capabilities.sso.availability !== "available") {
-        capabilitiesRequest = undefined;
-      }
       return capabilities;
     },
     (error: unknown) => {
@@ -56,7 +53,7 @@ async function loadAuthCapabilities(): Promise<AuthCapabilities> {
         controller.signal,
       );
     }
-    return authCapabilitiesSchema.or(legacyAuthCapabilitiesSchema).parse(body);
+    return authCapabilitiesSchema.parse(body);
   } finally {
     clearTimeout(timer);
   }

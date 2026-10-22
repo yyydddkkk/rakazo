@@ -30,16 +30,10 @@ function makePrisma(settings: { id: string; ownerUserId: string | null } | null)
   return prisma;
 }
 
-const env = { signupsEnabled: "false", signupAllowlist: "a@example.com, b@example.com" };
-
 describe("bootstrapUserSpace", () => {
   it("creates a personal organization with a default workspace", async () => {
     const prisma = makePrisma({ id: "default", ownerUserId: "user-1" });
-    const result = await bootstrapUserSpace(
-      prisma as unknown as PrismaClient,
-      { id: "user-1" },
-      env,
-    );
+    const result = await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" });
 
     expect(prisma.organization.create).toHaveBeenCalledTimes(1);
     const orgData = prisma.organization.create.mock.calls[0]![0].data;
@@ -70,22 +64,22 @@ describe("bootstrapUserSpace", () => {
     );
   });
 
-  it("seeds deployment settings from the env policy when none exist", async () => {
+  it("seeds deployment settings with public signup disabled", async () => {
     const prisma = makePrisma(null);
-    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" }, env);
+    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" });
 
     const { create, update } = prisma.deploymentSettings.upsert.mock.calls[0]![0];
     expect(create.id).toBe("default");
     expect(create.ownerUserId).toBe("user-1");
     expect(create.signupsEnabled).toBe(false);
-    expect(create.signupAllowlist).toBe("a@example.com,b@example.com");
+    expect(create.signupAllowlist).toBe("");
     expect(create.signupPolicyInitialized).toBe(true);
     expect(update).toEqual({});
   });
 
   it("claims the deployment owner when settings exist without one", async () => {
     const prisma = makePrisma({ id: "default", ownerUserId: null });
-    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" }, env);
+    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" });
 
     // Conditional claim: the database predicate decides, so a concurrent
     // claimant that already holds the seat is never overwritten.
@@ -97,7 +91,7 @@ describe("bootstrapUserSpace", () => {
 
   it("leaves existing owned settings untouched", async () => {
     const prisma = makePrisma({ id: "default", ownerUserId: "user-0" });
-    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" }, env);
+    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" });
 
     const { update } = prisma.deploymentSettings.upsert.mock.calls[0]![0];
     expect(update).toEqual({});
@@ -111,18 +105,26 @@ describe("bootstrapUserSpace", () => {
 
   it("never claims deployment ownership when claimDeploymentOwner is false", async () => {
     const prisma = makePrisma({ id: "default", ownerUserId: null });
-    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" }, env, {
-      claimDeploymentOwner: false,
-    });
+    await bootstrapUserSpace(
+      prisma as unknown as PrismaClient,
+      { id: "user-1" },
+      {
+        claimDeploymentOwner: false,
+      },
+    );
 
     expect(prisma.deploymentSettings.updateMany).not.toHaveBeenCalled();
   });
 
   it("seeds settings without an owner when claimDeploymentOwner is false", async () => {
     const prisma = makePrisma(null);
-    await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" }, env, {
-      claimDeploymentOwner: false,
-    });
+    await bootstrapUserSpace(
+      prisma as unknown as PrismaClient,
+      { id: "user-1" },
+      {
+        claimDeploymentOwner: false,
+      },
+    );
 
     const { create } = prisma.deploymentSettings.upsert.mock.calls[0]![0];
     expect(create.ownerUserId).toBeNull();
@@ -130,11 +132,9 @@ describe("bootstrapUserSpace", () => {
 
   it("creates the user memory document and notification preference in the new workspace", async () => {
     const prisma = makePrisma({ id: "default", ownerUserId: "user-1" });
-    const { spaceId } = await bootstrapUserSpace(
-      prisma as unknown as PrismaClient,
-      { id: "user-1" },
-      env,
-    );
+    const { spaceId } = await bootstrapUserSpace(prisma as unknown as PrismaClient, {
+      id: "user-1",
+    });
 
     const memoryData = prisma.memoryDocument.create.mock.calls[0]![0].data;
     expect(memoryData.spaceId).toBe(spaceId);
@@ -174,11 +174,7 @@ describe("bootstrapUserSpace concurrency", () => {
       },
       notificationPreference: { create: vi.fn(uniqueViolation) },
     };
-    const result = await bootstrapUserSpace(
-      prisma as unknown as PrismaClient,
-      { id: "user-1" },
-      env,
-    );
+    const result = await bootstrapUserSpace(prisma as unknown as PrismaClient, { id: "user-1" });
 
     expect(result.spaceId).toBe("org-winner");
   });

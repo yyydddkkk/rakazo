@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("sidebar rail keeps chats interactive and remembers a dragged width", async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.setViewportSize({ width: 1400, height: 900 });
-  await signup(page, `sidebar-rail-${Date.now()}@rakazo.test`, "password12", "Sidebar Sample");
+  await setupAdmin(page, `sidebar-rail-${Date.now()}@rakazo.test`, "password12", "Sidebar Sample");
   await completeOnboarding(page);
   const bot = await rpc<{ id: string }>(page, "bots/create", {
     name: "Research",
@@ -84,7 +84,7 @@ test("sidebar rail keeps chats interactive and remembers a dragged width", async
 
 test("sidebar resize follows RTL and reduced motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await signup(page, `sidebar-rtl-${Date.now()}@rakazo.test`, "password12", "Sidebar Sample");
+  await setupAdmin(page, `sidebar-rtl-${Date.now()}@rakazo.test`, "password12", "Sidebar Sample");
   await completeOnboarding(page);
   await page.evaluate(() => {
     document.documentElement.dir = "rtl";
@@ -109,7 +109,12 @@ test("narrow desktop keeps the chat width when both panels are open", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 800, height: 900 });
-  await signup(page, `sidebar-panels-${Date.now()}@rakazo.test`, "password12", "Sidebar Sample");
+  await setupAdmin(
+    page,
+    `sidebar-panels-${Date.now()}@rakazo.test`,
+    "password12",
+    "Sidebar Sample",
+  );
   await completeOnboarding(page);
   const sidebar = page.getByTestId("bots-sidebar");
   const handle = page.getByRole("separator", { name: "Resize bots sidebar" });
@@ -119,7 +124,7 @@ test("narrow desktop keeps the chat width when both panels are open", async ({
   await page.getByRole("button", { name: "Agent computer", exact: true }).click();
   const panel = page.getByTestId("side-panel");
   await expect(panel).toHaveCSS("position", "absolute");
-  const chat = page.locator('[data-space-switch="main"]');
+  const chat = page.getByRole("main");
   await expect(chat).toHaveCSS("width", "320px");
   await expect(panel).toHaveCSS("width", "320px");
   await captureScreenshot(page, testInfo, "sidebar-narrow-panel-overlay");

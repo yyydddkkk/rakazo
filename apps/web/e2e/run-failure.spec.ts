@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openNewSpace, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, openUserSettings, setupAdmin } from "./helpers";
 
 function isPresented(error: Locator) {
   return error.evaluate((element) => {
@@ -25,7 +25,7 @@ function seenRunErrorCount(page: Page) {
 
 test("a failed run is visible once without returning after reload", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `run-failure-${stamp}@rakazo.test`, "password12", "Run Failure");
+  await setupAdmin(page, `run-failure-${stamp}@rakazo.test`, "password12", "Run Failure");
   await completeOnboarding(page);
 
   // "fail this run" makes the scripted runtime throw, so the run fails the same way a
@@ -70,7 +70,12 @@ test("a failed run is visible once without returning after reload", async ({ pag
 
 test("a covered run error is not remembered until it is presented", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `covered-run-failure-${stamp}@rakazo.test`, "password12", "Covered Failure");
+  await setupAdmin(
+    page,
+    `covered-run-failure-${stamp}@rakazo.test`,
+    "password12",
+    "Covered Failure",
+  );
   await completeOnboarding(page);
   await page.setViewportSize({ width: 390, height: 844 });
 
@@ -122,16 +127,15 @@ test("a covered run error is not remembered until it is presented", async ({ pag
   await page.getByPlaceholder(/^Message /).fill("fail this run");
   const modalSendButton = await page.getByRole("button", { name: "Send" }).elementHandle();
   if (!modalSendButton) throw new Error("Send button not found");
-  await openNewSpace(page);
-  const newSpaceDialog = page.getByRole("dialog", { name: "New space" });
-  await expect(newSpaceDialog).toBeVisible();
+  const settings = await openUserSettings(page);
+  await expect(settings).toBeVisible();
   await modalSendButton.evaluate((button) => (button as HTMLButtonElement).click());
   await expect(error).toContainText("The model provider returned an error.", { timeout: 30_000 });
   expect(await isPresented(error)).toBe(false);
   await expect.poll(() => seenRunErrorCount(page)).toBe(recordedErrorCount + 1);
 
-  await newSpaceDialog.getByRole("button", { name: "Cancel" }).click();
-  await expect(newSpaceDialog).toHaveCount(0);
+  await settings.getByRole("button", { name: "Close user settings" }).click();
+  await expect(settings).toHaveCount(0);
   await expect.poll(() => isPresented(error)).toBe(true);
   await expect.poll(() => seenRunErrorCount(page)).toBe(recordedErrorCount + 2);
   await page.reload();

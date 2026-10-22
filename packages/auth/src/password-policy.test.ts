@@ -1,4 +1,5 @@
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@rakazo/core";
+import { hashPassword } from "better-auth/crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuth } from "./index.js";
 
@@ -28,11 +29,10 @@ function fixture({ breachedPasswordCheck = false } = {}) {
   };
   const prisma = {
     authData: data,
+    user: { findMany: vi.fn(async () => data.user!.map(({ id }) => ({ id }))) },
     deploymentSettings: {
       findUnique: vi.fn(async () => ({
-        signupsEnabled: true,
-        signupAllowlist: "",
-        signupPolicyInitialized: true,
+        ownerUserId: "admin",
       })),
     },
     spaceMember: { findFirst: vi.fn(async () => ({ spaceId: "space-1" })) },
@@ -42,8 +42,6 @@ function fixture({ breachedPasswordCheck = false } = {}) {
     secret: "offline-auth-secret-at-least-32-characters",
     baseURL,
     webOrigin,
-    signupsEnabled: "true",
-    signupAllowlist: "",
     breachedPasswordCheck,
     logger: { level: "error", log },
   });
@@ -59,9 +57,35 @@ function fixture({ breachedPasswordCheck = false } = {}) {
         body: JSON.stringify(body),
       }),
     );
-  const signup = (password: string) =>
-    request("/sign-up/email", { email: "ada@example.test", password, name: "Ada" });
-  return { data, request, signup, log };
+  const change = async (newPassword: string) => {
+    if (!data.user!.length) {
+      const now = new Date();
+      data.user!.push({
+        id: "admin",
+        name: "Admin",
+        email: "ada@example.test",
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      data.account!.push({
+        id: "credential",
+        userId: "admin",
+        accountId: "admin",
+        providerId: "credential",
+        password: await hashPassword(strongPassword),
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    const response = await request("/sign-in/email", {
+      email: "ada@example.test",
+      password: strongPassword,
+    });
+    const { token } = (await response.json()) as { token: string };
+    return request("/change-password", { currentPassword: strongPassword, newPassword }, token);
+  };
+  return { data, request, change, log };
 }
 
 /** A Have I Been Pwned range response listing `password` as breached. */
@@ -76,14 +100,14 @@ afterEach(() => vi.unstubAllGlobals());
 describe("password length", () => {
   it("enforces the shared minimum on new passwords", async () => {
     const f = fixture();
-    const short = await f.signup("x".repeat(MIN_PASSWORD_LENGTH - 1));
+    const short = await f.change("x".repeat(MIN_PASSWORD_LENGTH - 1));
     expect(short.status).toBe(400);
     expect(await short.json()).toMatchObject({ code: "PASSWORD_TOO_SHORT" });
-    expect((await f.signup("x".repeat(MIN_PASSWORD_LENGTH))).status).toBe(200);
+    expect((await f.change("x".repeat(MIN_PASSWORD_LENGTH))).status).toBe(200);
   });
 
   it("enforces the shared maximum on new passwords", async () => {
-    const long = await fixture().signup("x".repeat(MAX_PASSWORD_LENGTH + 1));
+    const long = await fixture().change("x".repeat(MAX_PASSWORD_LENGTH + 1));
     expect(long.status).toBe(400);
     expect(await long.json()).toMatchObject({ code: "PASSWORD_TOO_LONG" });
   });
@@ -93,7 +117,7 @@ describe("breached password check", () => {
   it("never contacts the breach service unless enabled", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
-    expect((await fixture().signup(strongPassword)).status).toBe(200);
+    expect((await fixture().change(strongPassword)).status).toBe(200);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -101,9 +125,9 @@ describe("breached password check", () => {
     const fetch = vi.fn(async () => new Response(await pwnedRange(strongPassword)));
     vi.stubGlobal("fetch", fetch);
     const f = fixture({ breachedPasswordCheck: true });
-    const signup = await f.signup(strongPassword);
-    expect(signup.status).toBe(400);
-    expect(await signup.json()).toMatchObject({ code: "PASSWORD_COMPROMISED" });
+    const change = await f.change(strongPassword);
+    expect(change.status).toBe(400);
+    expect(await change.json()).toMatchObject({ code: "PASSWORD_COMPROMISED" });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toMatch(/^https:\/\/api\.pwnedpasswords\.com\/range\/[0-9A-F]{5}$/);
     expect(url).not.toContain(strongPassword);
@@ -117,7 +141,7 @@ describe("breached password check", () => {
       vi.fn(async () => new Response("", { status: 503 })),
     );
     const f = fixture({ breachedPasswordCheck: true });
-    expect((await f.signup(strongPassword)).status).toBe(200);
+    expect((await f.change(strongPassword)).status).toBe(200);
     expect(f.log).toHaveBeenCalled();
   });
 
@@ -126,7 +150,7 @@ describe("breached password check", () => {
       "fetch",
       vi.fn(async () => new Response(await pwnedRange("some-other-password"))),
     );
-    expect((await fixture({ breachedPasswordCheck: true }).signup(strongPassword)).status).toBe(
+    expect((await fixture({ breachedPasswordCheck: true }).change(strongPassword)).status).toBe(
       200,
     );
   });
@@ -139,7 +163,7 @@ describe("breached password check", () => {
       }),
     );
     const f = fixture({ breachedPasswordCheck: true });
-    expect((await f.signup(strongPassword)).status).toBe(200);
+    expect((await f.change(strongPassword)).status).toBe(200);
     expect(f.log).toHaveBeenCalledWith(
       "error",
       "Breached password check unavailable",
@@ -153,7 +177,7 @@ describe("breached password check", () => {
       "fetch",
       vi.fn(async () => new Response("")),
     );
-    expect((await f.signup(strongPassword)).status).toBe(200);
+    expect((await f.change(strongPassword)).status).toBe(200);
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
     const signin = await f.request("/sign-in/email", {

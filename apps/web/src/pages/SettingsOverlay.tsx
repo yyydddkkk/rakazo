@@ -1,13 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { AvatarStyle, SpaceMemoryConfig } from "@rakazo/contracts";
-import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTitle,
-  OptionSelect,
-} from "@rakazo/ui-web";
+import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import {
   Brain,
   ChevronLeft,
@@ -26,9 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
 import { hasServerUpdates, useServerUpdateStatus } from "../components/SoftwareUpdateSection";
-import { rpcForSpace } from "../lib/rpc";
 import { SpaceRpcProvider } from "../lib/space-rpc";
-import { errorText } from "../lib/user-error";
 import {
   ComputerSettingsPanel,
   GeneralSettingsPanels,
@@ -49,7 +40,7 @@ export type SettingsSection =
   | "computer"
   | "updates";
 
-/** Sections whose settings belong to a space; only these show the space picker. */
+/** Sections whose settings belong to the space. */
 const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set([
   "models",
   "memory",
@@ -65,9 +56,6 @@ type NavItem = {
 
 export function SettingsOverlay({
   space,
-  spaces = [],
-  currentSpaceId,
-  onSpaceChange,
   email,
   name,
   usage,
@@ -87,12 +75,8 @@ export function SettingsOverlay({
   onClose,
   onVoiceStatusMaybeChanged,
 }: {
-  /** The space the per-space sections act on; it need not be the selected space. */
+  /** The space the per-space sections act on. */
   space?: { id: string; name: string } | null;
-  spaces?: { id: string; name: string }[];
-  /** The space the app is showing; its memory config comes from the shell. */
-  currentSpaceId?: string | null;
-  onSpaceChange?: (spaceId: string) => void;
   email?: string | null;
   name: string;
   usage?: {
@@ -134,40 +118,6 @@ export function SettingsOverlay({
   const panelBusy = memoryBusy || voiceBusy;
   const spaceScoped = SPACE_SECTIONS.has(section);
   const spaceId = spaceScoped ? (space?.id ?? null) : null;
-  // The shell only holds the selected space's memory config; another space's loads here.
-  const otherSpace = Boolean(spaceId && currentSpaceId && spaceId !== currentSpaceId);
-  // Kept with the space it was loaded for, so a switch never shows the previous space's config.
-  const [otherMemory, setOtherMemory] = useState<
-    { spaceId: string } & (
-      | { config: SpaceMemoryConfig | null; error?: never }
-      | { config?: never; error: string }
-    )
-  >();
-  const [memoryLoadAttempt, setMemoryLoadAttempt] = useState(0);
-  const otherMemoryError = otherMemory?.spaceId === spaceId ? otherMemory.error : undefined;
-  const otherMemoryConfig = otherMemory?.spaceId === spaceId ? otherMemory.config : undefined;
-  const setOtherMemoryConfig = useCallback(
-    (config: SpaceMemoryConfig | null) => {
-      if (spaceId) setOtherMemory({ spaceId, config });
-    },
-    [spaceId],
-  );
-  useEffect(() => {
-    if (section !== "memory" || !otherSpace || !spaceId) return;
-    let cancelled = false;
-    setOtherMemory(undefined);
-    rpcForSpace(spaceId)
-      .memory.providerConfig()
-      .then((config) => {
-        if (!cancelled) setOtherMemory({ spaceId, config });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setOtherMemory({ spaceId, error: errorText(err) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [section, otherSpace, spaceId, memoryLoadAttempt]);
   const releaseComputerRecovery = useCallback(() => {
     window.clearTimeout(recoveryHoldTimer.current);
     recoveryHoldTimer.current = undefined;
@@ -365,23 +315,6 @@ export function SettingsOverlay({
                 <DialogTitle className="text-2xl font-medium text-foreground">
                   {sectionTitle}
                 </DialogTitle>
-                {!spaceScoped ? null : space && spaces.length > 1 && onSpaceChange ? (
-                  <OptionSelect
-                    className="w-56"
-                    data-testid="settings-space"
-                    aria-label={t`Space`}
-                    options={spaces.map((option) => ({ value: option.id, label: option.name }))}
-                    value={space.id}
-                    disabled={panelBusy}
-                    onValueChange={(next) => {
-                      if (next !== space.id) leaveSettings(() => onSpaceChange(next));
-                    }}
-                  />
-                ) : space ? (
-                  <p data-testid="settings-space" className="text-sm text-muted-foreground">
-                    {space.name}
-                  </p>
-                ) : null}
               </div>
               <DialogClose
                 aria-label={closeLabel}
@@ -437,22 +370,12 @@ export function SettingsOverlay({
                 {section === "models" ? (
                   <ModelSettingsOverlay embedded onClose={requestClose} />
                 ) : null}
-                {section === "memory" && otherSpace && otherMemoryError ? (
-                  <div className="px-6 py-6 sm:px-8">
-                    <p className="mb-4 text-sm text-destructive">{otherMemoryError}</p>
-                    <Button
-                      variant="outline"
-                      onClick={() => setMemoryLoadAttempt((attempt) => attempt + 1)}
-                    >
-                      {t`Retry`}
-                    </Button>
-                  </div>
-                ) : section === "memory" ? (
+                {section === "memory" ? (
                   <MemorySettingsOverlay
                     embedded
                     onClose={requestClose}
-                    config={otherSpace ? otherMemoryConfig : memoryConfig}
-                    onConfigChange={otherSpace ? setOtherMemoryConfig : onMemoryConfigChange}
+                    config={memoryConfig}
+                    onConfigChange={onMemoryConfigChange}
                     onBusyChange={setMemoryBusy}
                   />
                 ) : null}

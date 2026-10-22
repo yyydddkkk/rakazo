@@ -7,6 +7,7 @@ import { answerRunInput, runAsSystem, runAsTenant } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { discardBotIntroFromCreate } from "./discard-bot-intro.js";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { asSystem } from "./system-db.js";
 
 const hasDb = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
@@ -376,11 +377,14 @@ describeIntegration("reusable credential lifecycle", () => {
   }
 
   async function signup(email: string, name: string) {
-    const response = await handles.app.request("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
-      body: JSON.stringify({ email, password: "password12", name }),
-    });
+    const response = await fixtureAccountResponse(
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+        body: JSON.stringify({ email, password: "password12", name }),
+      },
+      handles.prisma,
+    );
     expect(response.status).toBeLessThan(400);
     const raw = response.headers.get("set-cookie") ?? "";
     const match = raw.match(/better-auth\.session_token=([^;]+)/);

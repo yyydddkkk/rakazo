@@ -5,6 +5,7 @@ import type { RunActivityRow } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { createThreadMessage } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
@@ -276,8 +277,8 @@ async function seedRun(
   });
 }
 
-async function signup(app: App, email: string, name: string) {
-  const response = await app.request("/api/auth/sign-up/email", {
+async function signup(_app: App, email: string, name: string) {
+  const response = await fixtureAccountResponse({
     method: "POST",
     headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
     body: JSON.stringify({ email, password: "test-password-123", name }),

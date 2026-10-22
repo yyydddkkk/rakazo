@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
 test("approval input resumes durable work", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `approval-${stamp}@rakazo.test`, "password12", "Approval");
+  await setupAdmin(page, `approval-${stamp}@rakazo.test`, "password12", "Approval");
   await completeOnboarding(page);
 
   const composer = page.getByPlaceholder(/Message/);

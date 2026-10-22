@@ -9,8 +9,6 @@ async function trusted(url: string) {
     secret: "offline-auth-secret-at-least-32-characters",
     baseURL: "https://api.example.test",
     webOrigin: "https://app.example.test",
-    signupsEnabled: undefined,
-    signupAllowlist: undefined,
   });
   return (await auth.$context).isTrustedOrigin(url);
 }

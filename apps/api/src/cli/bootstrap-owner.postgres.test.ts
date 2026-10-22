@@ -27,8 +27,8 @@ it.skipIf(!testDatabase)(
     const env = {
       ...process.env,
       DATABASE_URL: at(testDatabase),
-      OWNER_EMAIL: "owner@example.test",
-      OWNER_PASSWORD: "bootstrap-test-password-12345",
+      RAKAZO_ADMIN_EMAIL: "owner@example.test",
+      RAKAZO_ADMIN_PASSWORD: "bootstrap-test-password-12345",
       BETTER_AUTH_URL: "http://127.0.0.1:5173",
       BETTER_AUTH_SECRET: "bootstrap-test-secret-with-over-32-characters",
     };
@@ -38,37 +38,24 @@ it.skipIf(!testDatabase)(
       });
       const boot = (password: string) =>
         run("pnpm", ["--filter", "@rakazo/api", "exec", "tsx", "src/cli/bootstrap-owner.ts"], {
-          env: { ...env, DATABASE_MIGRATION_URL: undefined, OWNER_PASSWORD: password },
+          env: { ...env, DATABASE_MIGRATION_URL: undefined, RAKAZO_ADMIN_PASSWORD: password },
         });
-      await boot(env.OWNER_PASSWORD);
-      const owner = await prisma.user.findUniqueOrThrow({ where: { email: env.OWNER_EMAIL } });
+      await Promise.all([boot(env.RAKAZO_ADMIN_PASSWORD), boot(env.RAKAZO_ADMIN_PASSWORD)]);
+      const owner = await prisma.user.findUniqueOrThrow({
+        where: { email: env.RAKAZO_ADMIN_EMAIL },
+      });
       expect(
         await prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
       ).toMatchObject({ ownerUserId: owner.id, signupsEnabled: false });
       expect(await prisma.session.count()).toBe(0);
       const memberships = await prisma.spaceMember.count({ where: { userId: owner.id } });
       expect(memberships).toBeGreaterThan(0);
-      await prisma.deploymentSettings.update({
-        where: { id: "default" },
-        data: { ownerUserId: null },
-      });
-      await expect(boot("wrong-recovery-password")).rejects.toThrow();
-      expect(
-        await prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
-      ).toMatchObject({ ownerUserId: null });
-      await boot(env.OWNER_PASSWORD);
-      expect(
-        await prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
-      ).toMatchObject({ ownerUserId: owner.id, signupsEnabled: false });
-      expect(await prisma.spaceMember.count({ where: { userId: owner.id } })).toBe(memberships);
       await boot("a-different-password-on-restart");
       expect(await prisma.user.count()).toBe(1);
       const auth = createAuth(prisma, {
         secret: env.BETTER_AUTH_SECRET,
         baseURL: env.BETTER_AUTH_URL,
         webOrigin: env.BETTER_AUTH_URL,
-        signupsEnabled: "false",
-        signupAllowlist: "",
       });
       const request = (path: string, body: object) =>
         auth.handler(
@@ -79,12 +66,17 @@ it.skipIf(!testDatabase)(
           }),
         );
       expect(
-        (await request("sign-in", { email: env.OWNER_EMAIL, password: env.OWNER_PASSWORD })).status,
+        (
+          await request("sign-in", {
+            email: env.RAKAZO_ADMIN_EMAIL,
+            password: env.RAKAZO_ADMIN_PASSWORD,
+          })
+        ).status,
       ).toBe(200);
       expect(
         (
           await request("sign-in", {
-            email: env.OWNER_EMAIL,
+            email: env.RAKAZO_ADMIN_EMAIL,
             password: "a-different-password-on-restart",
           })
         ).status,
@@ -94,10 +86,10 @@ it.skipIf(!testDatabase)(
           await request("sign-up", {
             name: "Stranger",
             email: "stranger@example.test",
-            password: env.OWNER_PASSWORD,
+            password: env.RAKAZO_ADMIN_PASSWORD,
           })
         ).status,
-      ).toBe(400);
+      ).toBe(404);
       expect(await prisma.user.count()).toBe(1);
     } finally {
       await prisma.$disconnect();

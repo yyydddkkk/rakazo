@@ -29,7 +29,7 @@ import {
   InMemoryJobQueue,
   InstalledConnectorProvider,
   isComposioEnabled,
-  isMessagingSurfaceEnabled,
+  isMessagingEnabled,
   isPipedreamEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
@@ -159,10 +159,7 @@ async function main() {
   // Telegram — that would steal the single getUpdates slot away from the
   // API process, which is the one with the inbound sink actually wired up.
   const messagingPlatforms = messagingPlatformsFromEnv(messagingEnvFromProcess(process.env));
-  const messaging = isMessagingSurfaceEnabled(messagingPlatforms, {
-    deploymentModelConfigured,
-    openSignup: process.env.MESSAGING_OPEN_SIGNUP === "true",
-  })
+  const messaging = isMessagingEnabled(messagingPlatforms)
     ? new ChatSdkMessagingSurface(messagingPlatforms)
     : undefined;
   const integrationSettings = new IntegrationProviderSettings(

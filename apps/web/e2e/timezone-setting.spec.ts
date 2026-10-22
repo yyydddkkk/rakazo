@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, openUserSettings, setupAdmin } from "./helpers";
 
 test.use({ timezoneId: "Pacific/Auckland" });
 
@@ -7,7 +7,7 @@ test("account settings save avatar style and timezone, and offer this device's z
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `timezone-${stamp}@rakazo.test`, "password12", "Timezone QA");
+  await setupAdmin(page, `timezone-${stamp}@rakazo.test`, "password12", "Timezone QA");
   await completeOnboarding(page);
 
   const settings = await openUserSettings(page);

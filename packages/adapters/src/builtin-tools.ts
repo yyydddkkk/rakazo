@@ -1154,23 +1154,6 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
-    name: "create_space",
-    description:
-      "Propose a new space in the current organization when the user asks for a separate data boundary. A space can contain many bots and groups, but its chats, files, memory, tools, and integrations stay isolated from other spaces. This always shows the user a confirmation card before creation. Creating the space is the whole action; do not create bots in it unless the user asks later.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: {
-          type: "string",
-          minLength: 1,
-          maxLength: 60,
-          description: 'Short display name, e.g. "Customer support".',
-        },
-      },
-      required: ["name"],
-    },
-  },
-  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",

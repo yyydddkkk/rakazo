@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 function rosterRow(page: Page, name: RegExp) {
   return page.locator("[data-sidebar-group] [data-roster-bot-id]").filter({
@@ -10,7 +10,7 @@ function rosterRow(page: Page, name: RegExp) {
 
 test("spawned bots nest under their parent and collapse", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `reporting-tree-${stamp}@rakazo.test`, "password12", "Tree User");
+  await setupAdmin(page, `reporting-tree-${stamp}@rakazo.test`, "password12", "Tree User");
   await completeOnboarding(page);
 
   const composer = page.locator('textarea[name="chat-message"]');

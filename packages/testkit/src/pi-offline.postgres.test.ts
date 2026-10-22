@@ -5,6 +5,7 @@ import path from "node:path";
 import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
 import { describe, expect, it } from "vitest";
 import { discardBotIntroRun } from "./discard-bot-intro.js";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 import { startModelEmulator } from "./model-emulator.js";
 import { asSystem } from "./system-db.js";
@@ -73,20 +74,23 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         sandboxProvider: "fake",
         agentRuntime: "pi",
         wakeupDriver: "memory",
-        signupsEnabled: "true",
+
         composio: new ComposioConnector({ client: new FakeComposioClient() }),
         encryptionKey: "offline-model-fixture-encryption-key",
       });
       stop = handles.stop;
-      const signup = await handles.app.request("/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: fixtureOrigin },
-        body: JSON.stringify({
-          email: `offline-pi-${randomUUID()}@rakazo.test`,
-          password: "password12",
-          name: "Offline fixture",
-        }),
-      });
+      const signup = await fixtureAccountResponse(
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: fixtureOrigin },
+          body: JSON.stringify({
+            email: `offline-pi-${randomUUID()}@rakazo.test`,
+            password: "password12",
+            name: "Offline fixture",
+          }),
+        },
+        handles.prisma,
+      );
       expect(signup.status).toBeLessThan(400);
       const cookie = sessionCookieHeader(signup);
       await rpc(handles.app, cookie, "models/connect", {

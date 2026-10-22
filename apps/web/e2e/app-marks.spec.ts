@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { completeOnboarding, signup } from "./helpers";
+import { completeOnboarding, setupAdmin } from "./helpers";
 
 // Cached public catalog artwork keeps visual coverage offline and repeatable.
 const apps = ["gmail", "notion", "github"];
@@ -33,7 +33,12 @@ for (const theme of ["light", "dark"]) {
         },
       }),
     );
-    await signup(page, `app-marks-${theme}-${Date.now()}@rakazo.test`, "password12", "Demo User");
+    await setupAdmin(
+      page,
+      `app-marks-${theme}-${Date.now()}@rakazo.test`,
+      "password12",
+      "Demo User",
+    );
     await completeOnboarding(page);
     const footer = page.getByTestId("sidebar-footer");
     const pill = footer.getByRole("button", { name: "Connect apps", exact: true });

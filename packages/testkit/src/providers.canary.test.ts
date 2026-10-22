@@ -11,6 +11,7 @@ import type { RunStatus } from "@rakazo/contracts";
 import { isTerminal } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { afterAll, describe, expect, it } from "vitest";
+import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
 
 if (process.env.VERIFY_PROVIDERS) loadRootEnv({ allowInTests: true });
@@ -223,11 +224,14 @@ describePiApp("live OpenRouter product journey", () => {
     stop = handles.stop;
     const stamp = Date.now();
     const email = `pi-${stamp}@rakazo.test`;
-    const signup = await handles.app.request("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
-      body: JSON.stringify({ email, password: "password12", name: "Pi Canary" }),
-    });
+    const signup = await fixtureAccountResponse(
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+        body: JSON.stringify({ email, password: "password12", name: "Pi Canary" }),
+      },
+      handles.prisma,
+    );
     expect(signup.status).toBeLessThan(400);
     const cookie = sessionCookieHeader(signup);
     const botRes = await rpc<{ id: string }>(handles.app, cookie, "bots/create", {

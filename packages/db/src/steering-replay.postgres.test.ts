@@ -5,8 +5,8 @@ import { createDb } from "./client.js";
 import { claimSteering, createPendingSteeringRun, finalizeRun, sendUserMessage } from "./events.js";
 import { expireStuckRun } from "./expire-stuck-run.js";
 import { createThreadMessage } from "./messages.js";
-import { provisionMessagingIdentity } from "./messaging.js";
 import { asSystem, runAsSystem, runAsTenant } from "./row-security.js";
+import { seedMessagingFixture } from "./test-support/messaging-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -35,11 +35,7 @@ describePostgres("steering after a run ends without completing (PostgreSQL)", ()
       }
     };
     const identity = await runAsSystem("test fixture", () =>
-      provisionMessagingIdentity(
-        prisma,
-        { provider: "sendblue", address },
-        { signupsEnabled: undefined, signupAllowlist: undefined },
-      ),
+      seedMessagingFixture(prisma, { provider: "sendblue", address }),
     );
     ({ userId, spaceId, botId, threadId } = identity);
     provisioned = true;

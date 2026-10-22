@@ -1,17 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { captureScreenshot } from "./helpers";
 
-test("sign-in shows translated password and callback errors", async ({ page }, testInfo) => {
+test("sign-in shows translated credential errors", async ({ page }, testInfo) => {
   await page.route("**/api/auth/get-session**", (route) => route.fulfill({ json: null }));
   await page.route("**/api/auth/capabilities", (route) =>
     route.fulfill({
-      json: { passwordAuth: true, sso: null, passwordReset: false, resetUrl: null },
+      json: { passwordReset: false, resetUrl: null },
     }),
   );
   await page.route("**/api/auth/sign-in/email", (route) =>
     route.fulfill({
-      status: 403,
-      json: { code: "PASSWORD_AUTH_DISABLED", message: "PASSWORD_AUTH_DISABLED" },
+      status: 401,
+      json: { code: "INVALID_EMAIL_OR_PASSWORD", message: "INVALID_EMAIL_OR_PASSWORD" },
     }),
   );
 
@@ -20,16 +20,7 @@ test("sign-in shows translated password and callback errors", async ({ page }, t
   await page.getByLabel("Password", { exact: true }).fill("password12");
   await page.getByRole("button", { name: "Continue with email" }).click();
   await expect(
-    page
-      .getByRole("alert")
-      .getByText("Password sign-in is turned off on this server", { exact: true }),
+    page.getByRole("alert").getByText("Invalid email or password", { exact: true }),
   ).toBeVisible();
-  await captureScreenshot(page, testInfo, "sign-in-password-auth-disabled");
-
-  await page.goto("/sign-in?error=REGISTRATION_CLOSED");
-  await expect(page.getByRole("button", { name: "Continue with email" })).toBeVisible();
-  await expect(
-    page.getByRole("alert").getByText("Registration is closed", { exact: true }),
-  ).toBeVisible();
-  await captureScreenshot(page, testInfo, "sign-in-registration-closed");
+  await captureScreenshot(page, testInfo, "sign-in-invalid-credentials");
 });

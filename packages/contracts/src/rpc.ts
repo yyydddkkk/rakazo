@@ -84,7 +84,6 @@ import {
   SkillPlaybookSchema,
   SpaceMemoryConfigSchema,
   SpaceNavigationSchema,
-  SpaceSchema,
   TaughtSkillSchema,
   TeachRecordingEventSchema,
   ThinkingLevelSchema,
@@ -172,8 +171,6 @@ const threadSendInput = threadTarget
     }
   });
 
-const spaceName = z.string().trim().min(1).max(60);
-
 export const appContract = {
   analytics: { screen: oc.input(AnalyticsScreenInput).output(z.object({ ok: z.literal(true) })) },
   aiConsent: {
@@ -209,25 +206,10 @@ export const appContract = {
   },
   spaces: {
     list: oc.output(SpaceNavigationSchema),
-    create: oc.input(z.object({ name: spaceName })).output(SpaceSchema),
-    rename: oc
-      .input(z.object({ spaceId: Id, name: spaceName }))
-      .output(z.object({ id: Id, name: z.string() })),
-    remove: oc
-      .input(z.object({ spaceId: Id }))
-      .output(z.object({ ok: z.literal(true), activeSpaceId: Id })),
   },
   bootstrap: oc.input(z.object({ botId: Id.optional() })).output(AppBootstrapSchema),
   deployment: {
     get: oc.output(DeploymentSettingsSchema),
-    update: oc
-      .input(
-        z.object({
-          signupsEnabled: z.boolean().optional(),
-          signupAllowlist: z.array(z.string()).optional(),
-        }),
-      )
-      .output(DeploymentSettingsSchema),
   },
   /** Deployment-owner view of the append-only security event log, newest first. */
   security: {

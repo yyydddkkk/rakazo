@@ -27,17 +27,7 @@ export function credentialIssueText(field: CredentialField): string {
 /** Text for a failed Better Auth client result (`{ code, message }`). */
 export function authErrorText(error: unknown, fallback: string): string {
   const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
-  if (code === "SSO_UNAVAILABLE") return t`SSO is temporarily unavailable. Try again.`;
-  if (code === "account_not_linked") return t`Sign in to your existing account to link SSO`;
-  if (code === "REGISTRATION_CLOSED") return t`Registration is closed`;
-  if (code === "EMAIL_NOT_ALLOWED") return t`Email is not allowed to register`;
-  if (code === "EMAIL_VERIFICATION_REQUIRED" || code === "unable_to_link_account")
-    return t`Email verification required`;
   if (code === "REAUTHENTICATION_REQUIRED") return t`Sign in again`;
-  if (code === "PASSWORD_AUTH_DISABLED") return t`Password sign-in is turned off on this server`;
-  if (code === "EMAIL_DELETION_UNAVAILABLE") return t`Could not continue`;
-  if (code === "INVALID_OTP") return t`Invalid code`;
-  if (code === "OTP_EXPIRED" || code === "TOO_MANY_ATTEMPTS") return t`Request a new code`;
   return authErrorMessage(error, {
     fallback,
     email: credentialIssueText("email"),

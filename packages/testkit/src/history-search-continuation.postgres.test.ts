@@ -183,7 +183,7 @@ describe.skipIf(!enabled)("unfinished broad history search", () => {
                 sandboxProvider: "fake",
                 agentRuntime: "pi",
                 wakeupDriver: "memory",
-                signupsEnabled: "true",
+
                 composio,
                 encryptionKey: "synthetic-history-continuation-encryption-key",
               }),

@@ -105,6 +105,7 @@ model Verification {
 }
 
 /// Better Auth WebAuthn credentials. `publicKey` is the base64 COSE key.
+/// Unused since slim/web-only; drop in a later migration.
 model Passkey {
   id           String    @id
   name         String?
@@ -310,6 +311,7 @@ model SpaceMember {
   @@map("space_members")
 }
 
+/// Unused since slim/web-only; drop in a later migration.
 model Invitation {
   id             String       @id
   organizationId String

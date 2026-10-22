@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 test("pasting into the composer attaches images and inserts text", async ({
   page,
   context,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `composer-paste-${stamp}@rakazo.test`, "password12", "Paste Test");
+  await setupAdmin(page, `composer-paste-${stamp}@rakazo.test`, "password12", "Paste Test");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

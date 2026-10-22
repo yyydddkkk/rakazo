@@ -199,21 +199,14 @@ import {
   appendEventInTransaction,
   BotSectionNameConflictError,
   botProfileLabelsChanged,
-  CannotDeleteDefaultSpaceError,
-  CannotDeleteLastSpaceError,
-  CannotDeleteSpaceAsNonOwnerError,
-  CannotRenameSpaceAsNonOwnerError,
   ComputerLimitError,
-  claimEmptySpaceDeletionForMember,
   commitBotUpdate,
   comparePreferenceOrder,
   createExternalConversationRepos,
   createGroupRepos,
   createRepos,
-  createSpaceForMember,
   createThreadMessageInTransaction,
   defaultModelCredentialCandidates,
-  deleteEmptySpaceForMember,
   deleteUnreferencedCredentialSecret,
   ensureBoard,
   findDefaultModelCredential,
@@ -223,7 +216,6 @@ import {
   findTicket,
   formatMessagingLinkCode,
   InstructionConflictError,
-  InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
   listBoards,
@@ -238,18 +230,11 @@ import {
   parseComputerMode,
   pushSessionExpiresAt,
   recordSecurityEvent,
-  releaseSpaceDeletionClaim,
-  renameSpaceForMember,
-  renewSpaceDeletionClaim,
   replaceSpaceBackupModels,
   restoreBotUnderComputerQuota,
   runAsSystem,
   runAsTenant,
-  SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
-  SpaceLimitError,
-  SpaceNotEmptyError,
-  SpaceNotFoundError,
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
   toBoardDto,
@@ -695,7 +680,7 @@ export interface RouterDeps {
   artifacts: ArtifactStore;
   dataDir: string;
   /** Present when the external messaging surface is enabled. */
-  messaging?: { enabled: boolean; providers: string[]; openSignup: boolean };
+  messaging?: { enabled: boolean; providers: string[] };
   env: {
     ticketBoardEnabled?: boolean;
     phoneCallsEnabled?: boolean;
@@ -724,7 +709,6 @@ export interface RouterDeps {
 /** Bound for one provider sandbox destroy during Space deletion. Providers may
  * ignore the request abort signal, so without a deadline a hung destroy would
  * keep the deletion claim renewed forever and block stale-claim recovery. */
-const SPACE_TEARDOWN_TIMEOUT_MS = 120_000;
 
 /** The card is closed by a marker; the run that follows finishes whatever the call left open. */
 /** Deterministic nonce for a call's marker message. The unique (threadId, clientNonce)
@@ -736,11 +720,6 @@ export function callMarkerClientNonce(callId: string): string {
 
 const HANG_UP_PROMPT =
   "The voice call just ended because the user hung up. First call end_call with a short title for the call (leave farewell empty). Then, if anything the user asked for during the call is still unfinished, complete it now as a normal chat reply with full formatting. If nothing is pending, reply with one short sentence.";
-
-function spaceTeardownTimeoutMs(): number {
-  const override = Number(process.env.SPACE_TEARDOWN_TIMEOUT_MS ?? "");
-  return Number.isFinite(override) && override > 0 ? override : SPACE_TEARDOWN_TIMEOUT_MS;
-}
 
 /** Surface a Space deletion race as a retryable conflict instead of a generic failure. */
 function mapSpaceLifecycleError(error: unknown): unknown {
@@ -891,24 +870,6 @@ async function asTenant<T extends { output: unknown }>(
     },
   };
   return { ...result, output: scoped };
-}
-
-/**
- * Runs `fn` scoped to another of the actor's Spaces. Membership is checked first,
- * so a client-supplied Space id never opens that Space's rows on its own.
- */
-async function asMemberOf<T>(
-  prisma: PrismaClient,
-  actor: Actor,
-  spaceId: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const member = await prisma.spaceMember.findFirst({
-    where: { spaceId, userId: actor.userId },
-    select: { id: true },
-  });
-  if (!member) throw new ORPCError("NOT_FOUND", { message: new SpaceNotFoundError().message });
-  return runAsTenant({ spaceId, userId: actor.userId }, fn);
 }
 
 export function createRouter(deps: RouterDeps) {
@@ -1118,195 +1079,6 @@ export function createRouter(deps: RouterDeps) {
       list: authed.spaces.list.handler(async ({ context }) =>
         spaceNavigationDto(deps, context.actor, repos, groupRepos),
       ),
-      // Seeds a Space whose id does not exist yet; the member limit is checked inside.
-      create: authed.spaces.create.handler(({ context, input }) =>
-        runAsSystem("create a Space for its member", async () => {
-          let space: { id: string; name: string };
-          try {
-            space = await createSpaceForMember(deps.prisma, {
-              currentSpaceId: context.actor.spaceId,
-              userId: context.actor.userId,
-              name: input.name,
-            });
-          } catch (error) {
-            if (error instanceof SpaceLimitError || error instanceof InvalidSpaceNameError) {
-              throw new ORPCError("BAD_REQUEST", { message: error.message });
-            }
-            throw error;
-          }
-          return {
-            id: space.id,
-            name: space.name,
-            isDefault: false,
-            hasContent: false,
-            canRename: true,
-            canDelete: true,
-            bots: [],
-            groups: [],
-            externalConversations: [],
-            botSections: [],
-          };
-        }),
-      ),
-      // Renames another of the member's Spaces; membership is checked inside.
-      rename: authed.spaces.rename.handler(({ context, input }) =>
-        asMemberOf(deps.prisma, context.actor, input.spaceId, async () => {
-          try {
-            return await renameSpaceForMember(deps.prisma, {
-              currentSpaceId: context.actor.spaceId,
-              userId: context.actor.userId,
-              spaceId: input.spaceId,
-              name: input.name,
-            });
-          } catch (error) {
-            if (error instanceof SpaceNotFoundError) {
-              throw new ORPCError("NOT_FOUND", { message: error.message });
-            }
-            if (error instanceof CannotRenameSpaceAsNonOwnerError) {
-              throw new ORPCError("FORBIDDEN", { message: error.message });
-            }
-            if (error instanceof InvalidSpaceNameError) {
-              throw new ORPCError("BAD_REQUEST", { message: error.message });
-            }
-            if (error instanceof SpaceDeletionInProgressError) {
-              throw new ORPCError("CONFLICT", { message: error.message });
-            }
-            throw error;
-          }
-        }),
-      ),
-      // Acts on the Space being deleted, not the current one, so its emptiness
-      // check and teardown see that Space's rows. Ownership is checked inside.
-      remove: authed.spaces.remove.handler(({ context, input }) =>
-        asMemberOf(deps.prisma, context.actor, input.spaceId, async () => {
-          let claimId: string | null = null;
-          let claimActive = false;
-          let claimHealthy = true;
-          let claimReleasable = false;
-          let claimRenewal: ReturnType<typeof setInterval> | null = null;
-          const deleteInput = {
-            currentSpaceId: context.actor.spaceId,
-            userId: context.actor.userId,
-            spaceId: input.spaceId,
-          };
-          try {
-            // Claim emptiness before external teardown. Bot and group creation
-            // take the same lifecycle lock and reject the Space until deletion
-            // finishes or this claim is released.
-            const claim = await claimEmptySpaceDeletionForMember(deps.prisma, deleteInput);
-            claimId = claim.claimId;
-            claimActive = true;
-            // A recovered worker can safely finish deletion, but cannot know
-            // whether the previous worker still has provider teardown in flight.
-            // Keep the Space claimed on failure so content cannot reuse it.
-            claimReleasable = !claim.recovered;
-            const claimedInput = { ...deleteInput, claimId };
-            const assertClaim = async () => {
-              if (!claimHealthy) throw new SpaceDeletionInProgressError();
-              try {
-                const renewed = await renewSpaceDeletionClaim(deps.prisma, claimedInput);
-                if (!renewed) {
-                  claimHealthy = false;
-                  claimReleasable = false;
-                  throw new SpaceDeletionInProgressError();
-                }
-              } catch (error) {
-                claimHealthy = false;
-                claimReleasable = false;
-                throw error;
-              }
-            };
-            claimRenewal = setInterval(() => {
-              void assertClaim().catch((renewalError) => {
-                if (claimActive) {
-                  getLogger().error("space deletion claim renewal failed", renewalError);
-                }
-              });
-            }, SPACE_DELETION_CLAIM_TIMEOUT_MS / 5);
-            const adapterContext = connectionContext(
-              context.actor,
-              "spaces.remove",
-              context.signal,
-            );
-            for (const computer of claim.computers) {
-              await assertClaim();
-              // Provider errors are ambiguous: teardown may have reached the
-              // remote service. From this point, only successful deletion may
-              // unblock content creation; a stale recovery must finish it.
-              claimReleasable = false;
-              let teardownTimer: ReturnType<typeof setTimeout> | undefined;
-              try {
-                await Promise.race([
-                  deps.sandbox.destroy(toComputerRef(computer), {
-                    ...adapterContext,
-                    botId: computer.homeKey,
-                  }),
-                  new Promise<never>((_, reject) => {
-                    teardownTimer = setTimeout(() => {
-                      // Stop renewal so the claim goes stale and a later
-                      // worker can recover; never release after teardown
-                      // started, since the hung destroy may still complete.
-                      claimHealthy = false;
-                      claimReleasable = false;
-                      reject(new Error("Space sandbox teardown timed out"));
-                    }, spaceTeardownTimeoutMs());
-                  }),
-                ]);
-              } finally {
-                if (teardownTimer !== undefined) clearTimeout(teardownTimer);
-              }
-              // Never clear a provider handle after this worker loses its claim.
-              await assertClaim();
-              await deps.prisma.computer.updateMany({
-                where: {
-                  spaceId: input.spaceId,
-                  homeKey: computer.homeKey,
-                  providerRef: computer.providerRef,
-                  space: { deletionClaimId: claimId },
-                },
-                data: { state: "stopped", providerRef: null },
-              });
-            }
-            await assertClaim();
-            claimActive = false;
-            if (claimRenewal) {
-              clearInterval(claimRenewal);
-              claimRenewal = null;
-            }
-            const fallback = await deleteEmptySpaceForMember(deps.prisma, claimedInput);
-            return { ok: true as const, activeSpaceId: fallback.id };
-          } catch (error) {
-            if (context.signal?.aborted) claimReleasable = false;
-            if (claimId && claimReleasable) {
-              await releaseSpaceDeletionClaim(deps.prisma, { ...deleteInput, claimId }).catch(
-                (releaseError) => {
-                  getLogger().error("space deletion claim release failed", releaseError);
-                },
-              );
-            }
-            if (error instanceof SpaceNotFoundError) {
-              throw new ORPCError("NOT_FOUND", { message: error.message });
-            }
-            if (error instanceof CannotDeleteSpaceAsNonOwnerError) {
-              throw new ORPCError("FORBIDDEN", { message: error.message });
-            }
-            if (error instanceof SpaceDeletionInProgressError) {
-              throw new ORPCError("CONFLICT", { message: error.message });
-            }
-            if (
-              error instanceof CannotDeleteDefaultSpaceError ||
-              error instanceof CannotDeleteLastSpaceError ||
-              error instanceof SpaceNotEmptyError
-            ) {
-              throw new ORPCError("BAD_REQUEST", { message: error.message });
-            }
-            throw error;
-          } finally {
-            claimActive = false;
-            if (claimRenewal) clearInterval(claimRenewal);
-          }
-        }),
-      ),
     },
     bootstrap: authed.bootstrap.handler(async ({ context, input }) => {
       const actor = context.actor;
@@ -1341,27 +1113,6 @@ export function createRouter(deps: RouterDeps) {
     deployment: {
       get: authed.deployment.get.handler(async ({ context }) => {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        return deploymentDto(deps.prisma, deps.env.sandboxProvider);
-      }),
-      update: authed.deployment.update.handler(async ({ context, input }) => {
-        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        await deps.prisma.deploymentSettings.upsert({
-          where: { id: "default" },
-          create: {
-            id: "default",
-            ownerUserId: context.actor.userId,
-            signupsEnabled: input.signupsEnabled ?? true,
-            signupAllowlist: (input.signupAllowlist ?? []).join(","),
-            signupPolicyInitialized: true,
-          },
-          update: {
-            ...(input.signupsEnabled === undefined ? {} : { signupsEnabled: input.signupsEnabled }),
-            ...(input.signupAllowlist ? { signupAllowlist: input.signupAllowlist.join(",") } : {}),
-            ...(input.signupsEnabled === undefined && input.signupAllowlist === undefined
-              ? {}
-              : { signupPolicyInitialized: true }),
-          },
-        });
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);
       }),
     },
@@ -6055,7 +5806,6 @@ export function createRouter(deps: RouterDeps) {
         return {
           enabled: deps.messaging?.enabled ?? false,
           providers: deps.messaging?.providers ?? [],
-          openSignup: deps.messaging?.openSignup ?? false,
           identities: await Promise.all(
             identities.map((identity) => messagingIdentityDto(deps.prisma, identity)),
           ),
@@ -6841,7 +6591,7 @@ async function memberSpaceNavigation(
   });
   if (!currentSpace) throw new IsolationError();
   const memberships = await deps.prisma.spaceMember.findMany({
-    where: { userId: actor.userId, organizationId: currentSpace.organizationId },
+    where: { userId: actor.userId, spaceId: actor.spaceId },
     select: {
       spaceId: true,
       role: true,
@@ -6893,7 +6643,6 @@ async function memberSpaceNavigation(
   const botsFor = (spaceId: string) => botsBySpace.get(spaceId) ?? [];
   const groupsFor = (spaceId: string) => groupsBySpace.get(spaceId) ?? [];
   const sectionsFor = (spaceId: string) => sectionsBySpace.get(spaceId) ?? [];
-  const staleClaimBefore = new Date(Date.now() - SPACE_DELETION_CLAIM_TIMEOUT_MS);
 
   return {
     current: {
@@ -6914,13 +6663,8 @@ async function memberSpaceNavigation(
         name: membership.space.name,
         isDefault: membership.space.isDefault,
         hasContent: spacesWithContent.has(membership.spaceId),
-        canRename: membership.role === "owner" && membership.space.deletingAt === null,
-        canDelete:
-          membership.role === "owner" &&
-          !membership.space.isDefault &&
-          memberships.length > 1 &&
-          !spacesWithContent.has(membership.spaceId) &&
-          (membership.space.deletingAt === null || membership.space.deletingAt < staleClaimBefore),
+        canRename: false,
+        canDelete: false,
         bots: spaceBots.map((bot) => ({
           id: bot.id,
           parentBotId: bot.parentBotId,
@@ -7328,10 +7072,6 @@ async function deploymentDto(prisma: PrismaClient, sandboxProvider: string) {
   const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
   return {
     ownerUserId: settings?.ownerUserId ?? null,
-    signupsEnabled: settings?.signupsEnabled ?? true,
-    signupAllowlist: settings?.signupAllowlist
-      ? settings.signupAllowlist.split(",").filter(Boolean)
-      : [],
     hasDeploymentModelCredential: Boolean(settings?.deploymentModelCredentialCipher),
     defaultProvider: settings?.defaultModelProvider
       ? canonicalPiProviderId(settings.defaultModelProvider)

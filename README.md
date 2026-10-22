@@ -37,6 +37,7 @@ then put them in `DATABASE_MIGRATION_URL` and `DATABASE_URL`. The app connects a
 independent long random values. Docker sandboxes also need a dedicated
 `SANDBOX_SUPERVISOR_TOKEN`. You can also set `OPENROUTER_API_KEY`, or connect a supported
 model provider during onboarding.
+Set `RAKAZO_ADMIN_EMAIL` and replace the `RAKAZO_ADMIN_PASSWORD` placeholder before the first start.
 
 For host-side development with Docker Desktop, set `SANDBOX_CONTROL_VIA_LOOPBACK=true`
 in `.env`. The supervisor discovers Docker Desktop's user socket automatically;

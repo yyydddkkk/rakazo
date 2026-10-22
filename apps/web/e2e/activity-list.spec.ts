@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 /** Activity rows sit above `[data-sidebar-group]` bots; match their aria-label. */
 function activityRow(page: Page, botName: string) {
@@ -40,7 +40,7 @@ async function captureActivitySidebar(
 
 test("sidebar Now and Recent surface active and terminal runs", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `activity-${stamp}@rakazo.test`, "password12", "Activity");
+  await setupAdmin(page, `activity-${stamp}@rakazo.test`, "password12", "Activity");
   await completeOnboarding(page);
 
   const aside = page.locator("aside").first();
@@ -175,7 +175,7 @@ test("sidebar Now and Recent surface active and terminal runs", async ({ page },
 
 test("activity filters keep retry when a refresh fails", async ({ page }) => {
   const stamp = Date.now();
-  await signup(page, `activity-retry-${stamp}@rakazo.test`, "password12", "Activity");
+  await setupAdmin(page, `activity-retry-${stamp}@rakazo.test`, "password12", "Activity");
   await completeOnboarding(page);
 
   type Phase = "ok" | "empty" | "fail" | "hang";

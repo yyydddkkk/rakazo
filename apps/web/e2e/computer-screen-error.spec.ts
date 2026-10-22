@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
 test("screen connection failures stay visible and can be retried", async ({ page }, testInfo) => {
-  await signup(page, `screen-error-${Date.now()}@rakazo.test`, "password12", "Screen Error");
+  await setupAdmin(page, `screen-error-${Date.now()}@rakazo.test`, "password12", "Screen Error");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await rpc(page, "computer/boot", { botId });
@@ -65,7 +65,7 @@ test("screen connection failures stay visible and can be retried", async ({ page
 test("a framed screen that fails to connect says so and can be retried", async ({
   page,
 }, testInfo) => {
-  await signup(page, `screen-frame-${Date.now()}@rakazo.test`, "password12", "Screen Frame");
+  await setupAdmin(page, `screen-frame-${Date.now()}@rakazo.test`, "password12", "Screen Frame");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await rpc(page, "computer/boot", { botId });
@@ -113,7 +113,12 @@ test("a framed screen that fails to connect says so and can be retried", async (
 });
 
 test("a framed screen the proxy refuses shows the proxy's reason", async ({ page }, testInfo) => {
-  await signup(page, `screen-refused-${Date.now()}@rakazo.test`, "password12", "Screen Refused");
+  await setupAdmin(
+    page,
+    `screen-refused-${Date.now()}@rakazo.test`,
+    "password12",
+    "Screen Refused",
+  );
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await rpc(page, "computer/boot", { botId });

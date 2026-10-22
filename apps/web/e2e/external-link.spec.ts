@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
 
 const destination = "https://docs.example.test/guide?from=chat";
 
@@ -10,7 +10,7 @@ test("opening a bot reply link asks before leaving the app", async ({ page }, te
       route.fulfill({ body: "Docs", contentType: "text/plain" }),
     );
   const stamp = Date.now();
-  await signup(page, `external-link-${stamp}@rakazo.test`, "password12", "External Link");
+  await setupAdmin(page, `external-link-${stamp}@rakazo.test`, "password12", "External Link");
   await completeOnboarding(page);
 
   const composer = page.getByRole("combobox", { name: /^Message/ });

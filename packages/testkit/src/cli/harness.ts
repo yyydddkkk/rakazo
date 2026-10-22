@@ -1,8 +1,9 @@
 import { execSync } from "node:child_process";
 import { globSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+import { asSystem } from "@rakazo/db";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import type { createApp } from "../../../../apps/api/src/app.ts";
 import { runProcess } from "./process.js";
@@ -59,7 +60,7 @@ async function main() {
     runtimeUrl.password = "rakazo-test-runtime";
     const databaseUrl = runtimeUrl.toString();
     const apiPort = Number(process.env.API_PORT ?? 3110);
-    const webPort = Number(process.env.WEB_PORT ?? 5180);
+    const webPort = integration ? 5173 : Number(process.env.WEB_PORT ?? 5180);
     const webOrigin = `http://127.0.0.1:${webPort}`;
 
     process.env.DATABASE_URL = databaseUrl;
@@ -71,6 +72,9 @@ async function main() {
     process.env.AGENT_RUNTIME = agentRuntime;
     process.env.RAKAZO_LIVE_MODEL_CATALOG = "off";
     if (!integration) {
+      process.env.RAKAZO_E2E_DATABASE_RESET = "1";
+      process.env.RAKAZO_E2E_COMPUTER_MANIFEST = path.join(reportDir, "computer-cleanup.jsonl");
+      await writeFile(process.env.RAKAZO_E2E_COMPUTER_MANIFEST, "");
       process.env.TICKET_BOARD_ENABLED = "true";
       process.env.PHONE_CALLS_ENABLED = "true";
     }
@@ -90,9 +94,9 @@ async function main() {
     process.env.WEB_PORT = String(webPort);
     process.env.PLAYWRIGHT_BASE_URL = webOrigin;
     process.env.DATA_DIR = path.join(reportDir, "data");
-    process.env.SIGNUPS_ENABLED = "true";
-    process.env.SIGNUP_ALLOWLIST = "";
-    // Model and speech fixtures listen on loopback, and most test accounts are not the owner.
+    process.env.RAKAZO_ADMIN_EMAIL = "admin@example.test";
+    process.env.RAKAZO_ADMIN_PASSWORD = "test-admin-password-12";
+    // Model and speech fixtures listen on loopback.
     process.env.MCP_ALLOW_PRIVATE_ENDPOINT = "true";
     process.env.CI = "1";
 
@@ -111,6 +115,7 @@ async function main() {
         "packages/testkit/src/search.test.ts",
         "packages/testkit/src/executor-lifecycle.test.ts",
         "packages/testkit/src/connections.test.ts",
+        "packages/testkit/src/messaging.test.ts",
         "packages/testkit/src/bot-secrets.test.ts",
       ];
       // Each app reconciles all durable work in its database, including intentionally
@@ -259,7 +264,7 @@ async function main() {
           },
         );
       } catch (error) {
-        const failedRuns = await handles.prisma.run.findMany({
+        const failedRuns = await asSystem(handles.prisma).run.findMany({
           where: { status: "failed" },
           select: { id: true, error: true },
         });
@@ -332,10 +337,28 @@ type AppHandles = Awaited<ReturnType<typeof createApp>>;
 
 async function managedComputers(handles: AppHandles) {
   if (!["e2b", "daytona", "boat"].includes(sandboxProvider)) return [];
-  return handles.prisma.computer.findMany({
+  const previous = (await readFile(process.env.RAKAZO_E2E_COMPUTER_MANIFEST!, "utf8"))
+    .split("\n")
+    .filter(Boolean)
+    .map(
+      (line) =>
+        JSON.parse(line) as {
+          homeKey: string;
+          kind: string;
+          providerRef: string | null;
+          userId: string;
+          spaceId: string;
+        },
+    );
+  const current = await asSystem(handles.prisma).computer.findMany({
     where: { providerRef: { not: null } },
     select: { homeKey: true, kind: true, providerRef: true, userId: true, spaceId: true },
   });
+  return [
+    ...new Map(
+      [...previous, ...current].map((computer) => [computer.providerRef, computer]),
+    ).values(),
+  ];
 }
 
 async function writeSummary(reportDir: string, summary: Record<string, unknown>) {

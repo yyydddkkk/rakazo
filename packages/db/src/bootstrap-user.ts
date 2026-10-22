@@ -1,11 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { signupPolicyFromEnv } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
-
-export interface SignupPolicyEnv {
-  signupsEnabled: string | undefined;
-  signupAllowlist: string | undefined;
-}
 
 function newId(): string {
   return randomBytes(16).toString("hex");
@@ -16,27 +10,23 @@ function isUniqueViolation(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
 }
 
-/**
- * Everything a brand-new user needs around their account row: a personal
- * organization, its default space, owner memberships for both boundaries,
- * deployment-owner claim, user memory, and notification preferences. Shared by
- * the Better Auth `session.create.before` hook and phone-identity provisioning so
- * both paths stay in lockstep.
- *
- * `claimDeploymentOwner: false` is for identities that did not sign up
- * through the app (phone provisioning): a first texter must never become
- * the deployment owner.
- */
+/** Provision the personal organization, Space, memberships, memory and preferences. */
 export async function bootstrapUserSpace(
-  prisma: PrismaClient,
+  prisma: Pick<
+    PrismaClient,
+    | "organization"
+    | "member"
+    | "space"
+    | "spaceMember"
+    | "deploymentSettings"
+    | "memoryDocument"
+    | "notificationPreference"
+  >,
   user: { id: string },
-  env: SignupPolicyEnv,
   options: { claimDeploymentOwner?: boolean } = {},
 ): Promise<{ spaceId: string }> {
   const claimDeploymentOwner = options.claimDeploymentOwner ?? true;
-  // Concurrent bootstraps for the same user (e.g. overlapping first phone
-  // inbounds) race on every unique key below; each step either wins or
-  // joins the winner's state instead of failing.
+  // Reuse existing personal boundaries when provisioning is retried.
   const slug = `user-${user.id.slice(0, 12)}`;
   let orgId = newId();
   try {
@@ -88,14 +78,13 @@ export async function bootstrapUserSpace(
     .catch((error: unknown) => {
       if (!isUniqueViolation(error)) throw error;
     });
-  const policy = signupPolicyFromEnv(env);
   await prisma.deploymentSettings.upsert({
     where: { id: "default" },
     create: {
       id: "default",
       ownerUserId: claimDeploymentOwner ? user.id : null,
-      signupsEnabled: policy.enabled,
-      signupAllowlist: policy.allowlist.join(","),
+      signupsEnabled: false,
+      signupAllowlist: "",
       signupPolicyInitialized: true,
     },
     update: {},

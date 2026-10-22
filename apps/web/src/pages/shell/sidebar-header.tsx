@@ -16,7 +16,6 @@ export function SidebarHeader({
   setMobileSidebarOpen,
   setPanel,
   navigate,
-  setNewSpaceOpen,
   setPickerInfoTopic,
 }: {
   mini?: boolean;
@@ -27,8 +26,7 @@ export function SidebarHeader({
   setMobileSidebarOpen: (open: boolean) => void;
   setPanel: (panel: Panel) => void;
   navigate: (path: string) => void;
-  setNewSpaceOpen: (open: boolean) => void;
-  setPickerInfoTopic: (topic: "group" | "space") => void;
+  setPickerInfoTopic: (topic: "group") => void;
 }) {
   const { t } = useLingui();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
@@ -109,20 +107,10 @@ export function SidebarHeader({
                   setMobileSidebarOpen(false);
                   setPanel("create-group");
                 }}
-                onCreateSpace={() => {
-                  setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
-                  setNewSpaceOpen(true);
-                }}
                 onShowGroupInfo={() => {
                   setCreateMenuOpen(false);
                   setMobileSidebarOpen(false);
                   setPickerInfoTopic("group");
-                }}
-                onShowSpaceInfo={() => {
-                  setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
-                  setPickerInfoTopic("space");
                 }}
               />
             </PopoverContent>

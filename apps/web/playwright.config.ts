@@ -18,7 +18,8 @@ export default defineConfig({
   testDir: "./e2e",
   forbidOnly: Boolean(process.env.CI),
   fullyParallel: false,
-  workers: realSandbox ? 1 : undefined,
+  // Every scenario resets the same singleton database through private fixture setup.
+  workers: 1,
   timeout: boatSandbox ? 600_000 : realSandbox ? 300_000 : 120_000,
   expect: { timeout: boatSandbox ? 300_000 : realSandbox ? 90_000 : 20_000 },
   reporter: reporters,

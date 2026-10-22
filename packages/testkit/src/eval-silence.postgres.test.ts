@@ -167,7 +167,7 @@ describe.skipIf(!databaseAvailable)("routine silence eval through the product", 
                 sandboxProvider: "fake",
                 agentRuntime: "pi",
                 wakeupDriver: "memory",
-                signupsEnabled: "true",
+
                 composio,
                 messaging,
                 encryptionKey: "offline-silence-encryption-key-32-characters",

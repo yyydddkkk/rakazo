@@ -2,14 +2,7 @@ import type { JobPublisher, MessagingInboundMessage } from "@rakazo/adapter-kit"
 import { messagingDeliverJob, runContinueJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { parseMessagingCommand, sanitizeMessagingLabel } from "@rakazo/core";
-import type {
-  MessagingIdentityRequest,
-  Prisma,
-  PrismaClient,
-  ProvisionedMessagingIdentity,
-  SignupPolicyEnv,
-  ThreadEvents,
-} from "@rakazo/db";
+import type { Prisma, PrismaClient, ProvisionedMessagingIdentity, ThreadEvents } from "@rakazo/db";
 import {
   createThreadMessage,
   normalizeMessagingLinkCode,
@@ -33,16 +26,6 @@ export interface MessagingInboundDeps {
   prisma: PrismaClient;
   events: Pick<ThreadEvents, "sendUserMessage" | "notify">;
   jobs: Pick<JobPublisher, "enqueue">;
-  provision: (
-    request: MessagingIdentityRequest,
-    env: SignupPolicyEnv,
-  ) => Promise<ProvisionedMessagingIdentity>;
-  /**
-   * Poke-style open line: unknown senders auto-provision their own account.
-   * Off by default — strangers' runs would bill the deployment model key.
-   */
-  openSignup: boolean;
-  signupPolicy: SignupPolicyEnv;
   acknowledge?: MessagingReceipts["acknowledge"];
 }
 
@@ -57,7 +40,7 @@ type IdentityRow = {
 
 /**
  * Inbound routing. 1:1 messages are messages to the sender's own bot (with
- * provisioning on first contact and the YES/NO/LEAVE owner commands).
+ * explicit account linking and the YES/NO/LEAVE owner commands).
  * Group messages drive channel discovery — upsert channel + members, DM
  * invites to linked owners, one intro when strangers are present — and
  * fan out to every approved member bot's own thread.
@@ -99,38 +82,22 @@ async function handleDirectEvent(
     if (await tryRedeemLinkCode(deps, event)) return;
   } else {
     // Unlinked senders: a valid link code binds this address to its issuer's
-    // account and bot; otherwise the line is silent unless the deployment
-    // explicitly runs as an open Poke-style signup line.
+    // account and bot; otherwise the line is silent.
     if (await tryRedeemLinkCode(deps, event)) return;
-    if (!deps.openSignup) return;
-    // Never provision a full account for a reaction or empty payload.
-    if (!text) return;
+    return;
   }
 
-  let ids: ProvisionedMessagingIdentity;
-  if (existing) {
-    const thread = await deps.prisma.thread.findFirst({ where: { botId: existing.botId } });
-    if (!thread) throw new Error(`messaging identity ${existing.id} has no thread`);
-    ids = {
-      provider: existing.provider,
-      address: existing.address,
-      userId: existing.userId,
-      spaceId: existing.spaceId,
-      botId: existing.botId,
-      threadId: thread.id,
-      created: false,
-    };
-  } else {
-    ids = await deps.provision(
-      {
-        provider: event.provider,
-        address: event.from,
-        dmThreadId: event.threadId,
-        displayName: event.fromLabel ? sanitizeMessagingLabel(event.fromLabel) : null,
-      },
-      deps.signupPolicy,
-    );
-  }
+  const thread = await deps.prisma.thread.findFirst({ where: { botId: existing.botId } });
+  if (!thread) throw new Error(`messaging identity ${existing.id} has no thread`);
+  const ids: ProvisionedMessagingIdentity = {
+    provider: existing.provider,
+    address: existing.address,
+    userId: existing.userId,
+    spaceId: existing.spaceId,
+    botId: existing.botId,
+    threadId: thread.id,
+    created: false,
+  };
 
   // Message-trigger routines own the delivery when configured. Do not also
   // start a normal messaging continue for the same inbound handle.

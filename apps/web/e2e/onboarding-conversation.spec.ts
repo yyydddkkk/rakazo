@@ -1,5 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openUserSettings, rpc, signup } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  openUserSettings,
+  rpc,
+  setupAdmin,
+} from "./helpers";
 
 function slackCard(page: Page) {
   return page.getByRole("group", { name: "Slack connection" });
@@ -9,7 +15,7 @@ test("focus choice suggests apps and preserves a completed connection", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `onboarding-${stamp}@rakazo.test`, "password12", "Robin");
+  await setupAdmin(page, `onboarding-${stamp}@rakazo.test`, "password12", "Robin");
   await completeOnboarding(page);
 
   await expect(
@@ -83,7 +89,7 @@ test("focus choice suggests apps and preserves a completed connection", async ({
 
 test("focus choice follows Simplified Chinese UI locale", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `onboarding-zh-cn-${stamp}@rakazo.test`, "password12", "Robin");
+  await setupAdmin(page, `onboarding-zh-cn-${stamp}@rakazo.test`, "password12", "Robin");
   await completeOnboarding(page);
 
   await expect(page.getByText("What do you want me on first?", { exact: true })).toBeVisible();
@@ -107,7 +113,7 @@ test("focus choice follows Simplified Chinese UI locale", async ({ page }, testI
 });
 
 test("choice refresh failures leave options available for retry", async ({ page }) => {
-  await signup(page, `choice-refresh-${Date.now()}@rakazo.test`, "password12", "Choice Retry");
+  await setupAdmin(page, `choice-refresh-${Date.now()}@rakazo.test`, "password12", "Choice Retry");
   await completeOnboarding(page);
   const choice = page.getByRole("button", { name: /Day-to-day work/ });
   await expect(choice).toBeEnabled();

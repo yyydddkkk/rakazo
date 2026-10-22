@@ -117,12 +117,10 @@ import {
 import type { McpServer, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   appendEventInTransaction,
-  createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
   findDefaultModelCredential,
   InstructionConflictError,
-  InvalidSpaceNameError,
   isTooManyDatabaseConnections,
   loadRunHistoryMessages,
   Prisma,
@@ -132,8 +130,6 @@ import {
   recordUsage,
   reserveInstructionProposal,
   retireModelCredential,
-  runAsSystem,
-  SpaceLimitError,
   searchHistory,
   settleReleasedTakeoverCards,
   validateInstructionProposal,
@@ -6943,24 +6939,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 );
             return finish({ ok: true });
           }
-          if (name === "create_space") {
-            try {
-              // The new Space's rows are outside the run's tenant until it exists.
-              const space = await runAsSystem("create a Space for its member", () =>
-                createSpaceForMember(deps.prisma, {
-                  currentSpaceId: run.spaceId,
-                  userId: run.userId,
-                  name: String(args.name ?? ""),
-                }),
-              );
-              return finish({ ok: true, spaceId: space.id, name: space.name });
-            } catch (error) {
-              if (error instanceof SpaceLimitError || error instanceof InvalidSpaceNameError) {
-                return finish({ error: error.message });
-              }
-              throw error;
-            }
-          }
           if (name === "spawn_bot") {
             const computerModeArg = args.computer_mode;
             let computerMode: "team" | "dedicated" | undefined;
@@ -9090,11 +9068,6 @@ export function userTurnInstructions(parts: {
     parts.workspaceInstruction,
     parts.agentEnvironmentInstruction,
     "A bot and a subagent are different. Never use both for the same request.",
-    offeredBuiltinClause(
-      parts.disabledBuiltinTools,
-      "create_space",
-      "create_space proposes a new privacy boundary inside the current organization. Use it when the user asks to create a space or separate data between teams or projects. It always pauses for explicit user approval; never claim the space exists before the tool succeeds.",
-    ),
     spawnBotClause(parts.disabledBuiltinTools),
     offeredBuiltinClause(
       parts.disabledBuiltinTools,

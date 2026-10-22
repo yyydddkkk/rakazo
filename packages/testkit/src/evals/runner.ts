@@ -6,6 +6,7 @@ import type { ModelConnectInput, RunStatus } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, isTerminal } from "@rakazo/core";
 import type { createDb } from "@rakazo/db";
 import { discardBotIntroRun } from "../discard-bot-intro.js";
+import { clearFixtureDatabase, fixtureAccountResponse } from "../fixture-account.js";
 import { sessionCookieHeader } from "../index.js";
 import { asSystem } from "../system-db.js";
 import type { EvalCase, Evidence } from "./cases.js";
@@ -143,6 +144,9 @@ export async function runTrial(
       });
   };
   try {
+    if (process.env.DATABASE_URL && process.env.VERIFY_DATABASE === "1") {
+      await clearFixtureDatabase();
+    }
     handles = await options.createApp(services, messaging, { notifications, realtime });
     const prisma = asSystem(handles.prisma);
     db = prisma;
@@ -152,15 +156,18 @@ export async function runTrial(
     const trial = handles;
     const { app } = trial;
     const setupActor = async () => {
-      const signup = await app.request("/api/auth/sign-up/email", {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
-        body: JSON.stringify({
-          email: `eval-${randomUUID()}@example.test`,
-          password: "synthetic-eval-password-12",
-          name: "Eval User",
-        }),
-      });
+      const signup = await fixtureAccountResponse(
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+          body: JSON.stringify({
+            email: `eval-${randomUUID()}@example.test`,
+            password: "synthetic-eval-password-12",
+            name: "Eval User",
+          }),
+        },
+        prisma,
+      );
       if (!signup.ok) throw new EvalFailure("harness", `Fixture signup failed (${signup.status})`);
       cookie = sessionCookieHeader(signup);
       await rpc(app, cookie, "models/connect", options.connection);
