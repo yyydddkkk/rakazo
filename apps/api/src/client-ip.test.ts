@@ -148,16 +148,12 @@ describe("clientIpMiddleware", () => {
       return (await response.json()) as { ip: string | null; context: Record<string, unknown> };
     });
 
-  it("stamps the resolved address and user agent on the log context", async () => {
+  it("passes the resolved trusted-proxy address to request handlers", async () => {
     const body = await fromSocket(app(["172.20.0.3"]), "172.20.0.3", {
       [header]: "203.0.113.5",
       "user-agent": "curl/8.5.0",
     });
     expect(body.ip).toBe("203.0.113.5");
-    expect(body.context).toMatchObject({
-      "client.ip": "203.0.113.5",
-      "user_agent.original": "curl/8.5.0",
-    });
   });
 
   it("does not let a direct caller choose its address", async () => {

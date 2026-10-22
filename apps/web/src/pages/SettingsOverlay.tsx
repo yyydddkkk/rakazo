@@ -5,7 +5,6 @@ import {
   Brain,
   ChevronLeft,
   ChevronRight,
-  CloudDownload,
   Cpu,
   Gauge,
   Monitor,
@@ -17,12 +16,10 @@ import type { ComponentType } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
-import { hasServerUpdates, useServerUpdateStatus } from "../components/SoftwareUpdateSection";
 import { SpaceRpcProvider } from "../lib/space-rpc";
 import {
   ComputerSettingsPanel,
   GeneralSettingsPanels,
-  UpdatesSettingsPanel,
   UsageSettingsPanel,
 } from "./AccountSettingsOverlay";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
@@ -34,8 +31,7 @@ export type SettingsSection =
   | "memory"
   | "confirmations"
   | "usage"
-  | "computer"
-  | "updates";
+  | "computer";
 
 /** Sections whose settings belong to the space. */
 const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set(["models", "memory", "confirmations"]);
@@ -97,8 +93,6 @@ export function SettingsOverlay({
   const recoveryHoldTimer = useRef<number | undefined>(undefined);
   const showComputer =
     keepComputerRecovery || (isDeploymentOwner && computersAreUnavailable(sandboxProvider));
-  const serverUpdate = useServerUpdateStatus(isDeploymentOwner);
-  const showUpdates = hasServerUpdates(serverUpdate);
   const spaceScoped = SPACE_SECTIONS.has(section);
   const spaceId = spaceScoped ? (space?.id ?? null) : null;
   const releaseComputerRecovery = useCallback(() => {
@@ -124,10 +118,6 @@ export function SettingsOverlay({
   }, [showComputer, section]);
 
   useEffect(() => {
-    if (!showUpdates && !serverUpdate.loading && section === "updates") setSection("general");
-  }, [showUpdates, serverUpdate.loading, section]);
-
-  useEffect(() => {
     if (section !== "computer") releaseComputerRecovery();
   }, [section, releaseComputerRecovery]);
   useEffect(() => () => window.clearTimeout(recoveryHoldTimer.current), []);
@@ -146,7 +136,6 @@ export function SettingsOverlay({
     { id: "confirmations", label: t`Confirmations`, icon: ShieldCheck },
     { id: "usage", label: t`Usage`, icon: Gauge },
     ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
-    ...(showUpdates ? [{ id: "updates" as const, label: t`Updates`, icon: CloudDownload }] : []),
   ];
 
   useEffect(() => {
@@ -177,7 +166,7 @@ export function SettingsOverlay({
       nav.removeEventListener("scroll", measure);
       observer?.disconnect();
     };
-  }, [section, showComputer, showUpdates, i18n.locale]);
+  }, [section, showComputer, i18n.locale]);
 
   function scrollSections(direction: number) {
     const nav = navRef.current;
@@ -322,9 +311,6 @@ export function SettingsOverlay({
                     }}
                     onRecoveryDismissed={releaseComputerRecovery}
                   />
-                ) : null}
-                {section === "updates" && showUpdates ? (
-                  <UpdatesSettingsPanel serverUpdate={serverUpdate} />
                 ) : null}
                 {section === "models" ? (
                   <ModelSettingsOverlay embedded onClose={requestClose} />

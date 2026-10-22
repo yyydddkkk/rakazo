@@ -311,7 +311,7 @@ YAML
 }
 
 # The Compose file passes each container only the settings it names. Say which .env settings it
-# does not name, such as TELEGRAM_BOT_TOKEN_<NAME>, rather than let an upgrade drop them silently.
+# does not name, such as CUSTOM_API_TOKEN, rather than let an upgrade drop them silently.
 warn_unpassed_settings() {
   local key unpassed=""
   while IFS= read -r key; do

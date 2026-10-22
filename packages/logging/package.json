@@ -14,10 +14,10 @@
       "development": "./src/hono.ts",
       "default": "./src/hono.ts"
     },
-    "./axiom": {
-      "types": "./src/axiom.ts",
-      "development": "./src/axiom.ts",
-      "default": "./src/axiom.ts"
+    "./root": {
+      "types": "./src/root.ts",
+      "development": "./src/root.ts",
+      "default": "./src/root.ts"
     }
   },
   "scripts": {
@@ -25,8 +25,6 @@
     "test": "vitest run --root ../.. packages/logging/src"
   },
   "dependencies": {
-    "@axiomhq/js": "2.0.0",
-    "@sentry/node": "11.8.0",
     "hono": "4.13.13"
   },
   "devDependencies": {

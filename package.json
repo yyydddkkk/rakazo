@@ -21,13 +21,7 @@
     "test:compose-smoke": "bash infra/compose/run-smokes.sh",
     "test:integration": "tsx packages/testkit/src/cli/harness.ts --integration",
     "test:e2e": "tsx packages/testkit/src/cli/harness.ts --e2e",
-    "test:topology": "tsx packages/testkit/src/cli/topology.ts",
-    "test:canary": "tsx packages/testkit/src/cli/canary.ts",
     "test:pi": "vitest run packages/testkit/src/model-emulator.test.ts packages/testkit/src/pi-offline.test.ts",
-    "test:evals": "tsx packages/testkit/src/cli/evals.ts",
-    "test:computer-replay": "tsx packages/testkit/src/cli/computer-replay.ts",
-    "test:computer": "tsx packages/testkit/src/cli/computer.ts",
-    "perf:compare": "tsx packages/testkit/src/cli/compare-performance.ts",
     "compose:up": "docker compose --env-file .env -f infra/compose/docker-compose.yml up --build",
     "compose:down": "docker compose --env-file .env -f infra/compose/docker-compose.yml down -v"
   },
@@ -39,7 +33,8 @@
     "tsx": "4.23.15",
     "turbo": "2.11.9",
     "typescript": "7.0.2",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "yaml": "2.9.1"
   },
   "pnpm": {
     "supportedArchitectures": {

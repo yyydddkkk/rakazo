@@ -1,7 +1,7 @@
 # Self-hosting on restricted networks
 
 Use a mirror you control or pre-copy files when GitHub or container registries are unreachable.
-These settings change downloads; model and remote-computer providers still need network access.
+These settings change downloads; configured remote model and tool providers still need network access.
 
 | Failure | Setting or action |
 | --- | --- |
@@ -65,7 +65,7 @@ BUSYBOX_IMAGE=registry.example.com/library/busybox@sha256:<trusted-busybox-diges
 ```
 
 Mirror both app and computer images and pair their tags to the same published version. Arm64
-hosts need multi-architecture tags; see [published images and tags](./self-host.md#published-images-and-tags).
+hosts need multi-architecture tags; see [published images and tags](./self-host.md#existing-images).
 Image overrides are defined in [docker-compose.images.yml](../infra/compose/docker-compose.images.yml).
 
 For Docker Hub images, you can instead merge `registry-mirrors` into the Docker daemon's existing
@@ -122,6 +122,6 @@ digest. Save the same `POSTGRES_IMAGE` and `BUSYBOX_IMAGE` references in the ins
 for later restarts; the exports above apply only to this startup. Do not replace them with mutable
 mirror tags. After startup, follow the health checks in [the setup prompt](../SETUP_PROMPT.md).
 
-Once downloads work, continue with [published-image setup](./self-host.md#published-images-no-checkout).
+Once downloads work, continue with [published-image setup](./self-host.md#existing-images).
 For hosts without external provider access, use local Docker computers and an operator-controlled
 model endpoint; see the [self-hosting guide](./self-host.md).

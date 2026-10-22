@@ -1,6 +1,5 @@
 import { createHmac } from "node:crypto";
 import type { TransactionalEmail } from "@rakazo/adapter-kit";
-import { recordSecurityEvent } from "@rakazo/db";
 import { hashPassword } from "better-auth/crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CLIENT_IP_HEADER, createAuth } from "./index.js";
@@ -14,7 +13,6 @@ vi.mock("better-auth/adapters/prisma", async () => {
 });
 vi.mock("@rakazo/db", () => ({
   bootstrapUserSpace: vi.fn(),
-  recordSecurityEvent: vi.fn(async () => undefined),
 }));
 
 const password = "offline-password-1234";
@@ -176,7 +174,7 @@ describe("private administrator authentication", () => {
 });
 
 describe("session and account security", () => {
-  it("records the API's resolved client address without trusting forwarding headers", async () => {
+  it("stores the API's resolved client address without trusting forwarding headers", async () => {
     const f = await fixture();
     const response = await f.request(
       "/sign-in/email",
@@ -185,9 +183,7 @@ describe("session and account security", () => {
       { [CLIENT_IP_HEADER]: "192.0.2.1", "x-forwarded-for": "198.51.100.2" },
     );
     expect(response.status).toBe(200);
-    expect(recordSecurityEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "auth.sign_in", ip: "192.0.2.1" }),
-    );
+    expect(f.data.session![0]!.ipAddress).toBe("192.0.2.1");
   });
   it("signs returned bearer tokens and never exposes tokens from session reads", async () => {
     const f = await fixture();
@@ -269,7 +265,6 @@ describe("session and account security", () => {
     expect((await f.request("/sign-out", {}, token)).status).toBe(200);
     expect(f.data.session).toHaveLength(0);
     expect(f.afterDeleteSession).toHaveBeenCalledOnce();
-    expect(recordSecurityEvent).toHaveBeenCalledWith({ type: "auth.sign_out", userId: "admin" });
   });
   it("rejects account mutation from an untrusted origin", async () => {
     const f = await fixture();

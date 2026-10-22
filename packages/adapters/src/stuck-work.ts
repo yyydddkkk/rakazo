@@ -14,7 +14,6 @@ import {
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { appendEventInTransaction, expireStuckRun, withTransactionRetry } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { ExpoPushProvider } from "./expo-push.js";
 
 type StuckCursor = { at: Date; id: string };
 
@@ -200,7 +199,6 @@ async function remindStuckRun(
   // A skipped push (notices off, no provider, or no push token yet) stays unmarked
   // so a later sweep can still remind during this same wait.
   if (!deps.notifications || !noticesEnabled(run)) return;
-  if (!(await pushCanDeliver(deps.notifications, run.userId))) return;
   const claimId = await withTransactionRetry(() =>
     deps.prisma.$transaction((tx) => claimStuckReminder(tx, run, deps.now)),
   );
@@ -220,14 +218,6 @@ async function remindStuckRun(
     return;
   }
   await withTransactionRetry(() => deps.prisma.$transaction((tx) => clearStuckNotice(tx, claimId)));
-}
-
-async function pushCanDeliver(
-  notifications: NotificationProvider,
-  userId: string,
-): Promise<boolean> {
-  if (!(notifications instanceof ExpoPushProvider)) return true;
-  return notifications.hasPushRecipient(userId);
 }
 
 async function claimStuckReminder(
@@ -360,9 +350,6 @@ async function sendStuckNotice(
   };
   const notice = run.thread.groupId ? { ...message, groupId: run.thread.groupId } : message;
   try {
-    if (notifications instanceof ExpoPushProvider) {
-      return await notifications.deliver(notice, context);
-    }
     await notifications.send(notice, context);
     return "delivered";
   } catch (error) {

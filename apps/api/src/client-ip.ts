@@ -4,8 +4,6 @@ import { BlockList, isIP } from "node:net";
 import { networkInterfaces } from "node:os";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { CLIENT_IP_HEADER } from "@rakazo/auth";
-import { securityRequestBindings } from "@rakazo/db";
-import { enrichLogContext } from "@rakazo/logging";
 import type { Context, MiddlewareHandler } from "hono";
 
 export interface ClientIpConfig {
@@ -147,7 +145,6 @@ export function clientIpMiddleware(resolver: ClientIpResolver, header: string): 
   return async (c, next) => {
     const ip = await resolver({ peer: socketPeer(c), forwarded: c.req.header(header) });
     c.set(CLIENT_IP_KEY, ip);
-    enrichLogContext(securityRequestBindings({ ip, userAgent: c.req.header("user-agent") }));
     await next();
   };
 }

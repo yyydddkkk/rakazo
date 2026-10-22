@@ -35,15 +35,9 @@ vi.mock("@rakazo/ui-web", () => ({
 vi.mock("./AccountSettingsOverlay", () => ({
   ComputerSettingsPanel: () => null,
   GeneralSettingsPanels: () => null,
-  UpdatesSettingsPanel: () => null,
   UsageSettingsPanel: () => null,
 }));
-const { updaterStatus } = vi.hoisted(() => ({
-  updaterStatus: vi.fn(async (): Promise<unknown> => ({ installKind: "compose" })),
-}));
-vi.mock("../lib/rpc", () => ({
-  rpc: { updater: { status: updaterStatus } },
-}));
+vi.mock("../lib/rpc", () => ({ rpc: {} }));
 vi.mock("./MemorySettingsOverlay", () => ({ MemorySettingsOverlay: () => null }));
 vi.mock("./ModelSettingsOverlay", () => ({ ModelSettingsOverlay: () => null }));
 vi.mock("../components/ComputersUnavailableHint", () => ({
@@ -94,52 +88,6 @@ it("shows no space picker on sections that are not per space", async () => {
   });
   try {
     expect(container.querySelector('[data-testid="settings-space"]')).toBeNull();
-  } finally {
-    await cleanup();
-  }
-});
-
-const updatesNav = (container: HTMLElement) =>
-  container.querySelector('[data-testid="settings-nav-updates"]');
-
-it("hides Updates when the server cannot update", async () => {
-  const { container, cleanup } = await render({ isDeploymentOwner: true });
-  try {
-    await vi.waitFor(() => expect(updaterStatus).toHaveBeenCalled());
-    expect(updatesNav(container)).toBeNull();
-  } finally {
-    await cleanup();
-  }
-});
-
-it("shows Updates to the owner of a server that can update itself", async () => {
-  updaterStatus.mockResolvedValueOnce({ installKind: "sidecar" });
-  const { container, cleanup } = await render({ isDeploymentOwner: true });
-  try {
-    await vi.waitFor(() => expect(updatesNav(container)).not.toBeNull());
-  } finally {
-    await cleanup();
-  }
-});
-
-it("leaves Updates for General once the status shows nothing to update", async () => {
-  let resolveStatus: (status: unknown) => void = () => undefined;
-  updaterStatus.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        resolveStatus = resolve;
-      }),
-  );
-  const { container, cleanup } = await render({
-    isDeploymentOwner: true,
-    initialSection: "updates",
-  });
-  const selected = () =>
-    container.querySelector('[data-testid="user-settings"]')?.getAttribute("data-settings-section");
-  try {
-    expect(selected()).toBe("updates");
-    await act(async () => resolveStatus({ installKind: "compose" }));
-    expect(selected()).toBe("general");
   } finally {
     await cleanup();
   }

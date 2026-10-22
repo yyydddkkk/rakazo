@@ -42,5 +42,4 @@ export const SERVICE_NAMES = {
   api: "rakazo-api",
   worker: "rakazo-worker",
   supervisor: "rakazo-sandbox-supervisor",
-  updater: "rakazo-updater",
 } as const;

@@ -13,7 +13,6 @@ import {
   createJobReconciler,
   createMessagingContextLoader,
   createPostgresReconciliationLeadership,
-  createProductAnalytics,
   createRoutineRetryNoticeReconciler,
   createRunExecutor,
   createRunSecretWriter,
@@ -21,7 +20,6 @@ import {
   createTicketChangeNotifier,
   createWebProvider,
   databaseCapacityBackoffMs,
-  ExpoPushProvider,
   GraphileJobPublisher,
   GraphileJobWorkerHost,
   InMemoryJobQueue,
@@ -43,7 +41,6 @@ import {
   resolveSandboxProvider,
   ScriptedAgentRuntime,
   sandboxProviderOptionsFromEnv,
-  shutdownPiTelemetry,
   withSecretPersistence,
 } from "@rakazo/adapters";
 import { resolveSupervisorToken, uploadSizeFromEnv } from "@rakazo/core";
@@ -51,20 +48,16 @@ import {
   contentEncryptionOf,
   createBoardEvents,
   createDb,
-  createSecurityEventPruner,
   createThreadEvents,
   describeRowSecurity,
-  installSecurityEventStore,
   isTooManyDatabaseConnections,
   parsePositiveInteger,
-  pushSessionExpiresAt,
   rowSecurityWarning,
   runAsSystem,
-  securityEventRetentionDays,
   verifyContentKeys,
 } from "@rakazo/db";
 import { SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
+import { createRootLogger } from "@rakazo/logging/root";
 import { MarkdownMemoryStore } from "@rakazo/memory";
 
 const logger = createRootLogger(SERVICE_NAMES.worker);
@@ -93,15 +86,12 @@ async function main() {
   if (secrets.describe().capabilities.degraded)
     logger.warn("Secret storage degraded; encrypted credentials remain available");
   prisma = withSecretPersistence(prisma, secrets);
-  installSecurityEventStore(prisma);
   const unreadableMasterKeys = await verifyContentKeys(prisma);
   if (unreadableMasterKeys.length)
     logger.error("Stored space keys need master keys that are not configured", undefined, {
       masterKeyIds: unreadableMasterKeys,
     });
-  const analytics = createProductAnalytics();
   const events = createThreadEvents(prisma, realtime, {
-    analytics,
     runSecretWriter: createRunSecretWriter(secrets),
   });
   const ticketBoardEnabled = process.env.TICKET_BOARD_ENABLED === "true";
@@ -157,12 +147,6 @@ async function main() {
   });
   // One provider instance so emulator launches and polls share the same Map.
   const cloudAgent = createCloudAgentConnection();
-  // Shared with the reconciler so a stuck wait uses the same push path as a finish notice.
-  const notifications = new ExpoPushProvider(dataDir, {
-    sessionExpiresAt: (sessionId) => pushSessionExpiresAt(prisma, sessionId),
-    jobs,
-    accessToken: process.env.EXPO_ACCESS_TOKEN,
-  });
   const executor = createRunExecutor({
     maxUploadSizeBytes: uploadSizeFromEnv(process.env),
     prisma,
@@ -185,7 +169,6 @@ async function main() {
     deploymentModelKey,
     deploymentModelConfigured,
     dataDir,
-    notifications,
     jobs,
     events,
     onTicketChange: ticketChanges,
@@ -215,7 +198,6 @@ async function main() {
     deploymentModelConfigured,
     messaging,
     cloudAgent,
-    notifications,
   });
   // graphile-worker run() connects through the shared pool. createPool already
   // retries connect() on 53300 a finite number of times. Keep retrying start
@@ -240,7 +222,6 @@ async function main() {
     prisma,
     jobs,
     events,
-    notifications,
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
@@ -249,10 +230,6 @@ async function main() {
       : createRoutineRetryNoticeReconciler(pool, (runId) =>
           executor.notifyRoutineRetryAttemptsExhausted(runId),
         ),
-    reconcileSecurityEventRetention: createSecurityEventPruner(
-      prisma,
-      securityEventRetentionDays(),
-    ),
   });
   reconciler.start();
 
@@ -270,8 +247,6 @@ async function main() {
       await prisma.$disconnect().catch(() => undefined);
       await pool.end().catch(() => undefined);
     } finally {
-      await analytics?.flush();
-      await shutdownPiTelemetry();
       await logger.flush({ timeoutMs: 2_000 });
     }
   };

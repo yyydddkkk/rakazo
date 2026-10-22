@@ -109,6 +109,7 @@ function buildPiCatalog(): PiCatalogEntry[] {
   );
   const entries: PiCatalogEntry[] = [];
   for (const provider of models.getProviders()) {
+    if (provider.id === "cloudflare-ai-gateway") continue;
     const providerName = PROVIDER_DISPLAY_NAMES[provider.id] ?? provider.name;
     const apiKey = Boolean(provider.auth.apiKey);
     const oauthAuth = loadProviderOAuth(provider.id);

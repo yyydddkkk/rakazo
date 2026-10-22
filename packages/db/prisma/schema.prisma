@@ -7,6 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Unused since slim/web-only; drop in a later migration.
 model AiDataConsent {
   userId String
   spaceId String
@@ -348,6 +349,7 @@ model DeploymentSettings {
 /// Append-only security audit trail. No foreign keys, so an account deletion
 /// keeps the record of what happened; retention pruning is the only delete.
 /// Never stores message content, secrets, or tokens.
+/// Unused since slim/web-only; drop in a later migration.
 model SecurityEvent {
   id        String   @id @default(cuid())
   type      String
@@ -1181,6 +1183,7 @@ model UsageRecord {
   @@map("usage_records")
 }
 
+/// Unused since slim/web-only; drop in a later migration.
 model NotificationPreference {
   id       String  @id @default(cuid())
   spaceId  String

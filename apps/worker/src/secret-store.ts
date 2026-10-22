@@ -7,7 +7,7 @@ export async function createWorkerSecretStore(
   source: NodeJS.ProcessEnv,
   realtime?: RealtimeFanout,
 ): Promise<SecretStore> {
-  const store = createSecretStore(resolveEncryptionKey(source), source, realtime);
+  const store = createSecretStore(resolveEncryptionKey(source), realtime);
   await store.start();
   return store;
 }

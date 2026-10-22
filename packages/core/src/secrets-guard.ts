@@ -116,21 +116,6 @@ export function resolveScreenProxySecret(env: NodeJS.ProcessEnv = process.env): 
 }
 
 /**
- * The updater sidecar holds the Docker socket, which is root-equivalent on the host. Its bearer
- * credential must therefore be independent from the cookie-signing and sandbox credentials: a
- * leak at one boundary must not unlock either of the others.
- */
-export function resolveUpdaterToken(env: NodeJS.ProcessEnv = process.env): string {
-  return resolveDedicatedSecret(env, {
-    name: "RAKAZO_UPDATER_TOKEN",
-    conflicts: ["BETTER_AUTH_SECRET", "SANDBOX_SUPERVISOR_TOKEN", "SCREEN_PROXY_SECRET"],
-    missingMessage: "Set RAKAZO_UPDATER_TOKEN to a dedicated random updater credential.",
-    conflictMessage:
-      "RAKAZO_UPDATER_TOKEN must differ from BETTER_AUTH_SECRET, SANDBOX_SUPERVISOR_TOKEN, and SCREEN_PROXY_SECRET.",
-  });
-}
-
-/**
  * Constant-time string comparison for shared-secret headers that carry no
  * `Bearer ` prefix (e.g. a vendor static signing-secret header).
  * Same XOR rationale as `hasValidBearerToken` below.

@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import dns from "node:dns";
 import type { LookupFunction } from "node:net";
 import { isIP } from "node:net";
-import { recordSecurityEvent } from "@rakazo/db";
 
 export type ResolvedAddress = { address: string; family: number };
 export type ResolveHostname = (hostname: string) => Promise<ResolvedAddress[]>;
@@ -108,17 +107,9 @@ export function createAddressCheckedLookup(
   };
 }
 
-/**
- * Record that an outbound-request guard refused a destination, so a probe of private addresses
- * leaves a security event. Returns the error for `throw egressRefused(...)`.
- */
-export function egressRefused(hostname: string, error: unknown): Error {
-  const refusal = error instanceof Error ? error : new Error(String(error));
-  void recordSecurityEvent({
-    type: "egress.refused",
-    metadata: { host: hostname.slice(0, 253), reason: refusal.message },
-  });
-  return refusal;
+/** Returns an outbound-request refusal as an Error. */
+export function egressRefused(_hostname: string, error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function pinnedAddressesFor(hostname: string): ResolvedAddress[] | undefined {

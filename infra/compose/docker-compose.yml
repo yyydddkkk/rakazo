@@ -1,7 +1,7 @@
 # What the api and worker both read. Each service adds the keys only it reads, so a process
 # only sees what it uses instead of the whole .env. A key with no value is passed through
 # when .env (or the shell) sets it and left unset otherwise. Keep in sync with the code:
-# infra/updater/src/compose-env.test.ts fails when a read is missing here or a key is unused.
+# infra/compose/tests/compose-env.test.ts fails when a read is missing here or a key is unused.
 x-app-environment: &app-environment
   # Runtime
   NODE_ENV: ${NODE_ENV:-production}
@@ -17,44 +17,16 @@ x-app-environment: &app-environment
   WAKEUP_DRIVER: graphile
   AGENT_RUNTIME: pi
   MAX_UPLOAD_SIZE_MB:
-  RAKAZO_IMAGE_TAG:
   RAKAZO_UPDATE_RESTART_SUPERVISOR:
   TICKET_BOARD_ENABLED:
   BOT_MESSAGE_MAX_HOPS:
   RAKAZO_MESSAGE_USER_MAX_CHARS:
   TEACH_RECORDING_TTL_MS:
   RAKAZO_SECRETS_ALLOW_PRIVATE_HTTP:
-  EXPO_ACCESS_TOKEN:
   # Secret storage
-  SECRET_STORE: ${SECRET_STORE:-encrypted}
-  INFISICAL_URL: ${INFISICAL_URL:-}
-  INFISICAL_ALLOW_INSECURE_HTTP: ${INFISICAL_ALLOW_INSECURE_HTTP:-false}
-  INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID:-}
-  INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET:-}
-  INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID:-}
-  INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT:-}
-  INFISICAL_FOLDER: ${INFISICAL_FOLDER:-}
-  # Logs, errors, traces and analytics
+  # Local structured logs
   LOG_LEVEL:
-  SECURITY_EVENT_RETENTION_DAYS:
   LOG_FORMAT:
-  AXIOM_TOKEN:
-  AXIOM_DATASET:
-  AXIOM_EDGE:
-  AXIOM_EDGE_URL:
-  SENTRY_DSN: ${SENTRY_DSN:-}
-  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
-  SENTRY_RELEASE: ${SENTRY_RELEASE:-}
-  OTEL_EXPORTER_OTLP_ENDPOINT:
-  OTEL_EXPORTER_OTLP_HEADERS:
-  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:
-  OTEL_EXPORTER_OTLP_TRACES_HEADERS:
-  OTEL_SERVICE_NAME:
-  OTEL_CAPTURE_CONTENT:
-  ANALYTICS_PROVIDER:
-  ANALYTICS_HOST:
-  ANALYTICS_KEY:
-  ANALYTICS_PSEUDONYM_SECRET:
   # Models
   PI_DEFAULT_PROVIDER:
   PI_DEFAULT_MODEL:
@@ -62,6 +34,7 @@ x-app-environment: &app-environment
   PI_SESSION_RECORDING:
   RAKAZO_LIVE_MODEL_CATALOG:
   OPENROUTER_API_KEY:
+  CLOUDFLARE_API_KEY:
   ANTHROPIC_API_KEY:
   TYPESAFE_API_KEY:
   MAX_TOOL_CALLS_PER_TURN:
@@ -79,7 +52,6 @@ x-app-environment: &app-environment
   RAKAZO_AUTO_REVIEW_MODEL:
   RAKAZO_AUTO_REVIEW_MIN_CONFIDENCE:
   RAKAZO_AUTO_REVIEW_TIMEOUT_MS:
-  RELEASE_WATCH_EVAL_MODEL:
   MEDIA_GENERATION_PROVIDER: ${MEDIA_GENERATION_PROVIDER:-disabled}
   MEDIA_GENERATION_BASE_URL: ${MEDIA_GENERATION_BASE_URL:-https://queue.fal.run}
   MEDIA_GENERATION_API_KEY: ${MEDIA_GENERATION_API_KEY:-}
@@ -98,7 +70,6 @@ x-app-environment: &app-environment
   AZURE_OPENAI_API_KEY:
   BASETEN_API_KEY:
   CEREBRAS_API_KEY:
-  CLOUDFLARE_API_KEY:
   COPILOT_GITHUB_TOKEN:
   DEEPSEEK_API_KEY:
   FIREWORKS_API_KEY:
@@ -220,13 +191,6 @@ services:
       SANDBOX_COMPUTER_DNS: ${SANDBOX_COMPUTER_DNS:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-}
-      AXIOM_TOKEN: ${AXIOM_TOKEN:-}
-      AXIOM_DATASET: ${AXIOM_DATASET:-}
-      AXIOM_EDGE: ${AXIOM_EDGE:-}
-      AXIOM_EDGE_URL: ${AXIOM_EDGE_URL:-}
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
-      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ../../data:/data
@@ -275,11 +239,7 @@ services:
       TRUSTED_PROXIES:
       CLIENT_IP_HEADER:
       SCREEN_PROXY_SECRET: ${SCREEN_PROXY_SECRET:?Set SCREEN_PROXY_SECRET in .env}
-      RAKAZO_UPDATER_URL:
-      RAKAZO_UPDATER_TOKEN:
       RAKAZO_GIT_SHA:
-      SENTRY_BROWSER_DSN: ${SENTRY_BROWSER_DSN:-}
-      PRIVACY_POLICY_URL:
       SMTP_URL:
       EMAIL_FROM:
       INTEGRATIONS_CATALOG_URL:

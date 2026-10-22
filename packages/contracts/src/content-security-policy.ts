@@ -1,6 +1,6 @@
 /**
  * Content-Security-Policy for documents the web server serves.
- * The app talks only to its own origin: /api, /rpc, the Sentry tunnel and the /novnc screen proxy
+ * The app talks only to its own origin: /api, /rpc, the /novnc screen proxy
  * all live there, so 'self' covers fetches, WebSockets and screen frames in every deployment. The
  * web server may add operator-configured https origins for a script its CDN injects.
  */
@@ -8,13 +8,6 @@
 /** Static shell for SandboxedHtmlViewer. It must load from the network so it does not inherit the
  * app policy the way a srcdoc frame would; its own meta CSP governs it and its nested preview. */
 export const HTML_VIEWER_PATH = "/html-viewer.html";
-
-/** Same-origin endpoint browsers send violation reports to, so a blocked resource is not silent. */
-export const CSP_REPORT_PATH = "/api/csp-report";
-const CSP_REPORT_GROUP = "csp";
-
-/** The `Reporting-Endpoints` header that names the policy's `report-to` group. */
-export const CSP_REPORTING_ENDPOINTS = `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"`;
 
 const APP_DIRECTIVES: Record<string, string[]> = {
   "default-src": ["'self'"],
@@ -24,7 +17,7 @@ const APP_DIRECTIVES: Record<string, string[]> = {
   // Markdown images, link favicons and attachment previews (object URLs).
   "img-src": ["'self'", "data:", "blob:", "https:"],
   "font-src": ["'self'", "data:"],
-  // Voice replies and video attachments play from object URLs.
+  // Audio and video attachments play from object URLs.
   "media-src": ["'self'", "blob:"],
   "connect-src": ["'self'"],
   // The /novnc screen proxy, the HTML viewer shell and PDF object URLs.
@@ -33,9 +26,6 @@ const APP_DIRECTIVES: Record<string, string[]> = {
   "base-uri": ["'self'"],
   "form-action": ["'self'"],
   "frame-ancestors": ["'none'"],
-  // Browsers with the Reporting API use report-to and ignore report-uri; the rest use report-uri.
-  "report-uri": [CSP_REPORT_PATH],
-  "report-to": [CSP_REPORT_GROUP],
 };
 
 function serialize(directives: Record<string, string[]>) {

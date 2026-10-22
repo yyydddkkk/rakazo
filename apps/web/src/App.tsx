@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { LinkFavicons } from "@rakazo/chat-ui/web";
 import { LinkFaviconsContext, RemoteImagesContext } from "@rakazo/chat-ui/web";
-import { analyticsScreen } from "@rakazo/core";
 import { Button, Skeleton } from "@rakazo/ui-web";
 import {
   Suspense,
@@ -11,12 +10,11 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Navigate, Outlet, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useSearchParams } from "react-router-dom";
 import { LoadingState } from "./components/ai/primitives";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { authClient } from "./lib/auth";
 import { getTicketBoardEnabled, subscribeTicketBoardEnabled } from "./lib/bootstrap";
-import { identifyMonitoringUser } from "./lib/monitoring";
 import { markAfterPaint, markOnce } from "./lib/performance";
 import { lazyComponent } from "./lib/preload-recovery";
 import { getRemoteImagesEnabled, subscribeRemoteImages } from "./lib/remote-images-preference";
@@ -78,28 +76,6 @@ function SessionApp() {
     () => false,
   );
   const session = authClient.useSession();
-  const pathname = useLocation().pathname;
-  const screen = analyticsScreen(pathname);
-  const analyticsUserId = session.data?.user.id;
-  const lastScreen = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    // A pending session is not a sign-out; startup already tagged the signed-in user.
-    if (session.isPending) return;
-    void identifyMonitoringUser(Boolean(analyticsUserId));
-  }, [analyticsUserId, session.isPending]);
-  useEffect(() => {
-    if (!analyticsUserId) {
-      lastScreen.current = undefined;
-      return;
-    }
-    if (!screen) return;
-    const key = `${analyticsUserId}:${screen}`;
-    if (lastScreen.current === key) return;
-    lastScreen.current = key;
-    void Promise.resolve()
-      .then(() => rpc.analytics.screen({ screen, surface: "web" }))
-      .catch(() => undefined);
-  }, [analyticsUserId, screen]);
   const gate = sessionGate(session);
   const [holdingUnreachable, setHoldingUnreachable] = useState(false);
   const nextHolding = holdUnreachableGate(gate, holdingUnreachable);

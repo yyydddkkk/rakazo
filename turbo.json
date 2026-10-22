@@ -8,14 +8,7 @@
     },
     "build": {
       "dependsOn": ["^build", "^generate"],
-      "env": [
-        "BETTER_AUTH_SECRET",
-        "DATABASE_URL",
-        "ENCRYPTION_KEY",
-        "GIT_SHA",
-        "PUBLIC_POSTHOG_HOST",
-        "PUBLIC_POSTHOG_KEY"
-      ],
+      "env": ["BETTER_AUTH_SECRET", "DATABASE_URL", "ENCRYPTION_KEY", "GIT_SHA"],
       "outputs": ["dist/**", "src/generated/**"]
     },
     "check": {
@@ -27,7 +20,6 @@
     },
     "dev": {
       "cache": false,
-      "env": ["PUBLIC_POSTHOG_HOST", "PUBLIC_POSTHOG_KEY"],
       "persistent": true,
       "passThroughEnv": ["RAKAZO_HOST", "RAKAZO_DEV_HOST", "RAKAZO_ALLOWED_HOSTS"]
     }

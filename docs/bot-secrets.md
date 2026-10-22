@@ -1,6 +1,6 @@
 # Reusable credentials
 
-Ask a bot to connect an API using a key or password. It calls `request_secret` with a reference name and an HTTPS service origin. The protected card shows that origin before you save. Web, Electron and mobile use the same backend; the value is cleared from the input when submission starts and is omitted from messages, events and model input.
+Ask a bot to connect an API using a key or password. It calls `request_secret` with a reference name and an HTTPS service origin. The protected card shows that origin before you save. The web UI uses the shared backend; the value is cleared from the input when submission starts and is omitted from messages, events and model input.
 
 For example, the bot can request:
 
@@ -63,7 +63,7 @@ A command variable is redacted from command output in its plain, base64 and URL-
 
 **The bot's shell reads this value.** A command variable is a convenience for the bot, not a boundary against it: the shell command the bot runs, and the code that command starts, can print, encode or send the value. Redaction stops it appearing in a result the model reads; it does not stop a permitted bot, or anything the bot runs, from using it. There is no secrecy from the bot that was given the credential, so treat a command variable as shared with that bot and save only values you would let it use unattended, scoped to what it needs.
 
-Command variables are managed with the same Credentials section as other reusable credentials: web and the Electron-hosted web UI can add, replace and remove one. Mobile has no credentials settings screen, but the request card a bot opens in a thread shows a command variable's variable name in place of a site, so a bot can obtain a command variable value on the phone; listing, adding, replacing and removing one is web and desktop only.
+Command variables are managed in the web Credentials section. A request card shows the variable name in place of a site; reusable values can be added, replaced, or removed there.
 
 ## Saved website logins
 
@@ -101,9 +101,6 @@ Owners can read back what is saved without asking the bot. In the web app, open 
 expand **Advanced**, and use the **Credentials** section. It lists each credential's name, origin
 and authentication type and never its value. From there you can add a credential, replace its value
 on the same destination, or remove one after confirming. Remove deletes the saved value immediately.
-The Electron desktop app hosts the same web UI, so it has the same section.
-
-Mobile does not host that web settings shell, so it has no credential management screen.
 The thread credential card still works on the phone, including website logins, and that is how a
 bot obtains a value there. Listing, replacing, and removing saved credentials stays on the web
 section. Asking the bot to `forget_secret` a name only removes it; it does not list or replace one.

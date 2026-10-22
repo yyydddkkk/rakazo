@@ -17,23 +17,11 @@ on:
         required: false
         type: string
         default: fake
-      publish_report:
-        description: Publish this run to the persistent visual dashboard
-        required: false
-        type: boolean
-        default: false
       upload_artifacts:
         description: Retain the report and diagnostics as GitHub artifacts
         required: false
         type: boolean
         default: false
-    secrets:
-      S3_ACCESS_KEY_ID:
-        description: Access key used to publish visual reports
-        required: false
-      S3_SECRET_ACCESS_KEY:
-        description: Secret key used to publish visual reports
-        required: false
 
 permissions:
   contents: read
@@ -82,7 +70,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Keeps the single "Web E2E" check and artifact that branch protection and the publisher expect.
+  # Keep a single Web E2E check and merged artifact.
   playwright:
     name: Web E2E
     needs: shard
@@ -90,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      group: ${{ inputs.publish_report && 'playwright-publication' || format('playwright-{0}', github.run_id) }}
+      group: playwright-${{ github.run_id }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
@@ -161,25 +149,6 @@ jobs:
             test-report/e2e
           retention-days: 7
           if-no-files-found: warn
-      - name: Publish Playwright visual report
-        if: ${{ !cancelled() && inputs.publish_report }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ vars.S3_REGION }}
-          AWS_EC2_METADATA_DISABLED: "true"
-          S3_BUCKET: ${{ vars.S3_BUCKET }}
-          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
-          PLAYWRIGHT_PUBLIC_BASE_URL: ${{ vars.PLAYWRIGHT_PUBLIC_BASE_URL }}
-          PLAYWRIGHT_RESULT: ${{ needs.shard.result == 'success' && job.status == 'success' && 'success' || 'failure' }}
-          PLAYWRIGHT_RUN_ATTEMPT: ${{ github.run_attempt }}
-          PLAYWRIGHT_RUN_ID: ${{ github.run_id }}
-          PLAYWRIGHT_RUN_NUMBER: ${{ github.run_number }}
-          PLAYWRIGHT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          PLAYWRIGHT_SHA: ${{ github.sha }}
-          PLAYWRIGHT_EVENT: ${{ github.event_name }}
-          PLAYWRIGHT_BRANCH: ${{ github.ref_name }}
-        run: bash scripts/publish-playwright-report.sh
       - name: Fail when a shard failed
         if: needs.shard.result != 'success'
         env:

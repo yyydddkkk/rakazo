@@ -270,8 +270,6 @@ export type StoredModelSecret =
       kind: "api_key";
       key: string;
       maxTokens?: number;
-      accountId?: string;
-      gatewayId?: string;
     } & StoredModelLimits)
   | { kind: "oauth"; credential: OAuthCredential; maxTokens?: number }
   | ({
@@ -360,12 +358,6 @@ function readOAuthCredential(value: unknown): OAuthCredential | undefined {
   return undefined;
 }
 
-function parsedRoutingId(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed || undefined;
-}
-
 function parsedMaxTokens(value: unknown): number | undefined {
   return typeof value === "number" &&
     Number.isInteger(value) &&
@@ -436,14 +428,10 @@ export function parseModelSecret(plaintext: string): StoredModelSecret {
       throw new Error(CORRUPT_MODEL_SECRET_MESSAGE);
     }
     const maxTokens = parsedMaxTokens(parsed.maxTokens);
-    const accountId = parsedRoutingId(parsed.accountId);
-    const gatewayId = parsedRoutingId(parsed.gatewayId);
     return {
       kind: "api_key",
       key: parsed.key,
       ...(maxTokens !== undefined ? { maxTokens } : {}),
-      ...(accountId ? { accountId } : {}),
-      ...(gatewayId ? { gatewayId } : {}),
       ...modelLimits(parsed),
     };
   }
@@ -494,8 +482,6 @@ export function serializeModelSecret(secret: StoredModelSecret): string {
   }
   if (
     secret.maxTokens === undefined &&
-    secret.accountId === undefined &&
-    secret.gatewayId === undefined &&
     secret.contextWindow === undefined &&
     secret.cacheCapabilities === undefined
   ) {
@@ -505,8 +491,6 @@ export function serializeModelSecret(secret: StoredModelSecret): string {
     kind: "api_key",
     key: secret.key,
     ...(secret.maxTokens !== undefined ? { maxTokens: secret.maxTokens } : {}),
-    ...(secret.accountId ? { accountId: secret.accountId } : {}),
-    ...(secret.gatewayId ? { gatewayId: secret.gatewayId } : {}),
     ...modelLimits(secret as unknown as Record<string, unknown>),
   });
 }

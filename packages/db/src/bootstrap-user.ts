@@ -10,17 +10,11 @@ function isUniqueViolation(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
 }
 
-/** Provision the personal organization, Space, memberships, memory and preferences. */
+/** Provision the personal organization, Space, memberships and memory. */
 export async function bootstrapUserSpace(
   prisma: Pick<
     PrismaClient,
-    | "organization"
-    | "member"
-    | "space"
-    | "spaceMember"
-    | "deploymentSettings"
-    | "memoryDocument"
-    | "notificationPreference"
+    "organization" | "member" | "space" | "spaceMember" | "deploymentSettings" | "memoryDocument"
   >,
   user: { id: string },
   options: { claimDeploymentOwner?: boolean } = {},
@@ -114,15 +108,5 @@ export async function bootstrapUserSpace(
         if (!isUniqueViolation(error)) throw error;
       });
   }
-  await prisma.notificationPreference
-    .create({
-      data: {
-        spaceId: orgId,
-        userId: user.id,
-      },
-    })
-    .catch((error: unknown) => {
-      if (!isUniqueViolation(error)) throw error;
-    });
   return { spaceId: orgId };
 }

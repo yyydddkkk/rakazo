@@ -7,7 +7,6 @@ import type {
   ConnectorCatalogItem,
   JobPublisher,
   MemoryStore,
-  ProductAnalytics,
   SandboxProvider,
   SecretStore,
   UsageOperationKind,
@@ -60,7 +59,6 @@ import {
   createFaviconResolver,
   createTicket,
   defaultCatalogModelId,
-  deletePushToken,
   deploymentAutoReviewDefault,
   destroyBot,
   displayBotWorkspacePath,
@@ -86,7 +84,6 @@ import {
   modelCredentialAuthKindsForSpace,
   modelCredentialDto,
   normalizeSecretDestination,
-  PushSessionEndedError,
   parseModelSecret,
   parseRoutineWatch,
   parseRoutineWatchState,
@@ -111,7 +108,6 @@ import {
   routineRunModelPin,
   sanitizeConnectorError,
   savedCatalogSelections,
-  savePushToken,
   scheduleComputerControlExpiry,
   scheduleComputerSleep,
   screenLeaseIdForRun,
@@ -206,7 +202,6 @@ import {
   IsolationError,
   issueMessagingLinkCode,
   listBoards,
-  listSecurityEvents,
   listSpaceBackupModels,
   listTicketComments,
   lockOwnedGroup,
@@ -214,8 +209,6 @@ import {
   newestModelCredentialOrder,
   Prisma,
   parseComputerMode,
-  pushSessionExpiresAt,
-  recordSecurityEvent,
   replaceSpaceBackupModels,
   restoreBotUnderComputerQuota,
   runAsSystem,
@@ -230,7 +223,6 @@ import {
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
-import { aiConsentStatus, allowAiConsent } from "./ai-consent.js";
 import {
   ArtifactListCursorError,
   createOwnedArtifact,
@@ -265,15 +257,7 @@ import { listRoutineRuns } from "./routine-runs.js";
 import { listSpaceRuns } from "./runs.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
-import { connectionCreatedEvent, procedureSecurityEvent } from "./security-audit.js";
 import { withSerializableRetry } from "./serializable-retry.js";
-import type { UpdaterProxyConfig } from "./server-update.js";
-import {
-  applyServerUpdate,
-  checkServerUpdate,
-  readServerUpdateStatus,
-  UpdaterProxyError,
-} from "./server-update.js";
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
 import {
   isBackgroundRun,
@@ -392,15 +376,12 @@ async function reconcileConnections(
     connectedProviderKeys.has(row.provider.trim().toLowerCase()),
   );
   const sync = planLiveConnectionSync(rows, connectedProviders);
-  // One update per row so the credential event goes only to rows this call actually connected.
-  const connectedIds: string[] = [];
   const updates = [
     ...sync.connectIds.map((id) => async (tx: Prisma.TransactionClient) => {
-      const updated = await tx.connection.updateMany({
+      await tx.connection.updateMany({
         where: { id, spaceId: owner.spaceId, userId: owner.userId, status: "pending" },
         data: { status: "connected" },
       });
-      if (updated.count > 0) connectedIds.push(id);
     }),
     ...(sync.revokeIds.length > 0
       ? [
@@ -438,9 +419,6 @@ async function reconcileConnections(
     await prisma.$transaction(async (tx) => {
       for (const update of updates) await update(tx);
     });
-  for (const id of connectedIds) {
-    await recordSecurityEvent(connectionCreatedEvent("connections.catalog", id, owner));
-  }
 }
 
 /** Serialize begin/revoke for one user+provider so slug-wide remote deletes cannot race a new connect. */
@@ -665,7 +643,6 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
-  analytics?: ProductAnalytics;
   cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
   events: ThreadEvents;
@@ -718,13 +695,9 @@ export interface RouterDeps {
     deploymentModelConfigured?: boolean;
     deploymentModelHostCredentials?: boolean;
     webOrigin: string;
-    privacyPolicyUrl?: string;
     screenProxySecret: string;
     sandboxProvider: string;
     gitSha?: string;
-    updaterUrl?: string;
-    updaterToken?: string;
-    imageTag?: string;
     integrationsCatalogUrl?: string;
     mcpAllowPrivateEndpoint?: boolean;
   };
@@ -998,18 +971,11 @@ export function createRouter(deps: RouterDeps) {
   });
   const agentSkills = createAgentSkillsService(deps.prisma);
 
-  const authed = os
-    .use(async ({ context, next }) => {
-      const actor = context.actor;
-      if (!actor) throw new ORPCError("UNAUTHORIZED");
-      return asTenant(actor, () => next({ context: { ...context, actor } }));
-    })
-    .use(async ({ context, next, path }, input) => {
-      const result = await next();
-      const event = procedureSecurityEvent(path, input, context.actor);
-      if (event) await recordSecurityEvent(event);
-      return result;
-    });
+  const authed = os.use(async ({ context, next }) => {
+    const actor = context.actor;
+    if (!actor) throw new ORPCError("UNAUTHORIZED");
+    return asTenant(actor, () => next({ context: { ...context, actor } }));
+  });
 
   const boardEnabled = os
     .use(async ({ next }) => {
@@ -1028,30 +994,6 @@ export function createRouter(deps: RouterDeps) {
   };
 
   return os.router({
-    aiConsent: {
-      status: authed.aiConsent.status.handler(({ context, input }) =>
-        aiConsentStatus(deps, context.actor, input),
-      ),
-      allow: authed.aiConsent.allow.handler(({ context, input }) =>
-        allowAiConsent(deps, context.actor, input),
-      ),
-      revoke: authed.aiConsent.revoke.handler(async ({ context, input }) => {
-        await deps.prisma.aiDataConsent.deleteMany({
-          where: {
-            userId: context.actor.userId,
-            spaceId: context.actor.spaceId,
-            recipientKey: input.key ?? undefined,
-          },
-        });
-        return aiConsentStatus(deps, context.actor);
-      }),
-    },
-    analytics: {
-      screen: authed.analytics.screen.handler(async ({ context, input }) => {
-        deps.analytics?.capture(context.actor.userId, { name: "screen_viewed", ...input });
-        return { ok: true as const };
-      }),
-    },
     health: os.health.handler(async () => ({ ok: true as const, version: "0.1.0" })),
     me: authed.me.handler(async ({ context }): Promise<Me> => meDto(deps, context.actor)),
     preferences: {
@@ -1115,36 +1057,6 @@ export function createRouter(deps: RouterDeps) {
       get: authed.deployment.get.handler(async ({ context }) => {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);
-      }),
-    },
-    security: {
-      events: authed.security.events.handler(async ({ context, input }) => {
-        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        return runAsSystem("the deployment security log for its owner", () =>
-          listSecurityEvents(deps.prisma, input),
-        );
-      }),
-    },
-    updater: {
-      status: authed.updater.status.handler(async ({ context }) => {
-        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        return readServerUpdateStatus(updaterConfig(deps));
-      }),
-      check: authed.updater.check.handler(async ({ context, input }) => {
-        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        try {
-          return await checkServerUpdate(updaterConfig(deps), input);
-        } catch (error) {
-          mapUpdaterError(error);
-        }
-      }),
-      apply: authed.updater.apply.handler(async ({ context, input }) => {
-        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        try {
-          return await applyServerUpdate(updaterConfig(deps), input);
-        } catch (error) {
-          mapUpdaterError(error);
-        }
       }),
     },
     models: {
@@ -4824,11 +4736,6 @@ export function createRouter(deps: RouterDeps) {
             });
             return updated.count > 0;
           });
-          if (applied && !auth.authorizationUrl) {
-            await recordSecurityEvent(
-              connectionCreatedEvent("connections.begin", row.id, context.actor),
-            );
-          }
           if (!applied) {
             // Revoke won the race. Clean up without a provider-wide slug delete.
             const state = auth.state?.trim();
@@ -5273,12 +5180,6 @@ export function createRouter(deps: RouterDeps) {
               return next;
             },
             { timeout: 60_000 },
-          );
-        }
-        // Clients poll this procedure, so it records the credential once, on the transition.
-        if (connectedNow) {
-          await recordSecurityEvent(
-            connectionCreatedEvent("connections.complete", row.id, context.actor),
           );
         }
         return {
@@ -6161,28 +6062,6 @@ export function createRouter(deps: RouterDeps) {
         };
       }),
     },
-    notifications: {
-      registerPush: authed.notifications.registerPush.handler(async ({ context, input }) => {
-        const sessionId = context.sessionId;
-        if (!sessionId) throw new ORPCError("UNAUTHORIZED");
-        try {
-          await savePushToken(deps.dataDir, context.actor.userId, input.token, sessionId, {
-            sessionActive: async () => {
-              const expiresAt = await pushSessionExpiresAt(deps.prisma, sessionId);
-              return expiresAt !== null && expiresAt.getTime() > Date.now();
-            },
-          });
-        } catch (error) {
-          if (error instanceof PushSessionEndedError) throw new ORPCError("UNAUTHORIZED");
-          throw error;
-        }
-        return { ok: true as const };
-      }),
-      unregisterPush: authed.notifications.unregisterPush.handler(async ({ context }) => {
-        await deletePushToken(deps.dataDir, context.actor.userId);
-        return { ok: true as const };
-      }),
-    },
     search: {
       query: authed.search.query.handler(async ({ context, input }) => ({
         hits: await querySpaceSearch(deps.prisma, context.actor, input.q),
@@ -6196,30 +6075,6 @@ export function createRouter(deps: RouterDeps) {
         runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
       })),
     },
-  });
-}
-
-function updaterConfig(deps: RouterDeps): UpdaterProxyConfig {
-  return {
-    url: deps.env.updaterUrl ?? null,
-    token: deps.env.updaterToken ?? null,
-    gitSha: deps.env.gitSha,
-    imageTag: deps.env.imageTag ?? null,
-  };
-}
-
-function mapUpdaterError(error: unknown): never {
-  if (error instanceof UpdaterProxyError) {
-    if (error.status === 401 || error.status === 403) {
-      throw new ORPCError("FORBIDDEN", { message: error.message });
-    }
-    if (error.status >= 500) {
-      throw new ORPCError("INTERNAL_SERVER_ERROR", { message: error.message });
-    }
-    throw new ORPCError("BAD_REQUEST", { message: error.message });
-  }
-  throw new ORPCError("INTERNAL_SERVER_ERROR", {
-    message: error instanceof Error ? error.message : "Update failed.",
   });
 }
 

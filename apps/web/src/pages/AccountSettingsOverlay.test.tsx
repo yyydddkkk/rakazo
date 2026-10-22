@@ -92,7 +92,6 @@ vi.mock("../components/ai/primitives", () => ({ SuccessPop: () => null }));
 vi.mock("../components/ComputersUnavailableHint", () => ({
   ComputersUnavailableHint: () => null,
 }));
-vi.mock("../components/SoftwareUpdateSection", () => ({ SoftwareUpdateSection: () => null }));
 vi.mock("../lib/auth", () => ({ authClient: { changePassword: vi.fn() } }));
 vi.mock("../lib/i18n", () => ({
   getActiveUiLocale: () => "en",

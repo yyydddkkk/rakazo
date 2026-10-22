@@ -1,5 +1,15 @@
 import { expect, vi } from "vitest";
-import type { InfisicalSecretStoreOptions } from "./infisical-secret-store.js";
+
+interface InfisicalSecretStoreOptions {
+  baseUrl: string;
+  clientId: string;
+  clientSecret: string;
+  projectId: string;
+  environment: string;
+  folder: string;
+  fetch?: typeof fetch;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+}
 
 const errorNames = { GET: "GetSecretByName", POST: "CreateSecret", DELETE: "DeleteSecret" };
 

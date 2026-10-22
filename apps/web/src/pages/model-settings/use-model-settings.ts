@@ -1,8 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Me, ThinkingLevel } from "@rakazo/contracts";
 import {
-  CLOUDFLARE_AI_GATEWAY_PROVIDER_ID,
-  cloudflareGatewayRouting,
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_TOKENS,
   MAX_MODEL_CONTEXT_WINDOW,
@@ -62,8 +60,6 @@ export function useModelSettings(onClose: () => void) {
   modelIdRef.current = modelId;
   const [enabledModelIds, setEnabledModelIds] = useState<string[]>([]);
   const [apiKey, setApiKey] = useState("");
-  const [accountId, setAccountId] = useState("");
-  const [gatewayId, setGatewayId] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [reasoning, setReasoning] = useState(false);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel | null>(null);
@@ -171,8 +167,6 @@ export function useModelSettings(onClose: () => void) {
         );
       }
       setMaxTokens(connectionMaxTokensField(nextProvider, nextCredential?.maxTokens));
-      setAccountId(nextCredential?.accountId ?? "");
-      setGatewayId(nextCredential?.gatewayId ?? "");
     }
   }
 
@@ -257,9 +251,6 @@ export function useModelSettings(onClose: () => void) {
   const disconnectName = selectedProviderName;
   const hostCredentialSource = me?.hostCredentialSource ?? "";
   const isOpenAiCompatible = provider === OPENAI_COMPATIBLE_PROVIDER_ID;
-  const isCloudflareGateway = provider === CLOUDFLARE_AI_GATEWAY_PROVIDER_ID;
-  const cloudflareRoutingReady =
-    !isCloudflareGateway || cloudflareGatewayRouting({ accountId, gatewayId }) !== undefined;
   const credential = credentials.find((entry) => entry.provider === provider);
   const currentEntry = catalog.find(
     (entry) => entry.provider === me?.defaultProvider && entry.id === me?.defaultModel,
@@ -304,14 +295,11 @@ export function useModelSettings(onClose: () => void) {
     probeModels,
   );
   const defaultModelOptions = [...new Set([...enabledModelIds, modelId])];
-  // Saved-connection settings edited without a new key (output limit, gateway ids).
+  // Saved output-limit settings can change without a new key.
   const settingsDirty =
     !isOpenAiCompatible &&
     Boolean(credential) &&
-    (maxTokens.trim() !== connectionMaxTokensField(provider, credential?.maxTokens) ||
-      (isCloudflareGateway &&
-        (accountId.trim() !== (credential?.accountId ?? "") ||
-          gatewayId.trim() !== (credential?.gatewayId ?? ""))));
+    maxTokens.trim() !== connectionMaxTokensField(provider, credential?.maxTokens);
 
   function invalidatePreflight() {
     preflightRevisionRef.current += 1;
@@ -385,8 +373,7 @@ export function useModelSettings(onClose: () => void) {
     );
     detailScrollRef.current?.scrollTo({ top: 0 });
     setApiKey("");
-    setAccountId(nextCredential?.accountId ?? "");
-    setGatewayId(nextCredential?.gatewayId ?? "");
+
     resetOpenAiCompatibleProbe();
     invalidatePreflight();
     setError(null);
@@ -596,9 +583,7 @@ export function useModelSettings(onClose: () => void) {
           : {
               provider: selected.provider,
               ...(newKey ? { apiKey: newKey } : {}),
-              ...(isCloudflareGateway
-                ? { accountId: accountId.trim(), gatewayId: gatewayId.trim() }
-                : {}),
+
               modelId: selected.id,
               // A limits-only save leaves the stored effort alone while the model
               // stays put. Changing the model sends the clamped level, including
@@ -663,7 +648,6 @@ export function useModelSettings(onClose: () => void) {
 
   return {
     acceptsKey,
-    accountId,
     activeThinkingLabel,
     apiKey,
     baseUrl,
@@ -673,7 +657,6 @@ export function useModelSettings(onClose: () => void) {
     catalog,
     catalogThinkingLevels,
     chooseProvider,
-    cloudflareRoutingReady,
     codeCopied,
     compatibleRows,
     confirmDisconnect,
@@ -693,13 +676,11 @@ export function useModelSettings(onClose: () => void) {
     enabledModelIds,
     error,
     filteredGroups,
-    gatewayId,
     groups,
     handleClose,
     hostCredentialSource,
     invalidatePreflight,
     isActive,
-    isCloudflareGateway,
     isOpenAiCompatible,
     loading,
     maxImagesPerPrompt,
@@ -729,12 +710,10 @@ export function useModelSettings(onClose: () => void) {
     selected,
     selectedProviderName,
     selectionRevisionRef,
-    setAccountId,
     setConfirmDisconnect,
     setContextWindow,
     setEnabledModelIds,
     setError,
-    setGatewayId,
     setMaxImagesPerPrompt,
     setMaxTokens,
     setModelDefault,

@@ -80,7 +80,7 @@
         "apps/api/**",
         "apps/worker/**",
         "infra/sandboxes/supervisor/**",
-        "infra/updater/**",
+        "infra/compose/tests/**",
         "packages/adapters/**",
         "packages/db/**",
         "packages/logging/**"
@@ -99,6 +99,16 @@
         "rules": {
           "suspicious": {
             "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["infra/compose/tests/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
           }
         }
       }

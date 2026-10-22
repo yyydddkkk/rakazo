@@ -1,7 +1,7 @@
 import type { SecretMigrationRepository, SecretMigrationRow } from "@rakazo/adapters";
 import type { PrismaClient } from "@rakazo/db";
 
-const tables = ["secret", "botSecret", "integrationProviderConfig"] as const;
+const tables = ["secret", "botSecret"] as const;
 
 export function createSecretMigrationRepository(prisma: PrismaClient): SecretMigrationRepository {
   return {
@@ -22,8 +22,7 @@ export function createSecretMigrationRepository(prisma: PrismaClient): SecretMig
               id: row.id,
               label,
               ref: row.ciphertext,
-              recordId:
-                label === "integrationProviderConfig" ? `integration-provider:${row.id}` : row.id,
+              recordId: row.id,
               ephemeral: row.kind?.startsWith("run-secret:"),
             };
           if (batch.length < 100) break;
@@ -41,8 +40,7 @@ export function createSecretMigrationRepository(prisma: PrismaClient): SecretMig
     async referenced(ref) {
       return Boolean(
         (await prisma.secret.count({ where: { ciphertext: ref } })) ||
-          (await prisma.botSecret.count({ where: { ciphertext: ref } })) ||
-          (await prisma.integrationProviderConfig.count({ where: { ciphertext: ref } })),
+          (await prisma.botSecret.count({ where: { ciphertext: ref } })),
       );
     },
   };

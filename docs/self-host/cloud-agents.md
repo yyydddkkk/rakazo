@@ -1,6 +1,6 @@
 # Cloud coding agents
 
-Cloud agents delegate a repository task to a hosted coding agent and track its result in the bot's chat. They are separate from the bot computer and its in-turn subagents. Web, Electron, and mobile show the same status and pull-request link.
+Cloud agents delegate a repository task to a hosted coding agent and track its result in the bot's chat. They are separate from the bot computer and its in-turn subagents. The web UI shows status and the pull-request link.
 
 The default is `CLOUD_AGENT_PROVIDER=none`. Core workflows do not require Cursor or any other hosted coding provider.
 
@@ -14,7 +14,7 @@ CLOUD_AGENT_SPACE_ID=example-space-id
 CURSOR_API_KEY=replace-with-your-key
 ```
 
-The key and explicit Space ID are both required. Use a credential whose connected repositories may be accessed by members of that Space. Each created agent is additionally bound to its initiating user; another user cannot inspect, reply to, or cancel it by supplying an agent ID. The deployment key is never a model tool argument.
+The key and explicit Space ID are both required. Use a credential whose connected repositories may be accessed by the user in that Space. Each created agent is additionally bound to its initiating user; the stored owner and Space scope are checked before access. The deployment key is never a model tool argument.
 
 The tools are `cloud_agent_launch`, `cloud_agent_status`, `cloud_agent_reply`, and `cloud_agent_cancel`. All three mutations participate in the existing action-approval rules and auto-review policy. As with other consequential tools, an empty rule set and disabled auto-review permit execution by default.
 

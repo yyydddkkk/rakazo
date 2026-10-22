@@ -44,7 +44,6 @@ import {
   ATTACHMENT_MAX_BYTES,
   BotSecretName,
   botSecretSubmissionSchema,
-  CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
   COMPUTER_COMMAND_OUTPUT_MAX_CHARS,
   disabledBuiltinToolSet,
   FLEET_TOOL_NAMES,
@@ -211,7 +210,6 @@ import { cloudAgentsEnabled } from "./cloud-agent-factory.js";
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
 import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
-import { cloudflareGatewayProviderEnv } from "./cloudflare-ai-gateway.js";
 import { BACKGROUND_WORK_LAUNCH, scheduleComputerSleep } from "./computer-idle.js";
 import type { ComputerExecutionLease } from "./computer-lifecycle.js";
 import {
@@ -2963,11 +2961,7 @@ export function buildApprovalContinuation(
 }
 
 export function isTerminalModelSetupError(error: unknown): boolean {
-  return (
-    error instanceof UnavailableModelForAuthError ||
-    isRetiredModelCredentialError(error) ||
-    (error instanceof Error && error.message === CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE)
-  );
+  return error instanceof UnavailableModelForAuthError || isRetiredModelCredentialError(error);
 }
 
 export function createRunExecutor(deps: ExecutorDeps) {
@@ -3013,7 +3007,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
       provider,
       id: modelId,
       apiKey: resolved.oauth ? undefined : resolved.apiKey,
-      ...cloudflareRunFields(resolved),
       baseUrl: resolved.baseUrl,
       allowPrivateEndpoint: resolved.allowPrivateEndpoint,
       cacheCapabilities: resolved.cacheCapabilities,
@@ -3100,7 +3093,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
         provider,
         id,
         apiKey: resolved.oauth ? undefined : resolved.apiKey,
-        ...cloudflareRunFields(resolved),
         baseUrl: resolved.baseUrl,
         allowPrivateEndpoint: resolved.allowPrivateEndpoint,
         cacheCapabilities: resolved.cacheCapabilities,
@@ -4925,8 +4917,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       runtime: deps.runtime,
                       checker: checker!,
                       apiKey: judgeKey.oauth ? undefined : judgeKey.apiKey,
-                      accountId: judgeKey.accountId,
-                      gatewayId: judgeKey.gatewayId,
                       baseUrl: judgeKey.baseUrl,
                       allowPrivateEndpoint: judgeKey.allowPrivateEndpoint,
                       cacheCapabilities: judgeKey.cacheCapabilities,
@@ -7236,7 +7226,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 provider: runModelProvider,
                 id: runModelId,
                 apiKey: resolved.oauth ? undefined : resolved.apiKey,
-                ...cloudflareRunFields(resolved),
                 baseUrl: resolved.baseUrl,
                 allowPrivateEndpoint: resolved.allowPrivateEndpoint,
                 cacheCapabilities: resolved.cacheCapabilities,
@@ -9458,8 +9447,6 @@ async function resolveModelKey(
   { requireStoredSecret = false }: { requireStoredSecret?: boolean } = {},
 ): Promise<{
   apiKey?: string;
-  accountId?: string;
-  gatewayId?: string;
   baseUrl?: string;
   allowPrivateEndpoint?: boolean;
   cacheCapabilities?: AgentRunRequest["model"]["cacheCapabilities"];
@@ -9488,7 +9475,6 @@ async function resolveModelKey(
         if (credential.provider === OPENAI_COMPATIBLE_PROVIDER_ID) {
           throw new UnavailableModelForAuthError("Unknown model for that provider");
         }
-        cloudflareGatewayProviderEnv({ provider });
         return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
       }
       const plaintext = await deps.secretStore.load(row.ciphertext, row.id);
@@ -9575,13 +9561,8 @@ async function resolveModelKey(
           (resolved.secret.visionModelIds === undefined &&
             credential.supportsImages === true &&
             credential.defaultModel?.trim() === modelId.trim()));
-      const accountId = resolved.secret.kind === "api_key" ? resolved.secret.accountId : undefined;
-      const gatewayId = resolved.secret.kind === "api_key" ? resolved.secret.gatewayId : undefined;
-      cloudflareGatewayProviderEnv({ provider, accountId, gatewayId });
       return {
         apiKey: resolved.apiKey,
-        accountId,
-        gatewayId,
         baseUrl,
         allowPrivateEndpoint,
         cacheCapabilities:
@@ -9637,18 +9618,7 @@ async function resolveModelKey(
     });
   }
   if (requireStoredSecret) throw new Error("Backup model credential is no longer available");
-  cloudflareGatewayProviderEnv({ provider });
   return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
-}
-
-function cloudflareRunFields(resolved: { accountId?: string; gatewayId?: string }): {
-  accountId?: string;
-  gatewayId?: string;
-} {
-  return {
-    ...(resolved.accountId ? { accountId: resolved.accountId } : {}),
-    ...(resolved.gatewayId ? { gatewayId: resolved.gatewayId } : {}),
-  };
 }
 
 export async function loadCurrentTurnImages(

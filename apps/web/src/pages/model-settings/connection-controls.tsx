@@ -11,18 +11,14 @@ import type { ModelSettingsState } from "./use-model-settings";
 
 export function ConnectionControls({
   acceptsKey,
-  accountId,
   apiKey,
   beginSelectedSubscriptionSignIn,
   busy,
   cancelOAuthAttempt,
-  cloudflareRoutingReady,
   codeCopied,
   connectKey,
   copyOAuthCode,
   credential,
-  gatewayId,
-  isCloudflareGateway,
   isOpenAiCompatible,
   oauth,
   oauthPending,
@@ -34,8 +30,6 @@ export function ConnectionControls({
   preflightTarget,
   preflightTesting,
   selected,
-  setAccountId,
-  setGatewayId,
   setPasteCode,
   submitOAuthCode,
   subscriptionSignIn,
@@ -45,18 +39,14 @@ export function ConnectionControls({
 }: Pick<
   ModelSettingsState,
   | "acceptsKey"
-  | "accountId"
   | "apiKey"
   | "beginSelectedSubscriptionSignIn"
   | "busy"
   | "cancelOAuthAttempt"
-  | "cloudflareRoutingReady"
   | "codeCopied"
   | "connectKey"
   | "copyOAuthCode"
   | "credential"
-  | "gatewayId"
-  | "isCloudflareGateway"
   | "isOpenAiCompatible"
   | "oauth"
   | "oauthPending"
@@ -68,8 +58,6 @@ export function ConnectionControls({
   | "preflightTarget"
   | "preflightTesting"
   | "selected"
-  | "setAccountId"
-  | "setGatewayId"
   | "setPasteCode"
   | "submitOAuthCode"
   | "subscriptionSignIn"
@@ -249,43 +237,8 @@ export function ConnectionControls({
 
       {acceptsKey ? (
         <div className="mt-5 first:mt-0">
-          {isCloudflareGateway ? (
-            <>
-              <label
-                className="block text-[13.5px] text-muted-foreground"
-                htmlFor="cloudflare-account-id"
-              >
-                <Trans>Account ID</Trans>
-                <Input
-                  id="cloudflare-account-id"
-                  value={accountId}
-                  onChange={(event) => setAccountId(event.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="mt-2 h-10 text-foreground"
-                />
-              </label>
-              <label
-                className="mt-4 block text-[13.5px] text-muted-foreground"
-                htmlFor="cloudflare-gateway-id"
-              >
-                <Trans>Gateway ID</Trans>
-                <Input
-                  id="cloudflare-gateway-id"
-                  value={gatewayId}
-                  onChange={(event) => setGatewayId(event.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="mt-2 h-10 text-foreground"
-                />
-              </label>
-            </>
-          ) : null}
           {acceptsKey ? (
-            <label
-              className={`block text-[13.5px] text-muted-foreground ${isCloudflareGateway ? "mt-4" : ""}`}
-              htmlFor="model-api-key"
-            >
+            <label className="block text-[13.5px] text-muted-foreground" htmlFor="model-api-key">
               {credential ? (
                 <Trans>Replace API key</Trans>
               ) : subscriptionSignIn ? (
@@ -329,7 +282,7 @@ export function ConnectionControls({
             variant="secondary"
             className="mt-3 rounded-full"
             size="sm"
-            disabled={busy || !cloudflareRoutingReady || apiKey.trim().length < 8}
+            disabled={busy || apiKey.trim().length < 8}
             onClick={() => void connectKey()}
           >
             {pending === "connect" ? (
@@ -405,7 +358,6 @@ export function CompatibleKeyControls({
 
 export function SaveModelButton({
   busy,
-  cloudflareRoutingReady,
   connectKey,
   credential,
   isActive,
@@ -419,7 +371,6 @@ export function SaveModelButton({
 }: Pick<
   ModelSettingsState,
   | "busy"
-  | "cloudflareRoutingReady"
   | "connectKey"
   | "credential"
   | "isActive"
@@ -440,7 +391,6 @@ export function SaveModelButton({
         size="sm"
         disabled={
           busy ||
-          !cloudflareRoutingReady ||
           (isOpenAiCompatible &&
             (!modelId.trim() ||
               !canUseCompatibleModelAsDefault(credential.enabledModelIds, modelId.trim())))

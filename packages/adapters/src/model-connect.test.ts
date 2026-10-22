@@ -1,8 +1,4 @@
-import {
-  CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
-  CLOUDFLARE_AI_GATEWAY_PROVIDER_ID,
-  ModelConnectInputSchema,
-} from "@rakazo/contracts";
+import { ModelConnectInputSchema } from "@rakazo/contracts";
 import { canUseCompatibleModelAsDefault } from "@rakazo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -231,86 +227,8 @@ describe("openai-codex API key guard", () => {
       connectAsOwner({
         provider: "openai",
         apiKey: "sk-test-key-123",
-        accountId: "acct1234",
-        gatewayId: "gateway-1",
       }),
     ).toBe("sk-test-key-123");
-  });
-
-  it("stores Cloudflare AI Gateway routing with the key and keeps it on a limit update", () => {
-    const input = {
-      provider: CLOUDFLARE_AI_GATEWAY_PROVIDER_ID,
-      apiKey: "cf-test-key-value",
-      accountId: "acct1234",
-      gatewayId: "gateway-1",
-    };
-    const plaintext = connectAsOwner(input);
-    expect(parseModelSecret(plaintext)).toEqual({
-      kind: "api_key",
-      key: "cf-test-key-value",
-      accountId: "acct1234",
-      gatewayId: "gateway-1",
-    });
-    expect(
-      parseModelSecret(
-        connectAsOwner({ provider: CLOUDFLARE_AI_GATEWAY_PROVIDER_ID, maxTokens: 4096 }, plaintext),
-      ),
-    ).toEqual({
-      kind: "api_key",
-      key: "cf-test-key-value",
-      maxTokens: 4096,
-      accountId: "acct1234",
-      gatewayId: "gateway-1",
-    });
-    expect(
-      modelCredentialDto(
-        {
-          id: "cred-cf",
-          provider: CLOUDFLARE_AI_GATEWAY_PROVIDER_ID,
-          label: "Cloudflare AI Gateway",
-          isDefault: false,
-        },
-        plaintext,
-      ),
-    ).toMatchObject({ accountId: "acct1234", gatewayId: "gateway-1" });
-    expect(() =>
-      connectAsOwner({
-        provider: CLOUDFLARE_AI_GATEWAY_PROVIDER_ID,
-        apiKey: "cf-test-key-value",
-      }),
-    ).toThrow(CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE);
-    expect(
-      parseModelSecret(
-        connectAsOwner(
-          { provider: CLOUDFLARE_AI_GATEWAY_PROVIDER_ID, accountId: "acct9999" },
-          plaintext,
-        ),
-      ),
-    ).toEqual({
-      kind: "api_key",
-      key: "cf-test-key-value",
-      accountId: "acct9999",
-      gatewayId: "gateway-1",
-    });
-    expect(
-      parseModelSecret(
-        connectAsOwner(
-          { provider: CLOUDFLARE_AI_GATEWAY_PROVIDER_ID, gatewayId: "gateway-2" },
-          plaintext,
-        ),
-      ),
-    ).toEqual({
-      kind: "api_key",
-      key: "cf-test-key-value",
-      accountId: "acct1234",
-      gatewayId: "gateway-2",
-    });
-    expect(() =>
-      connectAsOwner(
-        { provider: CLOUDFLARE_AI_GATEWAY_PROVIDER_ID, accountId: "acct/secret" },
-        plaintext,
-      ),
-    ).toThrow(CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE);
   });
 });
 

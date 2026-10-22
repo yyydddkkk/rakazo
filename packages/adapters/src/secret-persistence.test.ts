@@ -3,15 +3,27 @@ import type { AdapterContext } from "@rakazo/adapter-kit";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { withTransactionRetry } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { InfisicalSecretStore } from "./infisical-secret-store.js";
 import { McpConnector } from "./mcp-connector.js";
 import { McpOAuthBroker } from "./mcp-oauth.js";
 import { McpSession } from "./mcp-transport.js";
 import { createRunSecretWriter } from "./run-secret.js";
 import { persistPreparedSecret, withSecretPersistence } from "./secret-persistence.js";
-import { ComposedSecretStore } from "./secret-store-factory.js";
-import { infisicalFake } from "./secret-store-fake.js";
 import { EncryptedSecretStore } from "./secrets.js";
+
+class TestSecretStore extends EncryptedSecretStore {
+  constructor(private readonly values: Map<string, string>) {
+    super("test-key");
+  }
+  override async put(...args: Parameters<EncryptedSecretStore["put"]>) {
+    const record = await super.put(...args);
+    if (!args[2]?.ephemeral) this.values.set(record.ref, args[0]);
+    return record;
+  }
+  override async delete(...args: Parameters<EncryptedSecretStore["delete"]>) {
+    this.values.delete(args[0]);
+    await super.delete(...args);
+  }
+}
 
 const context: AdapterContext = {
   operationId: "test",
@@ -185,8 +197,8 @@ function database() {
 
 describe("secret persistence cleanup", () => {
   it("deletes a replaced ref only after commit and removes refs on row deletion", async () => {
-    const fake = infisicalFake();
-    const store = new InfisicalSecretStore(fake.options);
+    const fake = { values: new Map<string, string>() };
+    const store = new TestSecretStore(fake.values);
     await store.start();
     const db = database();
     const prisma = withSecretPersistence(db.prisma, store);
@@ -209,8 +221,8 @@ describe("secret persistence cleanup", () => {
     }
   });
   it("cleans the losing retry write while the committed fresh key remains loadable", async () => {
-    const fake = infisicalFake();
-    const store = new InfisicalSecretStore(fake.options);
+    const fake = { values: new Map<string, string>() };
+    const store = new TestSecretStore(fake.values);
     const db = database();
     const prisma = withSecretPersistence(db.prisma, store);
     let attempts = 0;
@@ -240,8 +252,8 @@ describe("secret persistence cleanup", () => {
     }
   });
   it("rollbacks preserve committed values and clean the losing new write", async () => {
-    const fake = infisicalFake();
-    const store = new InfisicalSecretStore(fake.options);
+    const fake = { values: new Map<string, string>() };
+    const store = new TestSecretStore(fake.values);
     await store.start();
     const db = database();
     const prisma = withSecretPersistence(db.prisma, store);
@@ -263,8 +275,8 @@ describe("secret persistence cleanup", () => {
     }
   });
   it("cleans cascade deletions and uses the integration configuration AAD", async () => {
-    const fake = infisicalFake();
-    const store = new InfisicalSecretStore(fake.options);
+    const fake = { values: new Map<string, string>() };
+    const store = new TestSecretStore(fake.values);
     await store.start();
     const db = database();
     const prisma = withSecretPersistence(db.prisma, store);
@@ -288,8 +300,8 @@ describe("secret persistence cleanup", () => {
     }
   });
   it("captures organization cascades and cleans only after the enclosing transaction commits", async () => {
-    const fake = infisicalFake();
-    const store = new InfisicalSecretStore(fake.options);
+    const fake = { values: new Map<string, string>() };
+    const store = new TestSecretStore(fake.values);
     await store.start();
     const db = database();
     const prisma = withSecretPersistence(db.prisma, store);
@@ -306,8 +318,8 @@ describe("secret persistence cleanup", () => {
     }
   });
   it("preserves atomicity by rejecting secret mutations in batches that expose no transaction client", async () => {
-    const fake = infisicalFake();
-    const store = new InfisicalSecretStore(fake.options);
+    const fake = { values: new Map<string, string>() };
+    const store = new TestSecretStore(fake.values);
     await store.start();
     const db = database();
     const prisma = withSecretPersistence(db.prisma, store);
@@ -329,14 +341,14 @@ describe("secret persistence cleanup", () => {
 });
 
 describe("MCP OAuth prepared persistence", () => {
-  it.each(["encrypted", "infisical"] as const)(
+  it.each(["encrypted", "local-test-store"] as const)(
     "keeps %s sessions alive through their own connect and tool refresh",
     async (provider) => {
-      const fake = infisicalFake();
+      const fake = { values: new Map<string, string>() };
       const store =
         provider === "encrypted"
           ? new EncryptedSecretStore("fake-encryption-key")
-          : new InfisicalSecretStore(fake.options);
+          : new TestSecretStore(fake.values);
       const db = database();
       const prisma = withSecretPersistence(db.prisma, store);
       const initial = await store.put(
@@ -439,8 +451,8 @@ describe("MCP OAuth prepared persistence", () => {
   );
 
   it("keeps slow provider I/O outside the five-second transaction and cleans CAS losers and pre-create failures", async () => {
-    const fake = infisicalFake();
-    const store = new InfisicalSecretStore(fake.options);
+    const fake = { values: new Map<string, string>() };
+    const store = new TestSecretStore(fake.values);
     const db = database();
     let clock = 0;
     let active = false;
@@ -536,11 +548,8 @@ describe("prepared run-secret writes", () => {
   it.each([false, true])(
     "prepares slow secret input outside the transaction (bot credential: %s)",
     async (credentialAsk) => {
-      const fake = infisicalFake();
-      const store = new ComposedSecretStore(
-        new EncryptedSecretStore("fake-key"),
-        new InfisicalSecretStore(fake.options),
-      );
+      const fake = { values: new Map<string, string>() };
+      const store = new TestSecretStore(fake.values);
       const db = database();
       const prisma = withSecretPersistence(db.prisma, store);
       const credential = credentialAsk

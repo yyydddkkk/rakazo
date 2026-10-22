@@ -5,7 +5,7 @@ loadRootEnv();
 
 import { serve } from "@hono/node-server";
 import { SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
+import { createRootLogger } from "@rakazo/logging/root";
 import { createApp } from "./app.js";
 import { loadEnv } from "./env.js";
 

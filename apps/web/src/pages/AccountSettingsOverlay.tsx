@@ -22,8 +22,6 @@ import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { AccountAccess } from "../components/AccountAccess";
 import { SuccessPop } from "../components/ai/primitives";
 import { ComputersUnavailableHint } from "../components/ComputersUnavailableHint";
-import type { ServerUpdateLoad } from "../components/SoftwareUpdateSection";
-import { hasServerUpdates, SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
 import { authClient } from "../lib/auth";
 import type { BotsSidebarDensity } from "../lib/bots-sidebar-density-pref";
 import {
@@ -446,14 +444,6 @@ export function ComputerSettingsPanel({
         onRecovered={onSandboxProviderChange}
         onRecoveryDismissed={onRecoveryDismissed}
       />
-    </div>
-  );
-}
-
-export function UpdatesSettingsPanel({ serverUpdate }: { serverUpdate: ServerUpdateLoad }) {
-  return (
-    <div className="space-y-5">
-      {hasServerUpdates(serverUpdate) ? <SoftwareUpdateSection load={serverUpdate} /> : null}
     </div>
   );
 }

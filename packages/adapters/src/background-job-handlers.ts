@@ -17,7 +17,6 @@ import { expireComputerControl } from "./computer-control.js";
 import { scheduleComputerSleep, sleepComputerIfIdle } from "./computer-idle.js";
 import { performComputerUpdate } from "./computer-update.js";
 import type { createRunExecutor } from "./executor.js";
-import type { ExpoPushProvider } from "./expo-push.js";
 import { compactHistory } from "./history-compaction.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
@@ -58,7 +57,6 @@ export function createBackgroundJobHandlers(deps: {
   deploymentModelConfigured?: boolean;
   messaging?: MessagingSurface;
   cloudAgent?: CloudAgentConnection | null;
-  notifications?: ExpoPushProvider;
 }): BackgroundJobHandlers {
   const messagingDeps = deps.messaging
     ? { prisma: deps.prisma, messaging: deps.messaging, events: deps.events, jobs: deps.jobs }
@@ -145,10 +143,6 @@ export function createBackgroundJobHandlers(deps: {
         payload,
       );
     }),
-    // A receipt belongs to a device's push token, not to a Space.
-    "push.receipt": async (payload) => {
-      await runAsSystem("check a push receipt", () => deps.notifications?.checkReceipt(payload));
-    },
     "history.compact": asOwner(thread, async (payload) => {
       // Retrieval policies use stored context without paid message-count compaction.
       // Skip legacy backlog work after a policy change.

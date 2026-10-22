@@ -1,11 +1,6 @@
-import type {
-  ProductAnalytics,
-  TransactionalEmail,
-  TransactionalEmailProvider,
-} from "@rakazo/adapter-kit";
+import type { TransactionalEmail, TransactionalEmailProvider } from "@rakazo/adapter-kit";
 import { displayName, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@rakazo/core";
-import type { PrismaClient, SecurityEventType } from "@rakazo/db";
-import { recordSecurityEvent } from "@rakazo/db";
+import type { PrismaClient } from "@rakazo/db";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
@@ -18,7 +13,6 @@ export type { BootstrapAdminCredentials } from "./bootstrap-admin.js";
 export { bootstrapAdmin } from "./bootstrap-admin.js";
 
 export interface AuthEnv {
-  analytics?: ProductAnalytics;
   /** Opt-in check that calls an outside service. */
   breachedPasswordCheck?: boolean;
   secret: string;
@@ -35,11 +29,6 @@ export interface AuthEnv {
 type AuthSession = { id: string; userId: string };
 
 export const CLIENT_IP_HEADER = "x-rakazo-client-ip";
-const REVOCATION_PATHS = new Set(["/revoke-session", "/revoke-sessions", "/revoke-other-sessions"]);
-const ACCOUNT_EVENT_PATHS: Record<string, SecurityEventType> = {
-  "/change-password": "auth.password.changed",
-};
-
 export function authRateLimitOptions(nodeEnv = process.env.NODE_ENV) {
   const rule = { window: 15 * 60, max: 10 };
   return {
@@ -81,13 +70,6 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
       minPasswordLength: MIN_PASSWORD_LENGTH,
       maxPasswordLength: MAX_PASSWORD_LENGTH,
       revokeSessionsOnPasswordReset: true,
-      onPasswordReset: async ({ user }) => {
-        await recordSecurityEvent({
-          type: "auth.password.changed",
-          userId: user.id,
-          metadata: { via: "/reset-password" },
-        });
-      },
       resetPasswordTokenExpiresIn: 60 * 60,
       sendResetPassword: env.email
         ? async ({ user, url }) => {
@@ -114,9 +96,6 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
             });
           });
         },
-        afterDelete: async (user) => {
-          await recordSecurityEvent({ type: "auth.account.deleted", userId: user.id });
-        },
       },
     },
     plugins: [
@@ -129,14 +108,6 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
         if (isBlockedAuthPath(ctx.path)) throw new APIError("NOT_FOUND");
       }),
       after: createAuthMiddleware(async (ctx) => {
-        const accountEvent = ACCOUNT_EVENT_PATHS[ctx.path];
-        if (accountEvent && !(ctx.context.returned instanceof APIError)) {
-          await recordSecurityEvent({
-            type: accountEvent,
-            userId: ctx.context.session?.user.id,
-            metadata: { via: ctx.path },
-          });
-        }
         const redacted = withoutSessionTokens(ctx.path, ctx.context.returned);
         if (redacted) return ctx.json(redacted);
         const signed = withSignedSessionToken(ctx.context, ctx.context.returned);
@@ -150,33 +121,12 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
             if (!(await isAdmin(prisma, session.userId))) throw new APIError("UNAUTHORIZED");
           },
           after: async (session, ctx) => {
-            env.analytics?.capture(
-              session.userId,
-              { name: "signed_in" },
-              { id: session.id, at: session.createdAt },
-            );
-            if (!replacedSession(ctx))
-              await recordSecurityEvent({
-                type: "auth.sign_in",
-                userId: session.userId,
-                ip: session.ipAddress,
-                userAgent: session.userAgent,
-                metadata: { via: ctx?.path ?? null },
-              });
             const previous = replacedSession(ctx);
             if (previous) await env.afterReplaceSession?.(previous, session);
           },
         },
         delete: {
           after: async (session, ctx) => {
-            if (ctx?.path === "/sign-out")
-              await recordSecurityEvent({ type: "auth.sign_out", userId: session.userId });
-            else if (ctx?.path && REVOCATION_PATHS.has(ctx.path))
-              await recordSecurityEvent({
-                type: "auth.session.revoked",
-                userId: session.userId,
-                metadata: { via: ctx.path },
-              });
             if (replacedSession(ctx)?.id !== session.id) await env.afterDeleteSession?.(session);
           },
         },

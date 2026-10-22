@@ -8,7 +8,6 @@ import { expect, it, vi } from "vitest";
 const capability = vi.hoisted(() => ({
   enabled: false,
   boardLoaded: vi.fn(),
-  screen: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
@@ -28,7 +27,7 @@ vi.mock("./lib/remote-images-preference", () => ({
   subscribeRemoteImages: () => () => {},
 }));
 vi.mock("./lib/performance", () => ({ markOnce: () => {}, markAfterPaint: () => {} }));
-vi.mock("./lib/rpc", () => ({ rpc: { analytics: { screen: capability.screen } } }));
+vi.mock("./lib/rpc", () => ({ rpc: {} }));
 vi.mock("./pages/Shell", () => ({ ShellPage: () => <div>Shell</div> }));
 vi.mock("./pages/Board", () => {
   capability.boardLoaded();
@@ -51,7 +50,6 @@ it("loads the board chunk only after bootstrap enables the route", async () => {
   try {
     await act(async () => root.render(render()));
     expect(container.textContent).toBe("Shell");
-    expect(capability.screen).toHaveBeenCalledExactlyOnceWith({ screen: "board", surface: "web" });
     expect(capability.boardLoaded).not.toHaveBeenCalled();
     capability.enabled = true;
     await act(async () => {
@@ -65,30 +63,3 @@ it("loads the board chunk only after bootstrap enables the route", async () => {
     vi.unstubAllGlobals();
   }
 });
-
-it.each(["throw", "reject"])(
-  "keeps screen reporting failures out of the app error boundary (%s)",
-  async (mode) => {
-    if (mode === "throw")
-      capability.screen.mockImplementationOnce(() => {
-        throw new Error("analytics unavailable");
-      });
-    else capability.screen.mockRejectedValueOnce(new Error("analytics unavailable"));
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    try {
-      await act(async () =>
-        root.render(
-          <MemoryRouter initialEntries={["/app"]}>
-            <App />
-          </MemoryRouter>,
-        ),
-      );
-      expect(container.textContent).toBe("Shell");
-    } finally {
-      await act(async () => root.unmount());
-      vi.unstubAllGlobals();
-    }
-  },
-);

@@ -6,7 +6,7 @@ test("changing language updates settings overflow without resizing", async ({ pa
   await setupAdmin(page, `settings-language-${stamp}@rakazo.test`, "password12", "Settings");
   await completeOnboarding(page);
   const settings = await openUserSettings(page);
-  await page.setViewportSize({ width: 740, height: 700 });
+  await page.setViewportSize({ width: 660, height: 700 });
   const nav = settings.getByTestId("settings-nav");
   const next = settings.getByRole("button", { name: "Next settings sections" });
   await expect.poll(() => nav.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
@@ -38,7 +38,7 @@ test("narrow settings reveals the active section and offers scroll controls", as
   const previous = settings.getByRole("button", { name: "Previous settings sections" });
   const next = settings.getByRole("button", { name: "Next settings sections" });
 
-  for (const width of [640, 390]) {
+  for (const width of [560, 390]) {
     await page.setViewportSize({ width, height: 700 });
     await expect(usage).toHaveAttribute("aria-current", "page");
     // Deep links and resizing must reveal the whole selected section.

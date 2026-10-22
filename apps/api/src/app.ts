@@ -25,18 +25,14 @@ import {
   createMessagingContextLoader,
   createMessagingExternalConversationHistory,
   createMessagingExternalConversationSender,
-  createProductAnalytics,
   createRunExecutor,
   createRunSecretWriter,
   createSandboxProvider,
   createSecretStore,
   createTicketChangeNotifier,
   createWebProvider,
-  deletePushToken,
   destroyBot,
   EmailEmulator,
-  ExpoPushProvider,
-  endSessionPushToken,
   GraphileJobPublisher,
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
@@ -69,17 +65,13 @@ import {
   createBoardEvents,
   createDb,
   createPool,
-  createSecurityEventPruner,
   createThreadEvents,
   describeRowSecurity,
   IsolationError,
-  installSecurityEventStore,
   parsePositiveInteger,
-  pushSessionExpiresAt,
   requireMembership,
   rowSecurityWarning,
   runAsSystem,
-  securityEventRetentionDays,
   verifyContentKeys,
 } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
@@ -103,7 +95,6 @@ import {
   requestClientIp,
   withClientIp,
 } from "./client-ip.js";
-import { cspReportRoutes } from "./csp-report.js";
 import { mountDiagramScript } from "./diagram-script.js";
 import type { AppEnv } from "./env.js";
 import { loadEnv } from "./env.js";
@@ -126,11 +117,9 @@ import {
 } from "./messaging-inbound.js";
 import { createMessagingReceipts } from "./messaging-receipts.js";
 import { mountMessagingWebhookRoutes } from "./messaging-webhook.js";
-import { monitoringRoutes } from "./monitoring.js";
 import { mountApiRequestBodyLimits } from "./request-body-limit.js";
 import { createRouter } from "./router.js";
 import { mountScreenTarget } from "./screen-proxy.js";
-import { createAuthResponseAudit } from "./security-audit.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
 
 export interface AppHandles {
@@ -141,7 +130,7 @@ export interface AppHandles {
   connectors: ConnectorRegistry;
   messaging?: MessagingSurface;
   email?: TransactionalEmailProvider;
-  notifications: NotificationProvider;
+  notifications?: NotificationProvider;
   executor: ReturnType<typeof createRunExecutor>;
   runtime: AgentRuntime;
   awaitIdle?: () => Promise<void>;
@@ -179,7 +168,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     connectors: connectorOverrides = [],
     messaging: messagingOverride,
     email: emailOverride,
-    notifications: notificationsOverride,
+    notifications,
     remoteConnectors,
     logger: loggerOverride,
     runtime: runtimeOverride,
@@ -221,20 +210,17 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
           publisher: created.pool,
         })
       : new InMemoryRealtimeFanout());
-  const secrets = createSecretStore(env.encryptionKey, process.env, realtime);
+  const secrets = createSecretStore(env.encryptionKey, realtime);
   await secrets.start();
   if (secrets.describe().capabilities.degraded)
     logger.warn("Secret storage degraded; encrypted credentials remain available");
   prisma = withSecretPersistence(prisma, secrets);
-  installSecurityEventStore(prisma);
   const unreadableMasterKeys = await verifyContentKeys(prisma);
   if (unreadableMasterKeys.length)
     logger.error("Stored space keys need master keys that are not configured", undefined, {
       masterKeyIds: unreadableMasterKeys,
     });
-  const analytics = createProductAnalytics();
   const events = createThreadEvents(prisma, realtime, {
-    analytics,
     runSecretWriter: createRunSecretWriter(secrets),
   });
   const ticketBoardEnabled = env.ticketBoardEnabled;
@@ -332,15 +318,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       : new PiAgentRuntime({
           sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
         }));
-  const notifications =
-    notificationsOverride ??
-    new ExpoPushProvider(env.dataDir, {
-      sessionExpiresAt: (sessionId) => pushSessionExpiresAt(prisma, sessionId),
-      jobs,
-      accessToken: env.expoAccessToken,
-    });
   const auth = createAuth(prisma, {
-    analytics,
     breachedPasswordCheck: env.breachedPasswordCheck,
     secret: env.authSecret,
     baseURL: env.authUrl,
@@ -378,20 +356,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         ),
       );
       await removePiUserSessions(env.dataDir, userId);
-      await deletePushToken(env.dataDir, userId).catch((error) =>
-        getLogger().error("push token removal failed", error),
-      );
-    },
-    // The session change already happened, so a token file failure must not fail sign-out.
-    afterDeleteSession: async (session) => {
-      await endSessionPushToken(env.dataDir, session.userId, session.id).catch((error) =>
-        getLogger().error("push token removal failed", error),
-      );
-    },
-    afterReplaceSession: async (previous, session) => {
-      await endSessionPushToken(env.dataDir, session.userId, previous.id, session.id).catch(
-        (error) => getLogger().error("push token session update failed", error),
-      );
     },
   });
   // One provider instance so emulator launches and polls share the same Map.
@@ -447,7 +411,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     events,
     workerId: "api",
     runtime,
-    notifications: notifications instanceof ExpoPushProvider ? notifications : undefined,
     secretStore: secrets,
     deploymentModelKey: env.deploymentModelKey,
     deploymentModelConfigured: env.deploymentModelConfigured,
@@ -465,16 +428,11 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         notifications,
         reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
-        reconcileSecurityEventRetention: createSecurityEventPruner(
-          prisma,
-          securityEventRetentionDays(),
-        ),
       })
     : undefined;
   reconciler?.start();
 
   const router = createRouter({
-    analytics,
     cloudAgent,
     codexCatalog,
     prisma,
@@ -508,13 +466,9 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       deploymentModelConfigured: env.deploymentModelConfigured,
       deploymentModelHostCredentials: env.deploymentModelHostCredentials,
       webOrigin: env.webOrigin,
-      privacyPolicyUrl: env.privacyPolicyUrl,
       screenProxySecret: env.screenProxySecret,
       sandboxProvider: env.sandboxProvider,
       gitSha: env.gitSha,
-      updaterUrl: env.updaterUrl,
-      updaterToken: env.updaterToken,
-      imageTag: env.imageTag,
       integrationsCatalogUrl: env.integrationsCatalogUrl,
       mcpAllowPrivateEndpoint: env.mcpAllowPrivateEndpoint,
     },
@@ -558,19 +512,9 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         }),
     );
   }
-  app.route(
-    "/",
-    monitoringRoutes(
-      env.browserMonitoring,
-      fetch,
-      async (request) => (await auth.api.getSession({ headers: request.headers }))?.user.id,
-    ),
-  );
-  app.route("/", cspReportRoutes(requestClientIp));
   mountApiRequestBodyLimits(app, env.maxUploadSizeBytes);
   mountScreenTarget(app, prisma, env.screenProxySecret);
   mountDiagramScript(app);
-  const auditAuthResponse = createAuthResponseAudit();
   // Account and session tables, signup bootstrap and account deletion span tenants;
   // webhooks authenticate a bot or provider, then resolve the tenant from it.
   for (const [path, reason] of [
@@ -588,7 +532,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     }
     const ip = requestClientIp(c);
     const response = await auth.handler(withClientIp(emptyAuthBodyAsJson(c.req.raw), ip));
-    await auditAuthResponse(path, ip, response);
     return response;
   });
   const requestSession = async (request: Request) => {
@@ -969,7 +912,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       await prisma.$disconnect().catch(() => undefined);
       await created.pool?.end().catch(() => undefined);
       await ownedJobPool?.end().catch(() => undefined);
-      await analytics?.flush();
       await logger.flush({ timeoutMs: 2_000 });
     },
   };

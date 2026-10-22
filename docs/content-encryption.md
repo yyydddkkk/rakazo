@@ -29,7 +29,7 @@ message rewritten while off drops its search tokens, so it matches its new
 text. `content-encryption decrypt` converts what is still encrypted, and
 `content-encryption migrate` encrypts everything after switching back on
 (`migrate`, `rotate` and `reencrypt` always encrypt, whatever the setting).
-Defaults and commands are in [self-hosting](./self-host.md#content-encryption).
+Defaults and commands are in [self-hosting](./self-host.md#computers-and-memory).
 
 `content-encryption export [--space <id>] [--thread <id>] [--bot <id>] [--output <file>]`
 writes decrypted threads (with their summary), messages, memory documents and

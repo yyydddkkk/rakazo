@@ -93,7 +93,7 @@ export class EvalServices extends FakeConnectorProvider {
     this.composio.seedGithubReleases(releases);
   }
 
-  listGithubReleases() {
+  listGithubReleases(): ReturnType<FakeComposioClient["listGithubReleases"]> {
     return this.composio.listGithubReleases();
   }
 

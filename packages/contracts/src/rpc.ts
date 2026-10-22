@@ -1,7 +1,5 @@
 import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
-import { AiConsentQuerySchema, AiConsentStatusSchema } from "./ai-consent.js";
-import { AnalyticsScreenInput } from "./analytics.js";
 import {
   ARTIFACT_DESCRIPTION_MAX_LENGTH,
   ARTIFACT_NAME_MAX_LENGTH,
@@ -75,10 +73,6 @@ import {
   RoutineSchema,
   ScratchpadItemSchema,
   ScratchpadItemStatusSchema,
-  ServerUpdateCheckSchema,
-  ServerUpdateRequestSchema,
-  ServerUpdateRunSchema,
-  ServerUpdateStatusSchema,
   SkillPlaybookSchema,
   SpaceNavigationSchema,
   TaughtSkillSchema,
@@ -99,7 +93,6 @@ import { MessageReactionSchema } from "./reactions.js";
 import { RoutineWatchSchema } from "./routine-watch.js";
 import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
-import { SecurityEventListInputSchema, SecurityEventSchema } from "./security-events.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -161,20 +154,6 @@ const threadSendInput = threadTarget
   });
 
 export const appContract = {
-  analytics: { screen: oc.input(AnalyticsScreenInput).output(z.object({ ok: z.literal(true) })) },
-  aiConsent: {
-    status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
-    allow: oc
-      .input(
-        z.object({
-          scope: z.string(),
-          version: z.string(),
-          keys: z.array(z.string()).min(1).max(200),
-        }),
-      )
-      .output(AiConsentStatusSchema),
-    revoke: oc.input(z.object({ key: z.string().nullable() })).output(AiConsentStatusSchema),
-  },
   health: oc.output(z.object({ ok: z.literal(true), version: z.string() })),
   me: oc.output(MeSchema),
   preferences: {
@@ -199,20 +178,6 @@ export const appContract = {
   bootstrap: oc.input(z.object({ botId: Id.optional() })).output(AppBootstrapSchema),
   deployment: {
     get: oc.output(DeploymentSettingsSchema),
-  },
-  /** Deployment-owner view of the append-only security event log, newest first. */
-  security: {
-    events: oc.input(SecurityEventListInputSchema).output(z.array(SecurityEventSchema)),
-  },
-  /**
-   * Deployment-owner product updates. When the Compose updater sidecar is reachable, these proxy
-   * to its `/state` `/plan` `/apply` contract. Rollback stays on the sidecar for ops only and is
-   * not exposed here. Never git-fetch from the API process.
-   */
-  updater: {
-    status: oc.output(ServerUpdateStatusSchema),
-    check: oc.input(ServerUpdateRequestSchema).output(ServerUpdateCheckSchema),
-    apply: oc.input(ServerUpdateRequestSchema).output(ServerUpdateRunSchema),
   },
   models: {
     list: oc.output(z.array(ModelCatalogEntrySchema)),
@@ -873,13 +838,6 @@ export const appContract = {
   },
   export: {
     bot: oc.input(botId).output(ExportManifestSchema),
-  },
-  notifications: {
-    registerPush: oc
-      // No whitespace: the token store keeps the registering session on the next line.
-      .input(z.object({ token: z.string().min(8).max(512).regex(/^\S+$/) }))
-      .output(z.object({ ok: z.literal(true) })),
-    unregisterPush: oc.output(z.object({ ok: z.literal(true) })),
   },
   search: {
     query: oc.input(z.object({ q: z.string().max(200) })).output(SearchQueryOutputSchema),

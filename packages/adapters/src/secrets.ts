@@ -14,8 +14,6 @@ import type {
   SecretRecord,
   SecretStore,
 } from "@rakazo/adapter-kit";
-import { SecretStoreUnavailableError } from "@rakazo/adapter-kit";
-import { getLogger } from "@rakazo/logging";
 import { SecretChanges } from "./secret-changes.js";
 
 const VERSION_PREFIX = "v2:";
@@ -64,8 +62,6 @@ function openSealed(sealed: SealedSecret, key: Buffer, recordId: string): string
 }
 
 export class EncryptedSecretStore extends SecretChanges implements SecretStore {
-  private warnedRemoteRef = false;
-
   constructor(private readonly encryptionKey: string) {
     super();
   }
@@ -118,15 +114,6 @@ export class EncryptedSecretStore extends SecretChanges implements SecretStore {
   async load(ciphertext: string, context: SecretContext): Promise<string> {
     const recordId = typeof context === "string" ? context : context.recordId;
     if (typeof context !== "string") context.signal?.throwIfAborted();
-    if (ciphertext.startsWith("infisical:")) {
-      const message =
-        "Infisical secret references require SECRET_STORE=infisical; run the reverse migration before switching to encrypted storage (docs/infisical-secrets.md)";
-      if (!this.warnedRemoteRef) {
-        this.warnedRemoteRef = true;
-        getLogger().warn(message);
-      }
-      throw new SecretStoreUnavailableError(undefined, message);
-    }
     if (!ciphertext.startsWith(VERSION_PREFIX)) return this.loadLegacy(ciphertext);
     const sealed = parseSealed(ciphertext);
     const key = await keyFromAsync(this.encryptionKey, sealed.salt);

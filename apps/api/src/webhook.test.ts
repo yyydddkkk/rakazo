@@ -1,14 +1,8 @@
 import { createHash, createHmac } from "node:crypto";
 import { SecretStoreUnavailableError } from "@rakazo/adapter-kit";
-import {
-  ComposedSecretStore,
-  EncryptedSecretStore,
-  GithubWebhookEmulator,
-  InfisicalSecretStore,
-} from "@rakazo/adapters";
+import { EncryptedSecretStore, GithubWebhookEmulator } from "@rakazo/adapters";
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
-import { infisicalFake } from "../../../packages/adapters/src/secret-store-fake.js";
 import { readBoundedBody } from "./http-body.js";
 import {
   formatGithubEventPrompt,
@@ -938,64 +932,6 @@ describe("webhook secret decryption", () => {
       );
     }
     expect(load).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("webhook external rotation", () => {
-  it("observes external rotation on reuse after the webhook cache TTL", async () => {
-    vi.useFakeTimers();
-    const fake = infisicalFake();
-    const store = new ComposedSecretStore(
-      new EncryptedSecretStore("fake-key"),
-      new InfisicalSecretStore({ ...fake.options, cacheTtlMs: 100 }),
-    );
-    await store.start();
-    const record = await store.put("initial", {
-      operationId: "test",
-      traceId: "test",
-      spaceId: "ws-1",
-      userId: "user-1",
-      signal: new AbortController().signal,
-    });
-    const deps = createDeps({
-      secret: {
-        id: record.id,
-        ciphertext: record.ref,
-        kind: WEBHOOK_SECRET_KIND,
-        userId: "user-1",
-        spaceId: "ws-1",
-      },
-      bot: {
-        id: "bot-1",
-        spaceId: "ws-1",
-        userId: "user-1",
-        webhookSecretId: record.id,
-        thread: { id: "thread-1" },
-      },
-    });
-    deps.secrets = store;
-    const cache = new Map();
-    try {
-      expect((await loadWebhookTarget(deps, cache, "bot-1"))?.expected).toBe("initial");
-      const changed = vi.fn();
-      store.onChange(changed);
-      fake.values.set(record.ref.split(":").at(-1)!, "rotated");
-      await vi.advanceTimersByTimeAsync(100);
-      expect(cache.size).toBe(1);
-      expect(changed).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect((await loadWebhookTarget(deps, cache, "bot-1"))?.expected).toBe("rotated");
-      expect(changed).toHaveBeenCalledExactlyOnceWith(record.ref);
-      changed.mockClear();
-      fake.values.set(record.ref.split(":").at(-1)!, "rotated-again");
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect((await loadWebhookTarget(deps, cache, "bot-1"))?.expected).toBe("rotated-again");
-      expect(changed).toHaveBeenCalledExactlyOnceWith(record.ref);
-      expect((await loadWebhookTarget(deps, cache, "bot-1"))?.expected).toBe("rotated-again");
-    } finally {
-      await store.close();
-      vi.useRealTimers();
-    }
   });
 });
 

@@ -1,8 +1,3 @@
-import type { EmulatedGithubRelease } from "../release-watch.js";
-import {
-  DEFAULT_RAKAZO_EMULATED_RELEASES,
-  RELEASE_WATCH_GITHUB_TOOL_NAMES,
-} from "../release-watch.js";
 import type {
   ComposioClient,
   ComposioSession,
@@ -15,6 +10,11 @@ import type {
   ToolRouterCreateSessionConfig,
   ToolRouterToolkitsOptions,
 } from "./composio-types.js";
+import type { EmulatedGithubRelease } from "./github-releases.js";
+import {
+  DEFAULT_RAKAZO_EMULATED_RELEASES,
+  RELEASE_WATCH_GITHUB_TOOL_NAMES,
+} from "./github-releases.js";
 
 type SessionTools = Awaited<ReturnType<ComposioSession["tools"]>>;
 type ToolkitPage = Awaited<ReturnType<ComposioSession["toolkits"]>>;

@@ -18,11 +18,15 @@ overwrite an existing `.env` without an explicit backup and operator consent.**
 | `ENCRYPTION_KEY` | `openssl rand -hex 32` | Encrypts stored credentials at rest |
 | `SCREEN_PROXY_SECRET` | `openssl rand -hex 32` | Signs short-lived `/novnc/*` screen capabilities |
 | `SANDBOX_SUPERVISOR_TOKEN` | `openssl rand -hex 32` | API ↔ sandbox supervisor auth |
+| `RAKAZO_ADMIN_EMAIL` | Template account address; replace before first startup | Local owner account |
+| `RAKAZO_ADMIN_PASSWORD` | `openssl rand -hex 32` | Initial owner password |
 
 Re-runs **preserve** an existing `.env` (they do not rotate secrets); they only append
 `POSTGRES_APP_PASSWORD` when an older `.env` lacks it. Empty
 required keys still fail closed at Compose validate time
 (`${VAR:?Set … in .env}`).
+
+The admin email and password bootstrap the single local owner before first startup. Installer reruns preserve the existing environment. Editing these settings does not reset an existing account or create a second owner; retain the original account credentials and use the supported password-change flow.
 
 Manual generation (same shapes the installer uses):
 
@@ -58,8 +62,6 @@ secret into multiple keys):
 - `ENCRYPTION_KEY`
 - `SCREEN_PROXY_SECRET`
 - `SANDBOX_SUPERVISOR_TOKEN`
-- `RAKAZO_UPDATER_TOKEN` (only if the updater profile is enabled; ≥32 chars,
-  also distinct from the four above)
 
 Rotating `ENCRYPTION_KEY` after credentials were stored makes old ciphertext
 unreadable. Keep the original key for an existing deployment unless you
@@ -80,15 +82,9 @@ From `.env.images.example` (images installer). Leave blank if unused:
 | --- | --- |
 | `OPENROUTER_API_KEY` | Deployment-wide OpenRouter models |
 | `TYPESAFE_API_KEY` | Optional TypeSafe Jev Auto Review verifier (`RAKAZO_AUTO_REVIEW_PROVIDER=jev`) |
-| `COMPOSIO_API_KEY` | Composio managed catalog |
-| `E2B_API_KEY` / `DAYTONA_API_KEY` / `BOAT_API_KEY` | Remote computers when `SANDBOX_PROVIDER` is not `docker` |
 | `SMTP_URL` / `EMAIL_FROM` | Password-recovery email |
-| `EXPO_ACCESS_TOKEN` | Mobile push when the Expo project enables enhanced push security |
-| Messaging tokens (Slack, Telegram, …) | Only if you enable those surfaces |
 
-Blank optional keys are normal for a minimal published-images boot. Pipedream
-Connect keys appear only in source/Compose `.env.example`, not the images
-example.
+Blank optional keys are normal for a minimal boot. Lark credentials are needed only when its messaging transport is enabled.
 
 ## Operator workflow
 
@@ -117,8 +113,3 @@ later" item.
 ## Related
 
 - [Self-hosting](./self-host.md)
-
-## Optional credential storage
-
-Stored credentials can use self-hosted Infisical while short-lived secrets stay
-encrypted in Postgres. See [Infisical setup, migration, and rollback](./infisical-secrets.md).

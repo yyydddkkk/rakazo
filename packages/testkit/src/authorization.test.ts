@@ -1,15 +1,10 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  ExpoPushProvider,
-  FakeComposioClient,
-  FakeConnectorProvider,
-  loadPushToken,
-} from "@rakazo/adapters";
+import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
 import type { appContract, SpaceNavigation } from "@rakazo/contracts";
-import { pushSessionExpiresAt, runAsSystem } from "@rakazo/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { runAsSystem } from "@rakazo/db";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import type { BotIntroHarness } from "./discard-bot-intro.js";
 import { discardBotIntroFromCreate } from "./discard-bot-intro.js";
@@ -75,9 +70,6 @@ describeWithDatabase("API authorization and resource isolation", () => {
     const calls = exhaustiveProtectedCalls([
       ["me"],
       ["deployment/get"],
-      ["updater/status"],
-      ["updater/check", {}],
-      ["updater/apply", {}],
       ["models/list"],
       ["models/credentials"],
       ["models/connect", { provider: "test", apiKey: "not-a-real-key" }],
@@ -187,7 +179,6 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["usage/list"],
       ["usage/summary"],
       ["export/bot", { botId: "missing-bot" }],
-      ["notifications/registerPush", { token: "ExponentPushToken[not-real]" }],
       ["search/query", { q: "anything" }],
     ]);
 
@@ -476,35 +467,11 @@ describeWithDatabase("API authorization and resource isolation", () => {
     ).not.toBeNull();
   });
 
-  it("hands a device's push token to the account that registers it last", async () => {
-    const first = await signup(app, `push-first-${stamp}@rakazo.test`, "Push First");
-    const second = await signup(app, `push-second-${stamp}@rakazo.test`, "Push Second");
-    const firstUser = (await rpc<Actor>(app, first, "me")).userId;
-    const secondUser = (await rpc<Actor>(app, second, "me")).userId;
-    const device = "ExponentPushToken[shared-device]";
-
-    await rpc(app, first, "notifications/registerPush", { token: device });
-    // Another device, or unregistering, only ever touches the caller's own token.
-    await rpc(app, second, "notifications/registerPush", { token: "ExponentPushToken[other]" });
-    await rpc(app, second, "notifications/unregisterPush");
-    await expect(loadPushToken(dataDir, firstUser)).resolves.toBe(device);
-
-    await rpc(app, second, "notifications/registerPush", { token: device });
-    await expect(loadPushToken(dataDir, secondUser)).resolves.toBe(device);
-    await expect(loadPushToken(dataDir, firstUser)).resolves.toBeUndefined();
-    const multiline = await raw(app, first, "notifications/registerPush", {
-      token: `${device}\nsession`,
-    });
-    expect(multiline.status).toBe(400);
-  });
-
-  // On the wire, the POST older phone apps send without a body arrives as an empty one.
-  const emptyBody = { method: "POST", body: "" };
-
-  it("ends the session when an older phone app signs out with an empty body", async () => {
+  it("ends the session when signing out with an empty body", async () => {
     const phone = await phoneSession(app, `phone-sign-out-${stamp}@rakazo.test`);
     const signedOut = await app.request("/api/auth/sign-out", {
-      ...emptyBody,
+      method: "POST",
+      body: "",
       headers: { ...phone.headers, "content-type": "application/json", "content-length": "0" },
     });
     expect(signedOut.status).toBe(200);
@@ -649,83 +616,6 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(replaced).not.toBe(signedIn);
     expect(await me(replaced)).toBe(200);
     expect(await me(signedIn)).toBe(401);
-  });
-
-  it("drops a push token when the session that registered it is revoked", async () => {
-    const email = `push-sessions-${stamp}@rakazo.test`;
-    const phone = await signup(app, email, "Push Sessions");
-    const userId = (await rpc<Actor>(app, phone, "me")).userId;
-    const token = "ExponentPushToken[phone]";
-    await rpc(app, phone, "notifications/registerPush", { token });
-
-    // Signing out or revoking other sessions elsewhere keeps the phone's token.
-    await authPost(app, await signin(app, email), "/sign-out");
-    await authPost(app, phone, "/revoke-other-sessions");
-    await expect(loadPushToken(dataDir, userId)).resolves.toBe(token);
-
-    await authPost(app, await signin(app, email), "/revoke-other-sessions");
-    await expect(loadPushToken(dataDir, userId)).resolves.toBeUndefined();
-
-    const relogged = await signin(app, email);
-    await rpc(app, relogged, "notifications/registerPush", { token });
-    await authPost(app, await signin(app, email), "/change-password", {
-      currentPassword: "password12",
-      newPassword: "password34",
-      revokeOtherSessions: true,
-    });
-    await expect(loadPushToken(dataDir, userId)).resolves.toBeUndefined();
-
-    // Changing the password on the phone itself replaces its session; the token follows it.
-    const samePhone = await signin(app, email, "password34");
-    await rpc(app, samePhone, "notifications/registerPush", { token });
-    await authPost(app, samePhone, "/change-password", {
-      currentPassword: "password34",
-      newPassword: "password56",
-      revokeOtherSessions: true,
-    });
-    await expect(loadPushToken(dataDir, userId)).resolves.toBe(token);
-    await authPost(app, await signin(app, email, "password56"), "/revoke-other-sessions");
-    await expect(loadPushToken(dataDir, userId)).resolves.toBeUndefined();
-
-    const signedIn = await signin(app, email, "password56");
-    await rpc(app, signedIn, "notifications/registerPush", { token });
-    await authPost(app, signedIn, "/revoke-sessions");
-    await expect(loadPushToken(dataDir, userId)).resolves.toBeUndefined();
-  });
-
-  it("does not deliver a push token after its session expires without a request", async () => {
-    const email = `push-expired-${stamp}@rakazo.test`;
-    const phone = await signup(app, email, "Push Expired");
-    const userId = (await rpc<Actor>(app, phone, "me")).userId;
-    const token = "ExponentPushToken[expired-session]";
-    await rpc(app, phone, "notifications/registerPush", { token });
-    await handles.prisma.session.updateMany({
-      where: { userId },
-      data: { expiresAt: new Date(Date.now() - 60_000) },
-    });
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    try {
-      const push = new ExpoPushProvider(dataDir, {
-        sessionExpiresAt: (sessionId) => pushSessionExpiresAt(handles.prisma, sessionId),
-      });
-      await expect(
-        push.deliver(
-          { kind: "completion", title: "done", body: "secret", botId: "b", threadId: "t" },
-          {
-            operationId: "n",
-            traceId: "n",
-            spaceId: "w",
-            userId,
-            signal: new AbortController().signal,
-          },
-        ),
-      ).resolves.toBe("undeliverable");
-      expect(fetchMock).not.toHaveBeenCalled();
-      await expect(loadPushToken(dataDir, userId)).resolves.toBeUndefined();
-    } finally {
-      vi.unstubAllGlobals();
-    }
   });
 
   it("keeps approval rules private to each account", async () => {
@@ -1127,7 +1017,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(await handles.prisma.user.findUnique({ where: { email } })).not.toBeNull();
   });
 
-  it("restricts deployment and updater access to the deployment owner", async () => {
+  it("restricts deployment access to the deployment owner", async () => {
     const owner = await signup(app, `deployment-owner-${stamp}@rakazo.test`, "Deployment Owner");
     const other = await signup(app, `deployment-other-${stamp}@rakazo.test`, "Deployment Other");
     const ownerActor = await rpc<Actor>(app, owner, "me");
@@ -1139,9 +1029,6 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(otherActor.userId).not.toBe(ownerActor.userId);
     await rpc(app, owner, "deployment/get");
     await expectDenied(app, other, "deployment/get", {});
-    await expectForbidden(app, other, "updater/status", {});
-    await expectForbidden(app, other, "updater/check", {});
-    await expectForbidden(app, other, "updater/apply", {});
   });
 });
 
@@ -1229,26 +1116,6 @@ async function phoneSession(app: App, email: string) {
   return { headers, me, cookie, userId: user.id, token };
 }
 
-async function signin(app: App, email: string, password = "password12") {
-  return sessionCookieHeader(await authPost(app, "", "/sign-in/email", { email, password }));
-}
-
-async function authPost(app: App, cookie: string, path: string, body: unknown = {}) {
-  const response = await app.request(`/api/auth${path}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(cookie ? { cookie } : {}),
-      origin: "http://127.0.0.1:5173",
-    },
-    body: JSON.stringify(body),
-  });
-  if (response.status >= 400) {
-    throw new Error(`${path} failed ${response.status}: ${await response.text()}`);
-  }
-  return response;
-}
-
 async function raw(
   app: App,
   cookie: string,
@@ -1300,13 +1167,6 @@ async function expectDenied(
   }
   expect(response.status, procedure).toBeGreaterThanOrEqual(400);
 }
-
-async function expectForbidden(app: App, cookie: string, procedure: string, body: unknown) {
-  const response = await raw(app, cookie, procedure, body);
-  expect(response.status, procedure).toBe(403);
-  expect(await response.text(), procedure).toMatch(/forbidden/i);
-}
-
 interface Actor {
   userId: string;
   spaceId: string;
