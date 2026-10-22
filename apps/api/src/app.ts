@@ -3,7 +3,6 @@ import { RPCHandler } from "@orpc/server/fetch";
 import type {
   AgentContextStrategy,
   AgentRuntime,
-  BillingProvider,
   ConnectorProvider,
   JobPublisher,
   ManagedConnectorProvider,
@@ -69,9 +68,7 @@ import {
   ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceMemoryProviderResolver,
-  StripeBillingProvider,
   sandboxProviderOptionsFromEnv,
-  stripeBillingConfigFromEnv,
   toTeamChatInbound,
   withSecretPersistence,
 } from "@rakazo/adapters";
@@ -112,8 +109,6 @@ import { MarkdownMemoryStore } from "@rakazo/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { storeInboundAttachment } from "./artifacts.js";
-import { createBillingService } from "./billing.js";
-import { mountBillingRoutes } from "./billing-webhook.js";
 import { clientBuildMiddleware, readDeployedWebBuild } from "./client-build.js";
 import {
   clientIpMiddleware,
@@ -185,7 +180,6 @@ type CreateAppOverrides = Partial<AppEnv> & {
   messaging?: MessagingSurface;
   email?: TransactionalEmailProvider;
   notifications?: NotificationProvider;
-  billing?: BillingProvider;
   remoteConnectors?: RemoteConnectorDependencies;
   logger?: Logger;
   runtime?: AgentRuntime;
@@ -203,7 +197,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     messaging: messagingOverride,
     email: emailOverride,
     notifications: notificationsOverride,
-    billing: billingOverride,
     remoteConnectors,
     logger: loggerOverride,
     runtime: runtimeOverride,
@@ -392,12 +385,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     (env.smtpUrl
       ? new SmtpEmailProvider({ url: env.smtpUrl, from: env.emailFrom ?? "" })
       : localEmailEmulator);
-  const stripeBilling = stripeBillingConfigFromEnv(env);
-  const billingProvider: BillingProvider | undefined =
-    billingOverride ?? (stripeBilling ? new StripeBillingProvider(stripeBilling) : undefined);
-  const billing = billingProvider
-    ? createBillingService({ prisma, provider: billingProvider, webOrigin: env.webOrigin })
-    : undefined;
   const installed = new InstalledConnectorProvider(
     prisma,
     secrets,
@@ -456,8 +443,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     },
     onEmailError: (error) => getLogger().error("transactional email delivery failed", error),
     beforeDeleteUser: async (userId) => {
-      // First, so a provider failure aborts deletion before anything is destroyed.
-      await billing?.cancelForDeletedUser(userId);
       const bots = await prisma.bot.findMany({
         where: { userId },
         select: { id: true, userId: true, spaceId: true, name: true, archivedAt: true },
@@ -619,7 +604,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     remoteConnectors,
     artifacts,
     dataDir: env.dataDir,
-    billing,
     messaging: {
       enabled: Boolean(messaging),
       providers: messaging?.platforms().map((platform) => platform.provider) ?? [],
@@ -682,7 +666,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       resetUrl:
         env.passwordAuth !== false && email ? new URL("/reset-password", env.webOrigin).href : null,
       emailCode: auth.emailCodeSignIn,
-      billing: Boolean(billing),
       passkeyRpId: auth.passkeyRpId,
     } satisfies AuthCapabilities);
   });
@@ -776,14 +759,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     return actor;
   });
   mountWebhookHttpRoutes(app, { prisma, secrets, events, jobs });
-  if (billing && billingProvider) {
-    mountBillingRoutes(app, {
-      billing,
-      provider: billingProvider,
-      webOrigin: env.webOrigin,
-      authenticate: sessionActor,
-    });
-  }
   // Shared with stop so a shutdown during retry delays does not restart polling.
   let messagingStopped = false;
   let clearMessagingRetryDelay: (() => void) | undefined;
@@ -1060,7 +1035,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         pipedream: Boolean(pipedream),
         messaging: Boolean(messaging),
         email: email?.describe().id ?? null,
-        billing: billingProvider?.describe().id ?? null,
         jobs: jobKind,
         realtime: realtime.describe().id,
         secrets: secrets.describe(),

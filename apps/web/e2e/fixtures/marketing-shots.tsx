@@ -232,7 +232,6 @@ const subscriptionMe: Me = {
   hostCredentialSource: null,
   sandboxProvider: "docker",
   avatarStyle: "robot",
-  billingEnabled: false,
 };
 
 const subscriptionCatalog: ModelCatalogEntry[] = [

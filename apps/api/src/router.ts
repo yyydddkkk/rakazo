@@ -271,7 +271,6 @@ import {
   listArtifactVersions,
   listSpaceArtifacts,
 } from "./artifacts.js";
-import type { BillingService } from "./billing.js";
 import {
   executionBlocksUserTakeover,
   resolveBusyBotName,
@@ -697,8 +696,6 @@ export interface RouterDeps {
   dataDir: string;
   /** Present when the external messaging surface is enabled. */
   messaging?: { enabled: boolean; providers: string[]; openSignup: boolean };
-  /** Present only when the deployment bills; self-hosted installs leave it unset. */
-  billing?: BillingService;
   env: {
     ticketBoardEnabled?: boolean;
     phoneCallsEnabled?: boolean;
@@ -1095,17 +1092,6 @@ export function createRouter(deps: RouterDeps) {
     },
     health: os.health.handler(async () => ({ ok: true as const, version: "0.1.0" })),
     me: authed.me.handler(async ({ context }): Promise<Me> => meDto(deps, context.actor)),
-    billing: {
-      status: authed.billing.status.handler(async ({ context }) =>
-        requireBilling(deps).status(context.actor),
-      ),
-      checkout: authed.billing.checkout.handler(async ({ context }) =>
-        requireBilling(deps).checkout(context.actor),
-      ),
-      portal: authed.billing.portal.handler(async ({ context }) =>
-        requireBilling(deps).portal(context.actor),
-      ),
-    },
     preferences: {
       update: authed.preferences.update.handler(async ({ context, input }): Promise<Me> => {
         await deps.prisma.user.update({
@@ -7045,13 +7031,7 @@ async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
     sandboxProvider: deps.env.sandboxProvider,
     avatarStyle: user.avatarStyle === "robot" ? "robot" : "organic",
     timezone: user.timezone ?? null,
-    billingEnabled: Boolean(deps.billing) && !actor.isDeploymentOwner,
   };
-}
-
-function requireBilling(deps: RouterDeps): BillingService {
-  if (!deps.billing) throw new ORPCError("NOT_FOUND", { message: "Billing is not enabled" });
-  return deps.billing;
 }
 
 async function modelSetup(deps: RouterDeps, actor: Actor) {

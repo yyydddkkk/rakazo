@@ -77,7 +77,6 @@ vi.mock("../lib/rpc", () => ({
     memory: { providerConfig: () => providerConfig(spaceId) },
   }),
 }));
-vi.mock("./BillingSettingsPanel", () => ({ BillingSettingsPanel: () => null }));
 vi.mock("./MemorySettingsOverlay", () => ({
   MemorySettingsOverlay: ({ config }: { config: unknown }) => {
     memoryConfigs.push(config);

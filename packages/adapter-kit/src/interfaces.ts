@@ -10,9 +10,6 @@ import type {
   AutoReviewResult,
   BackgroundJob,
   BackgroundJobHandlers,
-  BillingCheckoutRequest,
-  BillingPrice,
-  BillingSubscriptionSnapshot,
   BrowserActRequest,
   BrowserActResult,
   BrowserCapabilities,
@@ -394,25 +391,6 @@ export interface TransactionalEmailProvider {
   send(message: TransactionalEmail): Promise<void>;
   /** Wait for accepted in-flight deliveries before a graceful shutdown completes. */
   drain?(): Promise<void>;
-}
-
-/**
- * Seat-based subscription billing. Product code owns access rules; adapters own the
- * vendor API. Sync is pull-based: webhooks only say which customer changed.
- */
-export interface BillingProvider {
-  describe(): AdapterDescriptor<{ trials: boolean; portal: boolean }>;
-  getPrice(): Promise<BillingPrice>;
-  createCustomer(input: { email: string; organizationId: string }): Promise<{ customerId: string }>;
-  createCheckout(input: BillingCheckoutRequest): Promise<{ url: string }>;
-  createPortal(input: { customerId: string; returnUrl: string }): Promise<{ url: string }>;
-  /** Current subscription for the customer, preferring one that grants access. */
-  getCustomerSubscription(customerId: string): Promise<BillingSubscriptionSnapshot | null>;
-  /** Sets seats on the customer's subscription; a no-op when none can still take updates. */
-  updateSeats(customerId: string, seats: number): Promise<void>;
-  cancelCustomerSubscriptions(customerId: string): Promise<void>;
-  /** Verifies the signature. `null` means the request is not authentic. */
-  parseWebhook(rawBody: string, headers: Headers): { customerId: string } | "ignored" | null;
 }
 
 export interface ExecutionRunner {

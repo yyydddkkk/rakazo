@@ -30,7 +30,6 @@ it.each([
   { passwordReset: false, resetUrl: null, passwordAuth: false },
   { passwordReset: "false", resetUrl: null },
   { passwordReset: false, resetUrl: "invalid" },
-  { passwordReset: false, resetUrl: null, billing: "false" },
   { passwordAuth: true },
   { ...capability, sso: {} },
   { ...capability, passwordAuth: "false" },
@@ -52,14 +51,13 @@ it("rejects HTTP errors", async () => {
 it("accepts old capabilities from the server", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => Response.json({ passwordReset: false, resetUrl: null, billing: false })),
+    vi.fn(async () => Response.json({ passwordReset: false, resetUrl: null })),
   );
   await expect(fetchAuthCapabilities()).resolves.toEqual({
     passwordAuth: true,
     sso: null,
     passwordReset: false,
     resetUrl: null,
-    billing: false,
   });
 });
 

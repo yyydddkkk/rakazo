@@ -38,12 +38,6 @@ if (initialTarget) {
   primedBootstrap = { botId, promise };
 }
 
-/** The speculative first-load bootstrap, left in place for the shell to take. */
-export function peekInitialBootstrap(): Promise<AppBootstrap> | undefined {
-  // Only the speculative first load may be shared with the subscription gate.
-  return primedBootstrap?.spaceId === undefined ? primedBootstrap?.promise : undefined;
-}
-
 export function takeInitialBootstrap(botId?: string) {
   const primed = primedBootstrap;
   primedBootstrap = null;

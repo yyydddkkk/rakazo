@@ -384,12 +384,6 @@ This queries the Have I Been Pwned range API, sending only the first five charac
 password's SHA-1 hash. It is off by default so the server makes no outside request. If the service
 is unreachable or takes longer than three seconds, the password is accepted and the failure logged.
 
-### Billing
-
-Billing stays off, with no paywall, unless `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and
-`STRIPE_PRICE_ID` are all set (see `.env.example`). Setting only some of them stops the API at
-startup.
-
 ### Pi tracing
 
 Set `OTEL_EXPORTER_OTLP_ENDPOINT` on the worker to enable optional OpenTelemetry traces

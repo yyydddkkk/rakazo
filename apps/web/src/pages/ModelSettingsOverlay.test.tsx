@@ -178,7 +178,6 @@ function account(provider: string, modelId: string) {
     hostCredentialSource: null,
     sandboxProvider: "docker",
     avatarStyle: "robot" as const,
-    billingEnabled: false,
     ticketBoardEnabled: false,
     phoneCallsEnabled: false,
   };

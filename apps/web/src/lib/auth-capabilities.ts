@@ -10,7 +10,7 @@ const MAX_RESPONSE_BYTES = 64 * 1024;
 let capabilitiesRequest: Promise<AuthCapabilities> | undefined;
 
 export function fetchAuthCapabilities(): Promise<AuthCapabilities> {
-  // Auth can briefly remount during session refresh; the gate uses the same deployment lookup.
+  // Auth can briefly remount during session refresh; share the deployment lookup.
   capabilitiesRequest ??= loadAuthCapabilities().then(
     (capabilities) => {
       if (capabilities.sso && capabilities.sso.availability !== "available") {

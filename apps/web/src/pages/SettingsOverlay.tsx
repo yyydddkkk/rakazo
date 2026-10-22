@@ -14,7 +14,6 @@ import {
   ChevronRight,
   CloudDownload,
   Cpu,
-  CreditCard,
   Gauge,
   Monitor,
   Settings,
@@ -36,7 +35,6 @@ import {
   UpdatesSettingsPanel,
   UsageSettingsPanel,
 } from "./AccountSettingsOverlay";
-import { BillingSettingsPanel } from "./BillingSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
@@ -49,7 +47,6 @@ export type SettingsSection =
   | "confirmations"
   | "usage"
   | "computer"
-  | "billing"
   | "updates";
 
 /** Sections whose settings belong to a space; only these show the space picker. */
@@ -81,7 +78,6 @@ export function SettingsOverlay({
   timezone,
   onTimezoneChange,
   isDeploymentOwner = false,
-  billingEnabled = false,
   sandboxProvider,
   onSandboxProviderChange,
   messagingEnabled = false,
@@ -112,7 +108,6 @@ export function SettingsOverlay({
   timezone: string | null;
   onTimezoneChange: (timezone: string) => Promise<void>;
   isDeploymentOwner?: boolean;
-  billingEnabled?: boolean;
   sandboxProvider?: string | null;
   onSandboxProviderChange?: (sandboxProvider: string) => void;
   messagingEnabled?: boolean;
@@ -196,10 +191,6 @@ export function SettingsOverlay({
   }, [showComputer, section]);
 
   useEffect(() => {
-    if (!billingEnabled && section === "billing") setSection("general");
-  }, [billingEnabled, section]);
-
-  useEffect(() => {
     if (!showUpdates && !serverUpdate.loading && section === "updates") setSection("general");
   }, [showUpdates, serverUpdate.loading, section]);
 
@@ -223,7 +214,6 @@ export function SettingsOverlay({
     { id: "confirmations", label: t`Confirmations`, icon: ShieldCheck },
     { id: "usage", label: t`Usage`, icon: Gauge },
     ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
-    ...(billingEnabled ? [{ id: "billing" as const, label: t`Billing`, icon: CreditCard }] : []),
     ...(showUpdates ? [{ id: "updates" as const, label: t`Updates`, icon: CloudDownload }] : []),
   ];
 
@@ -255,7 +245,7 @@ export function SettingsOverlay({
       nav.removeEventListener("scroll", measure);
       observer?.disconnect();
     };
-  }, [section, showComputer, billingEnabled, showUpdates, i18n.locale]);
+  }, [section, showComputer, showUpdates, i18n.locale]);
 
   function scrollSections(direction: number) {
     const nav = navRef.current;
@@ -441,7 +431,6 @@ export function SettingsOverlay({
                     onRecoveryDismissed={releaseComputerRecovery}
                   />
                 ) : null}
-                {section === "billing" && billingEnabled ? <BillingSettingsPanel /> : null}
                 {section === "updates" && showUpdates ? (
                   <UpdatesSettingsPanel serverUpdate={serverUpdate} />
                 ) : null}

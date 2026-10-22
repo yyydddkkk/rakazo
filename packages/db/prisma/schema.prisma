@@ -150,6 +150,7 @@ model Organization {
   @@map("organization")
 }
 
+/// Unused since slim/web-only; drop in a later migration.
 model BillingAccount {
   organizationId      String       @id
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

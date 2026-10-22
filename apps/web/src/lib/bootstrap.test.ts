@@ -141,28 +141,15 @@ describe("primed space isolation", () => {
     expect(getTicketBoardEnabled()).toBe(false);
   });
 
-  it("does not expose a switch bootstrap to the subscription gate", async () => {
-    vi.stubGlobal("window", { location: { pathname: "/sign-in" } });
-    vi.mocked(rpc.bootstrap).mockResolvedValue({ me: {} } as Awaited<
-      ReturnType<typeof rpc.bootstrap>
-    >);
-    const { primeSpaceBootstrap, peekInitialBootstrap } = await import("./bootstrap");
-    await primeSpaceBootstrap("space-b");
-    expect(peekInitialBootstrap()).toBeUndefined();
-  });
-
   it("keeps the first-load speculative bootstrap available without an explicit space", async () => {
     vi.stubGlobal("window", { location: { pathname: "/app" } });
     const initial = { me: { ticketBoardEnabled: true } } as Awaited<
       ReturnType<typeof rpc.bootstrap>
     >;
     vi.mocked(rpc.bootstrap).mockReset().mockResolvedValue(initial);
-    const { peekInitialBootstrap, takeInitialBootstrap, getTicketBoardEnabled } = await import(
-      "./bootstrap"
-    );
-    await expect(peekInitialBootstrap()).resolves.toBe(initial);
-    expect(getTicketBoardEnabled()).toBe(true);
+    const { takeInitialBootstrap, getTicketBoardEnabled } = await import("./bootstrap");
     await expect(takeInitialBootstrap()).resolves.toBe(initial);
+    expect(getTicketBoardEnabled()).toBe(true);
     expect(rpc.bootstrap).toHaveBeenCalledTimes(1);
   });
 });

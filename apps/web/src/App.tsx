@@ -14,7 +14,6 @@ import {
 import { Navigate, Outlet, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { LoadingState } from "./components/ai/primitives";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { SubscriptionGate } from "./components/SubscriptionGate";
 import { authClient } from "./lib/auth";
 import { getTicketBoardEnabled, subscribeTicketBoardEnabled } from "./lib/bootstrap";
 import { identifyMonitoringUser } from "./lib/monitoring";
@@ -165,17 +164,7 @@ function SessionApp() {
               )
             }
           />
-          <Route
-            element={
-              user ? (
-                <SubscriptionGate fallback={<GateFallback />}>
-                  <Outlet />
-                </SubscriptionGate>
-              ) : (
-                <Navigate to="/sign-in" replace />
-              )
-            }
-          >
+          <Route element={user ? <Outlet /> : <Navigate to="/sign-in" replace />}>
             <Route path="/onboarding" element={<OnboardingPage />} />
             <Route path="/app" element={<ShellPage />} />
             <Route path="/app/g/:groupId" element={<ShellPage />} />
@@ -265,14 +254,6 @@ function AppFailed() {
         </div>
       </div>
     </div>
-  );
-}
-
-function GateFallback() {
-  return window.location.pathname.startsWith("/app") ? (
-    <ShellSkeleton />
-  ) : (
-    <div className="h-full bg-background" />
   );
 }
 
