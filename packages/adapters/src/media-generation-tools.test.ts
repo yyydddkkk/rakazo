@@ -59,7 +59,6 @@ describe("bot media tools", () => {
       graphicalToolsAllowed: false,
       groupId: null,
       trigger: "message",
-      semanticMemoryEnabled: false,
       messagingChannelRun: false,
     };
     const names = (extra = {}) =>

@@ -51,9 +51,6 @@ export const BUILTIN_TOOL_NAMES = [
   "cloud_agent_cancel",
   "search_history",
   "read_history",
-  "save_memory",
-  "recall_memory",
-  "forget_memory",
   "task_catalog",
   "scratchpad_list",
   "scratchpad_add",
@@ -104,9 +101,17 @@ export function disabledBuiltinToolSet(names: readonly string[] | undefined): Se
   return disabled;
 }
 
+/** Retired tools. Bots may still list them as disabled, so updates drop them rather than fail. */
+const RETIRED_BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "save_memory",
+  "recall_memory",
+  "forget_memory",
+]);
+
 export const DisabledBuiltinToolsSchema = z
   .array(z.string().trim().min(1).max(64))
   .max(BUILTIN_TOOL_NAMES.length)
+  .transform((names) => names.filter((name) => !RETIRED_BUILTIN_TOOL_NAMES.has(name)))
   .superRefine((names, ctx) => {
     names.forEach((name, index) => {
       if (!isBuiltinToolName(name)) {

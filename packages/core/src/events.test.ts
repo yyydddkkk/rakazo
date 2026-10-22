@@ -654,8 +654,8 @@ describe("trackToolNameStreak", () => {
 
   it("resets the streak when a different tool is called", () => {
     const first = trackToolNameStreak({ name: undefined, count: 0 }, "shell");
-    expect(trackToolNameStreak(first, "recall_memory")).toEqual({
-      name: "recall_memory",
+    expect(trackToolNameStreak(first, "skill_read")).toEqual({
+      name: "skill_read",
       count: 1,
     });
   });

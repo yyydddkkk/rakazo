@@ -9,7 +9,6 @@ import { builtinAgentTools } from "../builtin-tools.js";
 import { selectCloudAgentTools } from "../cloud-agent-tools-select.js";
 import { resolveDeploymentModel } from "../deployment-model.js";
 import type { FleetPrepareDeps } from "../fleet-tools.js";
-import { selectMemoryTools } from "../memory-tools.js";
 import { selectConfiguredModel } from "../model-selection.js";
 import { filterImageReturningComputerTools } from "../model-vision.js";
 import { kickModelCredentialRefresh } from "../pi-oauth.js";
@@ -62,9 +61,6 @@ export function selectBuiltinToolsForRun(options: {
   pageBrowserAllowed?: boolean;
   groupId: string | null;
   trigger: string;
-  semanticMemoryEnabled: boolean;
-  /** The configured provider can forget individual facts. */
-  semanticMemoryForgets?: boolean;
   cloudAgentEnabled?: boolean;
   mediaImagesEnabled?: boolean;
   mediaVideoEnabled?: boolean;
@@ -79,19 +75,15 @@ export function selectBuiltinToolsForRun(options: {
   const disabled = disabledBuiltinToolSet(options.disabledBuiltinTools);
   const fleetToolsAllowed = isOwnerStartedRun(options.trigger, Boolean(options.followUpFromUser));
   return selectCloudAgentTools(
-    selectMemoryTools(
-      filterBuiltinToolsForRun(
-        filterBuiltinToolsForThread(
-          filterPageBrowserTools(
-            filterImageReturningComputerTools(builtinAgentTools, options.graphicalToolsAllowed),
-            options.pageBrowserAllowed ?? options.graphicalToolsAllowed,
-          ),
-          options.groupId,
+    filterBuiltinToolsForRun(
+      filterBuiltinToolsForThread(
+        filterPageBrowserTools(
+          filterImageReturningComputerTools(builtinAgentTools, options.graphicalToolsAllowed),
+          options.pageBrowserAllowed ?? options.graphicalToolsAllowed,
         ),
-        options.trigger,
+        options.groupId,
       ),
-      options.semanticMemoryEnabled,
-      Boolean(options.semanticMemoryForgets),
+      options.trigger,
     ),
     Boolean(options.cloudAgentEnabled),
   ).filter(
@@ -115,15 +107,7 @@ export function selectBuiltinToolsForRun(options: {
       (options.historyRetrievalEnabled ||
         !["search_history", "read_history"].includes(tool.name)) &&
       (!options.messagingChannelRun ||
-        (![
-          "remember",
-          "save_shared_memory",
-          "save_memory",
-          "recall_memory",
-          "forget_memory",
-          "task_catalog",
-          "board_tickets",
-        ].includes(tool.name) &&
+        (!["remember", "save_shared_memory", "task_catalog", "board_tickets"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_") &&
           !tool.name.startsWith("ticket_"))),
   );

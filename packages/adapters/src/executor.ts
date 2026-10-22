@@ -526,7 +526,6 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "request_takeover",
   "run_subagent",
   "task_catalog",
-  "recall_memory",
   "schedule_list",
   "scratchpad_list",
   "board_tickets",
@@ -1653,8 +1652,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             pageBrowserAllowed,
             groupId: thread.groupId,
             trigger: run.trigger,
-            semanticMemoryEnabled: false,
-
             mediaImagesEnabled: Boolean(deps.artifacts && mediaGeneration?.capabilities.images),
             mediaVideoEnabled: Boolean(deps.artifacts && mediaGeneration?.capabilities.video),
             cloudAgentEnabled: cloudAgentsEnabled(cloudAgent, run.spaceId),

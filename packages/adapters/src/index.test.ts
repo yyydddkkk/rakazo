@@ -199,7 +199,6 @@ describe("builtin tools", () => {
       groupId: null,
       trigger: "user",
       cloudAgentEnabled: true,
-      semanticMemoryEnabled: false,
       historyRetrievalEnabled: true,
       messagingChannelRun: false,
     };

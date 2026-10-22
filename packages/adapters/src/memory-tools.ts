@@ -1,21 +1,3 @@
-import type { ConnectorTool } from "@rakazo/adapter-kit";
-
-const SEMANTIC_MEMORY_TOOL_NAMES = new Set(["recall_memory", "save_memory", "forget_memory"]);
-
-/** `forget_memory` is offered only when the provider implements its optional forget verb. */
-export function selectMemoryTools(
-  tools: ConnectorTool[],
-  semanticMemoryConfigured: boolean,
-  semanticMemoryForgets: boolean,
-): ConnectorTool[] {
-  return semanticMemoryConfigured
-    ? tools.filter(
-        (tool) =>
-          tool.name !== "remember" && (semanticMemoryForgets || tool.name !== "forget_memory"),
-      )
-    : tools.filter((tool) => !SEMANTIC_MEMORY_TOOL_NAMES.has(tool.name));
-}
-
 /** Adds a remembered fact to a bot memory document without dropping what it already holds. */
 export function appendMemoryFact(existing: string, fact: string): string {
   const current = existing.trimEnd().replace(/\r\n/g, "\n");

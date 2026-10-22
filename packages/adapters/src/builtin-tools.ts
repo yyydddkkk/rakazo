@@ -30,7 +30,7 @@ function secretAskToolSurface() {
       allowPrivateHttpOrigins
         ? "HTTPS origin, or an HTTP origin on a private LAN host"
         : "HTTPS origin"
-    }, or connectionId for a one-use connector code. Credential names must start with a lowercase letter and use only lowercase letters, digits, hyphens, or underscores (max 64 characters). For a website login the user wants saved, use auth {type:"login"} with the sign-in page's HTTPS origin; the card asks for a username and password, and browser_act fill_secret types them. For a value this bot's shell commands need, use auth {type:"command"} with no origin; it is exported to them as an environment variable named after the credential in upper case with hyphens as underscores (netbird-setup-key becomes $NETBIRD_SETUP_KEY). Existing named credentials are reused unless replace is true. For 2FA, CAPTCHA, passkeys, or anything else that needs the live desktop, call request_takeover instead.`,
+    }, or connectionId for a one-use connector code. Names start with a lowercase letter, then lowercase letters, digits, hyphens or underscores (max 64). To save a website login: auth {type:"login"} with the sign-in page's HTTPS origin; the card asks for username and password, and browser_act fill_secret types them. For a value this bot's shell commands need: auth {type:"command"} with no origin; it is exported as an environment variable named after the credential in upper case with hyphens as underscores (netbird-setup-key -> $NETBIRD_SETUP_KEY). Existing credentials are reused unless replace is true. For 2FA, CAPTCHA, passkeys, or anything needing the live desktop, call request_takeover instead.`,
     inputSchema: {
       oneOf: [
         {
@@ -82,7 +82,7 @@ const scheduleCreateProperties = {
   prompt: {
     type: "string",
     description:
-      "Concrete steps for when the schedule fires: name the connected plugin tools to call (e.g. GITHUB_LIST_RELEASES for owner/repo), what to extract, and how to report. Prefer plugin tools over computer browser or web search for app data.",
+      "What to do when it fires: the connected plugin tools to call (e.g. GITHUB_LIST_RELEASES for owner/repo), what to extract, how to report. Prefer plugin tools over computer browser or web search for app data.",
   },
   timezone: { type: "string", description: "IANA timezone (default UTC)." },
 };
@@ -125,7 +125,7 @@ const scheduleTimingSpecs = {
   watch: {
     type: "object",
     description:
-      'Run only when something changes, checked without a model every everyMinutes (minimum 5, default 15). kind files: paths on your computer. kind command: a shell command run in your folder every interval without a model or per-run approval, equivalent to running the command yourself; its output is compared. kind tool: a read-only connected tool and its args. If nothing changed, the routine does not run. Watch one named thing (a folder, a list, a search), never a whole account. For a list result, set track: e.g. new email matching a search -> the mail search tool with its query, track ["id"]; a Drive folder -> the tool listing that folder\'s files, track ["id", "modifiedTime"]; a ClickUp list -> the tool listing its tasks, track ["id", "date_updated"].',
+      'Run only when something changes, checked without a model every everyMinutes (minimum 5, default 15); if nothing changed, the routine does not run. Watch one named thing (a folder, a list, a search), never a whole account. kind files: paths on your computer. kind command: a shell command run in your folder each interval without a model or per-run approval, equivalent to running it yourself; its output is compared. kind tool: a read-only connected tool and its args. For a list result set track, e.g. new email matching a search -> the mail search tool with its query, track ["id"]; a Drive folder -> the tool listing its files, track ["id", "modifiedTime"].',
     properties: {
       kind: { type: "string", enum: ["files", "command", "tool"] },
       paths: { type: "array", items: { type: "string" } },
@@ -518,7 +518,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "render_plot",
     description:
-      'Render a chart from tabular data as a PNG and attach it to the chat. Backed by Observable Plot: bar, line, area, scatter, histogram, heatmap, box plot, facets, and more via a declarative JSON spec. Call with {"charts": true} FIRST to list every chart type with a complete runnable example spec ({"charts": "<keyword>"} searches), then copy the closest example and substitute your rows and columns. {"help": true} returns the full guide. Pass rows inline as data, or data_path for a .csv/.tsv/.json file in your home.',
+      'Render a chart from tabular data as a PNG and attach it to the chat. Backed by Observable Plot: bar, line, area, scatter, histogram, heatmap, box plot, facets, and more via a declarative JSON spec. Use it for any chart or data visualization. Call {"help": true} before your first chart to read the full guide. Call {"charts": true} to list every chart type with a complete runnable example spec ({"charts": "<keyword>"} searches), then copy the closest example and substitute your rows and columns. Pass rows inline as data, or data_path for a .csv/.tsv/.json file in your home.',
     inputSchema: {
       type: "object",
       properties: {
@@ -789,50 +789,6 @@ export const builtinAgentTools: ConnectorTool[] = [
       required: ["messageId"],
     },
   },
-  // Semantic-memory tools: exposed by selectMemoryTools() only when a
-  // Space memory provider is configured (which hides `remember`), and
-  // forget_memory only when that provider can forget.
-  {
-    name: "save_memory",
-    description:
-      "Store a durable fact in this bot's semantic memory (preferences, decisions, recurring context). Use for anything worth recalling in future conversations.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        content: { type: "string" },
-      },
-      required: ["content"],
-    },
-  },
-  {
-    name: "recall_memory",
-    description: "Semantically search this bot's durable memory for facts relevant to a query.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string" },
-      },
-      required: ["query"],
-    },
-  },
-  {
-    name: "forget_memory",
-    description:
-      "Forget a durable semantic memory by id (from recall citations). Providers without forget support return an error.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        id: { type: "string", description: "Memory id from a prior recall citation." },
-        entity: {
-          type: "string",
-          description:
-            "Optional entity/namespace from the recall citation when the provider scopes deletes.",
-        },
-        reason: { type: "string", description: "Optional reason recorded with the forget." },
-      },
-      required: ["id"],
-    },
-  },
   {
     name: "task_catalog",
     description:
@@ -988,7 +944,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "schedule_create",
     description:
-      'Create a reminder or recurring job for this bot. Use for "remind me in 10 minutes" or "every morning send a joke". Repeats: cron or every/unit (min 1 minute). One-shot: runAt, delayMinutes, or delaySeconds.',
+      "Create a reminder or recurring job for this bot. Repeats: cron or every/unit (min 1 minute). One-shot: runAt, delayMinutes, or delaySeconds.",
     inputSchema: scheduleCreateInputSchema,
   },
   {
@@ -1074,7 +1030,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "run_subagent",
     description:
-      "Run a short-lived helper inside this turn only. It is not a bot: no list entry, no thread, no computer of its own, and it disappears when this turn ends. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
+      "Run a short-lived helper inside this turn only. It is not a bot: no list entry, no thread, no computer of its own, and it disappears when this turn ends. Use it for parallel work you will summarize here. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1116,7 +1072,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "spawn_bot",
     description:
-      "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
+      "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Call spawn_bot once; creating the bot is the whole action, so stop. Only set prompt if the user asked that new bot to start work immediately.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1293,13 +1249,13 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "create_child_routine",
     description:
-      "Schedule a routine that wakes a bot you created in its own thread. Identify it by bot_id or bot_name (exact). Only bots you created. Repeats: cron or every/unit (min 1 minute). One-shot: runAt, delayMinutes, or delaySeconds. Needs the owner's approval.",
+      "Schedule a routine that wakes a bot you created, in its own thread. Identify it by bot_id or exact bot_name; only bots you created. Repeats: cron or every/unit (min 1 minute). One-shot: runAt, delayMinutes, or delaySeconds. Needs the owner's approval.",
     inputSchema: createChildRoutineInputSchema,
   },
   {
     name: "archive_bot",
     description:
-      "Archive a bot this bot created. Archiving stops its work and routines, hides it from the active list, and preserves its conversation, memory, and files for the user to restore or delete later. confirm_name must exactly match its name. This cannot archive you, bots the user created, or bots another bot created.",
+      "Archive a bot this bot created. Use it when the user asks to remove that bot or when it is finished and unused. Archiving stops its work and routines, hides it from the active list, and preserves its conversation, memory, and files for the user to restore or delete later. confirm_name must exactly match its name. This cannot archive you, bots the user created, or bots another bot created.",
     inputSchema: {
       type: "object",
       properties: {

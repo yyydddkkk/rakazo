@@ -204,6 +204,15 @@ describe("contracts", () => {
     }
   });
 
+  it("drops retired built-in tool names from a stored denylist", () => {
+    expect(
+      UpdateBotInput.parse({
+        botId: "bot-1",
+        disabledBuiltinTools: ["save_memory", "web_search", "recall_memory", "forget_memory"],
+      }).disabledBuiltinTools,
+    ).toEqual(["web_search"]);
+  });
+
   it("accepts fleetManagement on bot updates and rejects non-boolean values", () => {
     expect(UpdateBotInput.parse({ botId: "bot-1", fleetManagement: true }).fleetManagement).toBe(
       true,

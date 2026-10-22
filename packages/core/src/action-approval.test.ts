@@ -25,7 +25,6 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresApproval("destination.write", true)).toBe(true);
     expect(toolRequiresApproval("secret_request", false)).toBe(true);
     expect(toolRequiresApproval("forget_secret", false)).toBe(true);
-    expect(toolRequiresApproval("forget_memory", false)).toBe(true);
     expect(toolRequiresApproval("list_secrets", false)).toBe(false);
     expect(toolRequiresApproval("delete_bot", false)).toBe(true);
     expect(toolRequiresApproval("archive_bot", false)).toBe(true);
@@ -592,7 +591,7 @@ describe("toolResultTaintsRun", () => {
   });
 
   it("does not taint on the bot's own writes and saved state", () => {
-    for (const tool of ["ask_user", "remember", "recall_memory", "skill_read", "write_file"]) {
+    for (const tool of ["ask_user", "remember", "save_shared_memory", "skill_read", "write_file"]) {
       expect(toolResultTaintsRun(tool)).toBe(false);
     }
   });

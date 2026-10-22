@@ -219,12 +219,6 @@ function scratchpadClause(disabled?: ReadonlySet<string>): string | undefined {
   return `Use ${pads.join(" / ")} for open work that should outlive this turn${reminder}.`;
 }
 
-function spawnBotClause(disabled?: ReadonlySet<string>): string | undefined {
-  if (!builtinOffered(disabled, "spawn_bot")) return undefined;
-  const demo = builtinOffered(disabled, "run_subagent") ? " Do not run_subagent to demo it." : "";
-  return `spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop.${demo}`;
-}
-
 /** The fleet tools this run was offered, the same decision as tool selection. */
 export function offeredFleetTools(tools: readonly { name: string }[]): string[] {
   return tools.map((tool) => tool.name).filter((name) => FLEET_TOOL_NAMES_SET.has(name));
@@ -255,14 +249,6 @@ function fleetClause(offered: readonly string[] | undefined): string | undefined
 
 function listWords(words: readonly string[]): string {
   return words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : words[0]!;
-}
-
-function offeredBuiltinClause(
-  disabled: ReadonlySet<string> | undefined,
-  name: string,
-  text: string,
-): string | undefined {
-  return builtinOffered(disabled, name) ? text : undefined;
 }
 
 function toolUsageLine(parts: {
@@ -324,37 +310,11 @@ export function userTurnInstructions(parts: {
     parts.workspaceInstruction,
     parts.agentEnvironmentInstruction,
     "A bot and a subagent are different. Never use both for the same request.",
-    spawnBotClause(parts.disabledBuiltinTools),
-    offeredBuiltinClause(
-      parts.disabledBuiltinTools,
-      "update_bot",
-      "update_bot updates this bot's own name (chat header / list label), title, description, avatar, and notifyOnFinish. Your description is the short public summary teammates see; it does not change your instructions. When the user asks you to rename yourself, change your title or description, change your profile picture, or turn finish notifications on or off, call update_bot — do not claim you changed them without the tool. Pass color for a hex or encoded shape, artifact_id for an image in this space, or use_attached_image when they attached a picture on this message.",
-    ),
-    offeredBuiltinClause(
-      parts.disabledBuiltinTools,
-      "run_subagent",
-      "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
-    ),
     parts.botDirectory,
-    offeredBuiltinClause(
-      parts.disabledBuiltinTools,
-      "archive_bot",
-      "archive_bot safely archives a bot this bot created, and only that bot. Use it when the user asks to remove that bot or when it is finished and unused. The user can restore it or permanently delete it later. confirm_name must exactly match its name.",
-    ),
     fleetClause(parts.offeredFleetTools),
     parts.pluginLine,
     parts.agentSkillsLine,
     parts.taughtSkillsLine,
-    offeredBuiltinClause(
-      parts.disabledBuiltinTools,
-      "render_plot",
-      'For charts and data visualization, use the render_plot tool: it renders bar, line, scatter, histogram, heatmap, faceted and many more chart types from a JSON spec and attaches the PNG to the chat. Call render_plot with {"help": true} before your first chart to read the full guide.',
-    ),
-    offeredBuiltinClause(
-      parts.disabledBuiltinTools,
-      "add_mcp_server",
-      "When the user asks you to add or connect an MCP server (and gives you its details), use add_mcp_server. If it uses browser sign-in, an approval card appears in the chat — tell the user to click Authorize on it.",
-    ),
     "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
     "Treat pagination cursors as opaque: copy the returned continuation value exactly, never calculate or guess it. When the tool reports no next page, stop; if a cursor is rejected, recheck the last successful result before retrying.",
     replyGuidanceForOfferedTools(parts.replyGuidance, parts.disabledBuiltinTools),
