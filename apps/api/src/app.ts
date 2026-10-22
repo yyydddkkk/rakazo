@@ -800,15 +800,12 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     };
     messaging.onInbound((event) => runAsSystem("messaging inbound", () => handleInbound(event)));
     mountMessagingWebhookRoutes(app, { messaging });
-    // Start polling-mode adapters (e.g. Telegram with no public webhook URL
-    // registered) immediately rather than waiting for the first webhook
-    // POST or outbound send to lazily trigger it. This is the process that
-    // owns the inbound sink registered just above, so it must be the one
-    // holding the live connection — a second poller elsewhere (e.g. the
-    // worker) would only fight this one for Telegram's single getUpdates
-    // slot without ever seeing the messages itself.
-    // Bounded retries cover transient Telegram startup failures; polling-only
-    // bots otherwise stay dark until an unrelated outbound send re-inits.
+    // Start polling-mode adapters eagerly instead of waiting for the first webhook
+    // or outbound send. This process owns the inbound sink registered above, so
+    // it must also own the receive loop; a second poller in another process would
+    // compete for updates without delivering them to this sink.
+    // Bounded retries cover transient startup failures so recovery does not depend
+    // on an unrelated outbound send initializing the adapter again.
     messagingInitTask = (async () => {
       const delayMs = [0, 2_000, 10_000];
       for (let attempt = 0; attempt < delayMs.length; attempt += 1) {

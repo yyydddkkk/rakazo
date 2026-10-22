@@ -432,17 +432,14 @@ export interface MessagingSurface {
     context: AdapterContext,
   ): Promise<MessagingInboundMessage[]>;
   /**
-   * Start the surface eagerly instead of waiting for the first inbound
-   * webhook or outbound send to touch it. Needed for adapters that pull
-   * updates themselves (e.g. Telegram in "auto"/"polling" mode, used when
-   * no public webhook URL is reachable): without an explicit call here,
-   * nothing kicks off that pull loop until something else happens to
-   * initialize the adapter first.
+   * Start the surface eagerly instead of waiting for the first inbound webhook
+   * or outbound send. Adapters that pull updates need this call to start their
+   * receive loop before traffic arrives.
    */
   initialize?(): Promise<void>;
   /**
-   * Release long-lived inbound resources (Telegram getUpdates polling) so a
-   * replacement process can claim them. No-op when the surface never started.
+   * Release long-lived inbound resources so a replacement process can claim
+   * them. No-op when the surface never started.
    */
   shutdown?(): Promise<void>;
 }
