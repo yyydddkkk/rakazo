@@ -1,6 +1,6 @@
 # Vision
 
-Rakazo exists so that people can own AI teammates that persist, use computers, and finish work beyond a single chat.
+Rakazo is a single-user, web-only self-hosted home for AI teammates that persist, use computers, and finish work beyond a single chat.
 It serves people who want capable agents without surrendering their choice of models, infrastructure, or where their data lives.
 It owns exactly one thing: the durable home in which each AI teammate's identity, conversation, memory, routines, and computer remain available over time.
 
@@ -14,17 +14,16 @@ Changes that reduce bots to prompt presets or isolated one-off tasks work agains
 ## Ownership includes choice
 
 The complete core product runs on infrastructure controlled by its operator under an open-source license.
-No hosted vendor is required for models, computers, memory, voice, integrations, or another core workflow.
+No hosted vendor is required for models, computers, memory, integrations, or another core workflow.
 External services remain optional choices behind provider-neutral contracts, and new providers reuse shared contracts and deterministic offline conformance tests.
 Bot state remains inspectable, exportable, recoverable, and portable across provider failure or replacement.
-A managed Rakazo service may improve convenience, but it does not become a hidden dependency of the self-hosted core.
 
-## One product across every surface
+## One user, one web interface
 
-Web, Electron, mobile, and messaging surfaces expose the same bots and durable state through shared product contracts.
-Core workflows work on every applicable surface or degrade safely for an explicit reason.
-Shared behavior, orchestration, and reusable interface logic live in shared packages.
-Platform-specific code is reserved for native navigation, storage, permissions, and interactions that genuinely differ.
+The operator signs in with an email and password and uses one Space through the web UI.
+Shared behavior, orchestration, contracts, and reusable interface logic live in shared packages.
+Space and Organization remain data and authorization boundaries without multi-user management.
+Lark exposes the same bots and durable state through shared product contracts.
 
 ## Computers are durable places
 
@@ -48,7 +47,6 @@ Implementation complexity is acceptable only when it protects a real boundary or
 ## Trust is explicit and verified
 
 Spaces are authorization boundaries across which private chats, files, memory, computers, and integrations do not mix implicitly.
-Sharing a bot transfers an intentional configuration, not its computer, credentials, files, private memory, or history.
 Consequential actions respect explicit approval policy, and uncertain automated review fails toward asking rather than silently acting.
 Authentication, secret handling, sandbox boundaries, host commands, and integrations are treated as security-sensitive product behavior.
 Important effects are verified independently, recovery preserves known-good user state, and core tests remain deterministic and offline by default.
@@ -68,4 +66,4 @@ Rakazo is not a model provider, a hosted-only service, a general virtual-machine
 Rakazo does not promise that a trusted host computer or third-party destination is isolated from data deliberately sent to it.
 Implementation plans and technical documentation explain mechanics, but this file is authoritative when product direction conflicts with an older plan.
 A change aligns when it strengthens persistent useful work, user ownership, safe autonomy, shared product behavior, or calm interaction without weakening an explicit boundary.
-A change should be resisted when it creates mandatory lock-in, fragments the product by surface, exposes internal machinery as user burden, weakens ownership or isolation, or adds capability without a durable place in a bot's work.
+A change should be resisted when it creates mandatory lock-in, exposes internal machinery as user burden, weakens ownership or isolation, or adds capability without a durable place in a bot's work.
