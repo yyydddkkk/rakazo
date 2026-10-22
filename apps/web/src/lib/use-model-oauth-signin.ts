@@ -1,7 +1,6 @@
 import type { ModelOAuthBegin, ThinkingLevel } from "@rakazo/contracts";
 import { cancelModelOAuthAttempt, finishModelOAuthAttempt } from "@rakazo/core";
 import { useEffect, useRef, useState } from "react";
-import { desktopBridge, oauthStateOf, onDesktopOAuthCallback } from "./desktop";
 import { waitForModelOAuth } from "./model-auth";
 import { useSpaceRpc } from "./space-rpc";
 import { errorText } from "./user-error";
@@ -13,11 +12,7 @@ export type ModelOAuthSignInBegin = {
   label?: string;
 };
 
-/**
- * Shared subscription sign-in lifecycle for desktop loopback capture and the
- * paste fallback. Preserves attempt-owned capture unsubscribe and submitting
- * guards so cancel-and-retry cannot drop a newer callback.
- */
+/** Shared browser subscription sign-in lifecycle and pasted authorization codes. */
 export function useModelOAuthSignIn(options: {
   onFinished: (controller: AbortController) => void | Promise<void>;
   onError: (message: string) => void;
@@ -32,7 +27,6 @@ export function useModelOAuthSignIn(options: {
   const oauthAbortRef = useRef<AbortController | null>(null);
   const oauthLoginIdRef = useRef<string | null>(null);
   const oauthCodeSubmittingRef = useRef(false);
-  const oauthCaptureRef = useRef<(() => void) | null>(null);
   const onFinishedRef = useRef(onFinished);
   const onErrorRef = useRef(onError);
   const onClearErrorRef = useRef(onClearError);
@@ -40,14 +34,7 @@ export function useModelOAuthSignIn(options: {
   onErrorRef.current = onError;
   onClearErrorRef.current = onClearError;
 
-  function releaseOAuthCapture(expected?: (() => void) | null) {
-    if (expected !== undefined && oauthCaptureRef.current !== expected) return;
-    oauthCaptureRef.current?.();
-    oauthCaptureRef.current = null;
-  }
-
   function cancelOAuthAttempt(resetState = true) {
-    releaseOAuthCapture();
     oauthCodeSubmittingRef.current = false;
     const loginId = oauthLoginIdRef.current;
     oauthLoginIdRef.current = null;
@@ -82,7 +69,6 @@ export function useModelOAuthSignIn(options: {
     const attempt = login ?? oauth;
     if (attempt?.mode !== "auth-url" || oauthCodeSubmittingRef.current) return;
     const controller = oauthAbortRef.current;
-    const capture = oauthCaptureRef.current;
     const code = (captured ?? pasteCode).trim();
     if (!controller || !code) return;
     oauthCodeSubmittingRef.current = true;
@@ -110,13 +96,11 @@ export function useModelOAuthSignIn(options: {
       onErrorRef.current(errorText(err, "Could not finish sign-in"));
     } finally {
       // A cancelled attempt may already have started another sign-in; do not clear
-      // its submitting guard or the newer desktop callback is dropped.
+      // its submitting guard.
       if (oauthAbortRef.current === controller) {
         oauthCodeSubmittingRef.current = false;
       }
       if (!retryable) {
-        // Only drop this attempt's listener — a newer sign-in may already own the ref.
-        releaseOAuthCapture(capture);
         finishModelOAuthAttempt(oauthAbortRef, controller, () => setOauthPending(false));
       }
     }
@@ -143,34 +127,9 @@ export function useModelOAuthSignIn(options: {
       oauthLoginIdRef.current = started.loginId;
       setPasteCode("");
       setOauth(started);
-      if (started.mode === "auth-url") {
-        // Subscribe before the popup exists: a provider that is already
-        // authorized can redirect before React commits the state above.
-        releaseOAuthCapture();
-        oauthCaptureRef.current = onDesktopOAuthCallback(
-          (code) => void submitOAuthCode(code, started),
-          oauthStateOf(started.verificationUri),
-        );
-      }
-      const browserAuth = desktopBridge()?.oauth;
-      if (browserAuth?.open) {
-        const cancelBrowser = () =>
-          void browserAuth.cancel?.(started.verificationUri).catch(() => undefined);
-        controller.signal.addEventListener("abort", cancelBrowser, { once: true });
-        const releaseCapture = oauthCaptureRef.current;
-        oauthCaptureRef.current = () => {
-          releaseCapture?.();
-          controller.signal.removeEventListener("abort", cancelBrowser);
-          cancelBrowser();
-        };
-        await browserAuth.open(started.verificationUri);
-        if (controller.signal.aborted) return;
-      } else {
-        // null means the browser blocked the popup — the card keeps showing the
-        // URL, and callers can flag that nothing opened.
-        if (!window.open(started.verificationUri, "rakazo-model-oauth", "noopener,noreferrer")) {
-          setPopupBlocked(true);
-        }
+      // The card retains the URL when the browser blocks the popup.
+      if (!window.open(started.verificationUri, "rakazo-model-oauth", "noopener,noreferrer")) {
+        setPopupBlocked(true);
       }
       waitingForCode = started.mode === "auth-url";
       if (!waitingForCode) await finishSubscriptionSignIn(started.loginId, controller);
@@ -183,7 +142,6 @@ export function useModelOAuthSignIn(options: {
       setOauth(null);
     } finally {
       if (!waitingForCode) {
-        if (oauthAbortRef.current === controller) releaseOAuthCapture();
         finishModelOAuthAttempt(oauthAbortRef, controller, () => setOauthPending(false));
       }
     }

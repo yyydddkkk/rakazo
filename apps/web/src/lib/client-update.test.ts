@@ -178,7 +178,7 @@ describe("client updates", () => {
     first.updates.navigated();
     await flush();
     expect(first.deps.reload).toHaveBeenCalledOnce();
-    // The page came back on the same old bundle (a cache, or a desktop bundled renderer).
+    // The page came back on the same old bundle (a cached page).
     const store = first.store;
     const again = setup({
       storage: {

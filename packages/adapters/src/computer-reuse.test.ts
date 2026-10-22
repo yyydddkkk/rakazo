@@ -5,9 +5,7 @@ import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ComputerBusyError, provisionComputer } from "./computer-lifecycle.js";
 import { DockerSandboxProvider } from "./docker-sandbox.js";
-import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { LocalAgentHomeStore } from "./home.js";
-import { HostAwareSandbox } from "./host-aware-sandbox.js";
 
 const context = {
   operationId: "test",
@@ -65,7 +63,7 @@ async function fixture() {
   const execute = vi.spyOn(docker, "execute").mockImplementation(async function* () {
     yield { type: "exit", code: 0 };
   });
-  const sandbox = new HostAwareSandbox(docker, new FakeSandboxProvider(), async () => false);
+  const sandbox = docker;
   const deps = {
     prisma: {
       computer: { findUniqueOrThrow: vi.fn(async () => ({ ...row })), updateMany },
@@ -167,7 +165,7 @@ describe("running Docker computer reuse", () => {
         vi.fn(async () => {
           if (change === "state") f.row.state = "stopped";
           if (change === "provider") f.row.providerRef = "replacement";
-          if (change === "kind") f.row.kind = "desktop";
+          if (change === "kind") f.row.kind = "fake";
           if (change === "generation") f.row.screenGeneration++;
           if (change === "maintenance") f.row.maintenanceId = "maintenance";
           if (change === "ownership") f.unassign();

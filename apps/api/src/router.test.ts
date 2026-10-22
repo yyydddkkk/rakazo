@@ -76,13 +76,13 @@ describe("account preferences", () => {
     const capture = vi.fn();
     deps.analytics = { capture, flush: async () => undefined };
     const client = createRouterClient(createRouter(deps), { context: { actor } as never });
-    await expect(client.analytics.screen({ screen: "chat", surface: "desktop" })).resolves.toEqual({
+    await expect(client.analytics.screen({ screen: "chat", surface: "web" })).resolves.toEqual({
       ok: true,
     });
     expect(capture).toHaveBeenCalledWith(actor.userId, {
       name: "screen_viewed",
       screen: "chat",
-      surface: "desktop",
+      surface: "web",
     });
     await expect(
       client.analytics.screen({
@@ -2724,16 +2724,6 @@ describe("computer screen url", () => {
     });
   });
 
-  it("returns desktop provider screen URLs without sealing them", async () => {
-    const { response } = await callScreenUrl(async () => ({
-      url: "desktop://screen/computer-1",
-    }));
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      json: { url: "desktop://screen/computer-1?view_only=true" },
-    });
-  });
-
   it("clears the row instead of 500ing when the provider says the sandbox is gone", async () => {
     const { response, updateMany } = await callScreenUrl(() =>
       Promise.reject(
@@ -2962,15 +2952,6 @@ describe("computer terminal and file transfer", () => {
     expect(blip.prisma.computer.updateMany).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { state: "stopped", providerRef: null } }),
     );
-  });
-
-  it("offers no terminal on host computers", async () => {
-    const { sandbox, call } = setup({ ...controlled, kind: "desktop" });
-    await expect(call("terminalUrl", {})).resolves.toEqual({
-      status: 200,
-      body: { json: { url: null } },
-    });
-    expect(sandbox.connectTerminal).not.toHaveBeenCalled();
   });
 
   it("enforces the configured computer upload limit and advertises it to the sandbox", async () => {

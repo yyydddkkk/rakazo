@@ -49,7 +49,7 @@ export type ClientUpdateDeps = {
  *
  * Loops are impossible by construction: every reload records the build it left and the build it
  * expected, and a tab that comes back on the same build never reloads for that target again (a
- * desktop app's bundled renderer, or a cache that served the old page). The shared recovery guard
+ * cache that served the old page). The shared recovery guard
  * also allows at most one automatic reload per cooldown.
  */
 export function createClientUpdates(deps: ClientUpdateDeps) {

@@ -29,8 +29,6 @@ async function runRoutine(
   toolCalls: Array<{ name: string; args: Record<string, unknown> }>,
   options: {
     takeover?: boolean;
-    native?: boolean;
-    nativeUnavailable?: boolean;
     toolFailure?: "abort" | "recover";
     attachments?: "file" | "image";
     steering?: boolean;
@@ -117,7 +115,7 @@ async function runRoutine(
         computer: {
           id: "computer-1",
           scope: "dedicated",
-          kind: options.native ? "desktop" : "e2b",
+          kind: "e2b",
           homeKey: "home-1",
         },
       })),
@@ -199,12 +197,6 @@ async function runRoutine(
   };
   const sandbox = {
     describe: () => ({ id: "e2b", capabilities: { graphical: false } }),
-    environment: options.native
-      ? vi.fn(async () => {
-          if (options.nativeUnavailable) throw new Error("native app is closed");
-          return { platform: "win32", home: "C:\\Users\\example", shell: "powershell.exe" };
-        })
-      : undefined,
     listFiles: vi.fn(async () => [{ path: "notes.txt", kind: "file", size: 4 }]),
     writeFile: vi.fn(async () => undefined),
     releaseScreen: vi.fn(async () => undefined),
@@ -387,19 +379,6 @@ describe("run computer provisioning", () => {
     await runRoutine([], { attachments: "image", steering: true });
     expect(provisionComputer).not.toHaveBeenCalled();
   });
-
-  it.each([false, true])(
-    "keeps native chat lazy when native access is unavailable: %s",
-    async (nativeUnavailable) => {
-      const { finalizeRun, sandbox } = await runRoutine([], { native: true, nativeUnavailable });
-      expect(finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: "completed" }));
-      expect(provisionComputer).not.toHaveBeenCalled();
-      expect(sandbox.environment).toHaveBeenCalledWith(
-        expect.objectContaining({ kind: "desktop", botId: "home-1" }),
-        expect.anything(),
-      );
-    },
-  );
 
   it("starts the computer the first time a tool needs it and reuses it", async () => {
     const { finalizeRun, sandbox, sleepJobs, toolResults } = await runRoutine([

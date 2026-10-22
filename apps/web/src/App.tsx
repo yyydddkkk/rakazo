@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { LinkFavicons } from "@rakazo/chat-ui/web";
 import { LinkFaviconsContext, RemoteImagesContext } from "@rakazo/chat-ui/web";
-import { LOCAL_SETTINGS_PAGE } from "@rakazo/contracts";
 import { analyticsScreen } from "@rakazo/core";
 import { Button, Skeleton } from "@rakazo/ui-web";
 import {
@@ -18,7 +17,6 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SubscriptionGate } from "./components/SubscriptionGate";
 import { authClient } from "./lib/auth";
 import { getTicketBoardEnabled, subscribeTicketBoardEnabled } from "./lib/bootstrap";
-import { desktopBridge } from "./lib/desktop";
 import { identifyMonitoringUser } from "./lib/monitoring";
 import { markAfterPaint, markOnce } from "./lib/performance";
 import { lazyComponent } from "./lib/preload-recovery";
@@ -30,9 +28,7 @@ import {
   sessionRetryDelayMs,
   showSessionUnavailable,
 } from "./lib/session-gate";
-import { completeSsoCallback, SSO_CALLBACK_PATH } from "./lib/sso-flow";
 import { IntegrationSetupPage } from "./pages/IntegrationSetup";
-import { LocalSettingsPage } from "./pages/LocalSettings";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
 import { ShellPage } from "./pages/Shell";
 
@@ -51,13 +47,6 @@ const ArtifactsPage = lazyComponent(() =>
 );
 const BoardPage = lazyComponent(() => import("./pages/Board").then((module) => module.BoardPage));
 
-function SsoCallbackPage() {
-  useEffect(() => {
-    completeSsoCallback();
-  }, []);
-  return null;
-}
-
 // Link icons come from our API, which fetches and caches them; the browser never asks the site.
 const linkFavicons: LinkFavicons = {
   load: (origin) => rpc.links.favicon({ origin }),
@@ -73,13 +62,7 @@ export function App() {
     <RemoteImagesContext.Provider value={loadRemoteImages}>
       <LinkFaviconsContext.Provider value={linkFavicons}>
         <ErrorBoundary fallback={<AppFailed />}>
-          {window.location.pathname === SSO_CALLBACK_PATH ? (
-            <SsoCallbackPage />
-          ) : window.location.pathname === LOCAL_SETTINGS_PAGE ? (
-            <LocalSettingsPage />
-          ) : (
-            <SessionApp />
-          )}
+          <SessionApp />
         </ErrorBoundary>
       </LinkFaviconsContext.Provider>
     </RemoteImagesContext.Provider>
@@ -115,7 +98,7 @@ function SessionApp() {
     if (lastScreen.current === key) return;
     lastScreen.current = key;
     void Promise.resolve()
-      .then(() => rpc.analytics.screen({ screen, surface: desktopBridge() ? "desktop" : "web" }))
+      .then(() => rpc.analytics.screen({ screen, surface: "web" }))
       .catch(() => undefined);
   }, [analyticsUserId, screen]);
   const gate = sessionGate(session);

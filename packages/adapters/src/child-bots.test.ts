@@ -1473,7 +1473,7 @@ describe("destroyBot", () => {
     }
   });
 
-  it.each(["docker", "desktop"])(
+  it.each(["docker"])(
     "leaves a stopped %s Team Computer's stored home to its next boot",
     async (kind) => {
       const root = await mkdtemp(path.join(tmpdir(), "rakazo-team-folder-docker-stopped-"));

@@ -163,8 +163,6 @@ x-app-environment: &app-environment
   SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-docker}
   SANDBOX_SUPERVISOR_URL: http://supervisor:7091
   SANDBOX_SUPERVISOR_TOKEN: ${SANDBOX_SUPERVISOR_TOKEN:?Set SANDBOX_SUPERVISOR_TOKEN in .env}
-  SANDBOX_HOST_URL: ${SANDBOX_HOST_URL:-}
-  SANDBOX_HOST_TOKEN: ${SANDBOX_HOST_TOKEN:-}
   SANDBOX_COMMAND_TIMEOUT_MS:
   SANDBOX_IDLE_MS:
   SANDBOX_MAX_COMPUTERS_PER_USER:
@@ -362,8 +360,6 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://127.0.0.1:5173}
       AUTH_PASSWORD_ENABLED: ${AUTH_PASSWORD_ENABLED:-true}
       AUTH_BREACHED_PASSWORD_CHECK_ENABLED: ${AUTH_BREACHED_PASSWORD_CHECK_ENABLED:-false}
-      PASSKEY_APPLE_APP_IDS:
-      PASSKEY_ANDROID_CERT_SHA256:
       # Proxies whose X-Forwarded-For is believed. Unset trusts this stack's own networks: the web
       # proxy and a reverse proxy on the host. See docs/self-host.md#client-addresses.
       TRUSTED_PROXIES:
@@ -377,7 +373,6 @@ services:
       SIGNUPS_ENABLED:
       SIGNUP_ALLOWLIST:
       SCREEN_PROXY_SECRET: ${SCREEN_PROXY_SECRET:?Set SCREEN_PROXY_SECRET in .env}
-      RAKAZO_DESKTOP_STACK_TOKEN: ${RAKAZO_DESKTOP_STACK_TOKEN:-}
       RAKAZO_UPDATER_URL:
       RAKAZO_UPDATER_TOKEN:
       RAKAZO_GIT_SHA:
@@ -469,10 +464,6 @@ services:
       NODE_ENV: production
       API_PROXY_TARGET: http://api:3100
       RAKAZO_HOST: ${RAKAZO_HOST:-localhost}
-      # Set only by the packaged desktop app. Its authenticated probe prevents a
-      # source dev server on the same host port from impersonating this stack.
-      RAKAZO_DESKTOP_STACK_TOKEN: ${RAKAZO_DESKTOP_STACK_TOKEN:-}
-      RAKAZO_IMAGE_TAG: ${RAKAZO_IMAGE_TAG:-edge}
       SCREEN_PROXY_SECRET: ${SCREEN_PROXY_SECRET:?Set SCREEN_PROXY_SECRET in .env}
       RAKAZO_CSP_SCRIPT_SRC: ${RAKAZO_CSP_SCRIPT_SRC:-}
       RAKAZO_CSP_CONNECT_SRC: ${RAKAZO_CSP_CONNECT_SRC:-}

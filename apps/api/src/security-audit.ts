@@ -52,7 +52,7 @@ export const AUDITED_PROCEDURES: Record<string, AuditedProcedure> = {
   "memory.disconnectProvider": { type: "credential.deleted", kind: "memory" },
   "deployment.update": {
     type: "deployment.settings.changed",
-    fields: ["signupsEnabled", "computerHost"],
+    fields: ["signupsEnabled"],
   },
   "mcp.assignments.approve": {
     type: "approval.decided",

@@ -72,7 +72,7 @@ async function click(label: string) {
   expect(button).toBeDefined();
   await act(async () => button!.click());
 }
-it("uses the shared desktop flow for linking", async () => {
+it("uses the shared SSO flow for linking", async () => {
   await render();
   await click("Link SSO");
   expect(runSsoFlow).toHaveBeenCalledWith(expect.any(Function), [window.location.href]);
@@ -85,7 +85,7 @@ it("uses the shared desktop flow for linking", async () => {
     }),
   );
 });
-it("uses the shared desktop flow for account-bound deletion reauthentication", async () => {
+it("uses the shared SSO flow for account-bound deletion reauthentication", async () => {
   await render();
   await click("Delete account");
   await click("Sign in again");

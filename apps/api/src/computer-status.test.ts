@@ -31,16 +31,7 @@ describe("toComputerStatus", () => {
     expect(toComputerStatus("bot-1", computer, "Writer").busyBotName).toBe("Writer");
   });
 
-  it("hides update on desktop computers", () => {
-    expect(
-      toComputerStatus("bot-1", {
-        kind: "desktop",
-        state: "running",
-        scope: "team",
-        controlHolder: "none",
-        homeRevision: "r1",
-      }).canUpdate,
-    ).toBe(false);
+  it("offers update on sandbox computers", () => {
     expect(
       toComputerStatus("bot-1", {
         kind: "e2b",

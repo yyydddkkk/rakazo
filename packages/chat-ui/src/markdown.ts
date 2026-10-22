@@ -1,6 +1,5 @@
 /// <reference path="./linkify-it.d.ts" />
 import LinkifyIt from "linkify-it";
-import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
 
 export type ChatMarkdownProps = {
@@ -11,11 +10,6 @@ export type ChatMarkdownProps = {
 type LinkifyRules = {
   set(options: { fuzzyLink: boolean }): unknown;
   add(schema: string, definition: null): unknown;
-};
-
-type LinkifyParser = {
-  set(options: { linkify: boolean }): unknown;
-  linkify: LinkifyRules;
 };
 
 type ExplicitLinkMatch = {
@@ -32,18 +26,6 @@ function applyExplicitLinkRules(linkify: LinkifyRules) {
   linkify.set({ fuzzyLink: false });
   linkify.add("ftp:", null);
   linkify.add("//", null);
-}
-
-/**
- * Turn bare http(s) URLs and email addresses into links, as the web renderer's GFM autolinks
- * do. Bare domains stay text: fuzzy matching would also link file names like setup.py or
- * notes.md. ftp: and protocol-relative URLs stay text because sanitizeMarkdownUrl would not
- * open them.
- */
-export function linkifyExplicitUrls<T extends LinkifyParser>(parser: T): T {
-  parser.set({ linkify: true });
-  applyExplicitLinkRules(parser.linkify);
-  return parser;
 }
 
 const plainTextLinkify: ExplicitLinkify = new LinkifyIt();
@@ -68,7 +50,7 @@ function appendPlainText(parts: PlainTextPart[], value: string) {
 
 /**
  * Split plain user-message text into literal runs and tappable links.
- * User bubbles stay plain text on web and mobile. Bold, headings, and other
+ * User bubbles stay plain text. Bold, headings, and other
  * markdown remain characters. Links use the same explicit autolinker as bot
  * messages, so a balanced parenthesis stays inside the URL and a closing
  * parenthesis that only wraps the surrounding prose does not.
@@ -289,15 +271,13 @@ export function linkFaviconOrigin(href: string): string | undefined {
 
 /**
  * Where link icons come from. Apps load them through the Rakazo API, which fetches and caches
- * them, so a device never contacts the linked site or an icon service. `globe` is the native
- * fallback glyph; web draws its own.
+ * them, so a device never contacts the linked site or an icon service.
  */
 export type LinkFavicons = {
   /** Cache scope for the API serving these answers. */
   endpoint?: string;
   /** `retry` means the server was too busy to look, not that the site has no icon. */
   load(origin: string): Promise<{ icon: string | null; retry?: boolean }>;
-  globe?: ReactNode;
 };
 
 export const LinkFaviconsContext = createContext<LinkFavicons | null>(null);

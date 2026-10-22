@@ -190,11 +190,9 @@ import {
 import { getToolActivityEnabled, subscribeToolActivity } from "../lib/tool-activity-preference";
 import { transcriptCanSnapAfterFrame, transcriptIsNearEnd } from "../lib/transcript-scroll";
 import { speaker } from "../lib/tts";
-import { useDesktopBadge } from "../lib/use-desktop-badge";
 import { errorText } from "../lib/user-error";
 import { ActivityList } from "./ActivityList";
 import { CreateGroupForm, GroupSettings, memberName } from "./GroupPanel";
-import { HostComputerPrompt } from "./HostComputerPrompt";
 import { ResizableSidePanel } from "./ResizableSidePanel";
 import { RoutineEditor } from "./RoutineEditor";
 import type { SettingsSection } from "./SettingsOverlay";
@@ -222,7 +220,7 @@ import { resolveRosterDrop } from "./shell/roster-drop";
 import { SidebarHeader } from "./shell/sidebar-header";
 import { BotsSidebarLayout } from "./shell/sidebar-layout";
 import { SidebarRoster } from "./shell/sidebar-roster";
-import { commitSpaceRename, countUnreadChats, sidebarGroupsForSpaces } from "./shell/space-sidebar";
+import { commitSpaceRename, sidebarGroupsForSpaces } from "./shell/space-sidebar";
 import { Transcript } from "./shell/transcript";
 import { useRoutineEditor } from "./shell/use-routine-editor";
 import { useSidebarExpansion } from "./shell/use-sidebar-expansion";
@@ -1578,13 +1576,6 @@ function SpaceShell() {
       }),
     [sidebarSpaces, query, miniSidebar, t],
   );
-  // The Dock badge ignores the roster search box: a filter must not hide unread chats.
-  const unreadChatCount = useMemo(
-    () => countUnreadChats(sidebarGroupsForSpaces(sidebarSpaces, "")),
-    [sidebarSpaces],
-  );
-  useDesktopBadge(userId ? unreadChatCount : 0);
-
   const spaceSwitchRequest = useRef(0);
   useEffect(
     () => () => {
@@ -1610,7 +1601,7 @@ function SpaceShell() {
       // Another space is an auth boundary: its bootstrap is loaded first, under that
       // space's header, then the shell remounts so none of this space's state survives.
       // A call in progress, or a page outside the shell, still reloads.
-      const target = initialBootstrapTarget(path, false);
+      const target = initialBootstrapTarget(path);
       if (!target || getCallSnapshot()) {
         reload();
         return;
@@ -2922,16 +2913,11 @@ function SpaceShell() {
     ) : null;
   const computerPreviewScreen =
     !computerOpen &&
-    computer?.kind !== "desktop" &&
     computer?.state === "running" &&
     Boolean(embeddedScreenUrl) &&
     !computerScreenError;
   const showingRecoveryHint =
-    !computerOpen &&
-    computer?.kind !== "desktop" &&
-    !computerPreviewScreen &&
-    !computerScreenError &&
-    showComputerRecoveryHint;
+    !computerOpen && !computerPreviewScreen && !computerScreenError && showComputerRecoveryHint;
 
   const { label: userName, initial: initials } = accountDisplay(session.data?.user ?? {}, t`You`);
 
@@ -3095,9 +3081,6 @@ function SpaceShell() {
           if (active) void refreshThread(active.id);
         }}
       />
-      {bootstrapMe !== undefined ? (
-        <HostComputerPrompt initialMe={bootstrapMe ?? undefined} onMeUpdated={setBootstrapMe} />
-      ) : null}
       <button
         type="button"
         aria-label={t`Close navigation`}
@@ -3337,13 +3320,13 @@ function SpaceShell() {
             className="absolute bottom-20 start-0 top-16 z-20 w-8 touch-none md:hidden"
           />
         ) : null}
-        <div className="app-drag flex items-center justify-between border-b border-sidebar-border px-3 py-[17px] md:px-[22px]">
+        <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-[17px] md:px-[22px]">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               aria-label={t`Open navigation`}
               onClick={() => setMobileSidebarOpen(true)}
-              className="app-no-drag grid h-8 w-8 shrink-0 place-items-center rounded-lg text-foreground/75 hover:bg-accent md:hidden"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-foreground/75 hover:bg-accent md:hidden"
             >
               <Menu size={19} strokeWidth={1.7} />
             </button>
@@ -3351,7 +3334,7 @@ function SpaceShell() {
               type="button"
               data-testid="bot-settings-trigger"
               onClick={() => setPanel(inGroup ? "group-settings" : "settings")}
-              className="app-no-drag flex min-w-0 items-center gap-3"
+              className="flex min-w-0 items-center gap-3"
             >
               {inGroup ? (
                 <GroupAvatar
@@ -3390,7 +3373,7 @@ function SpaceShell() {
                     callBot(active);
                   }}
                   data-active={call?.botId === active.id ? "" : undefined}
-                  className="app-no-drag grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
+                  className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
                 >
                   <Phone size={17} strokeWidth={1.6} className="text-foreground/75" />
                 </button>
@@ -3411,7 +3394,7 @@ function SpaceShell() {
                     }
                   }}
                   data-active={panel === "computer" ? "" : undefined}
-                  className="app-no-drag grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
+                  className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
                 >
                   <Monitor size={18} strokeWidth={1.6} className="text-foreground/75" />
                 </button>

@@ -15,7 +15,6 @@ import { errorText } from "../../lib/user-error";
  */
 export function TeachComputerOverlayControl({
   botId,
-  computer,
   busy: busyProp,
   onRefresh,
 }: {
@@ -91,9 +90,6 @@ export function TeachComputerOverlayControl({
       cancelled = true;
     };
   }, [botId, onRefresh]); // t omitted: identity churn must not re-lock Start
-
-  // Hide only for desktop-host bots. Null computer still shows the control so teaching can boot.
-  if (computer?.kind === "desktop") return null;
 
   async function refreshView() {
     const requestBotId = botId;

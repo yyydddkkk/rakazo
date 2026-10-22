@@ -1922,20 +1922,6 @@ describeJourneys("required product journeys", () => {
     expect(await rpc<Bot[]>(app, cookie, "bots/list")).toHaveLength(before);
   });
 
-  it("14: this-mac is refused unless the sandbox is docker", async () => {
-    const cookie = await signup(app, `host-j-${stamp}@rakazo.test`, "Host");
-    const me = await rpc<Me>(app, cookie, "me");
-    expect(me.canChooseHostComputer).toBe(false);
-    await prisma.deploymentSettings.update({
-      where: { id: "default" },
-      data: { ownerUserId: me.userId },
-    });
-    const res = await raw(app, cookie, "deployment/update", { computerHost: "this-mac" });
-    const text = await res.text();
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(text).toMatch(/This Mac mode is only available/i);
-  });
-
   it("15: ask, answer, stop, follow-up, and clientNonce stay consistent", async () => {
     const cookie = await signup(app, `ask-j-${stamp}@rakazo.test`, "Ask");
     const bot = await rpc<Bot>(app, cookie, "bots/create", {
@@ -3900,7 +3886,7 @@ describeJourneys("required product journeys", () => {
   });
 });
 
-type Me = { spaceId: string; userId: string; canChooseHostComputer: boolean };
+type Me = { spaceId: string; userId: string };
 type Bot = {
   id: string;
   spaceId: string;

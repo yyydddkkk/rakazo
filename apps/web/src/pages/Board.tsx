@@ -29,7 +29,6 @@ import { rpc } from "../lib/rpc";
 import { useTicketPriorityLabels } from "../lib/ticket-priority";
 import { useTicketStatusLabels } from "../lib/ticket-status";
 import { errorText } from "../lib/user-error";
-import { WindowChrome } from "./WindowChrome";
 
 export function BoardPage() {
   const { t } = useLingui();
@@ -108,7 +107,6 @@ export function BoardPage() {
 
   return (
     <div className="flex h-screen min-w-0 flex-col overflow-hidden bg-background text-foreground">
-      <WindowChrome />
       <header className="flex items-center gap-3 border-b px-4 py-3">
         <Link
           to="/app"

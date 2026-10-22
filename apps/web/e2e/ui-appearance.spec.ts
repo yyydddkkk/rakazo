@@ -118,12 +118,10 @@ test("sidebar footer opens integrations and the account menu", async ({ page }, 
     expect(pillBox.x + pillBox.width).toBe(searchBox.x + searchBox.width);
     expect(pillBox.height).toBe(avatarBox.height);
   }
-  await expect(footer.getByRole("button", { name: "Install update", exact: true })).toHaveCount(0);
   await footer.getByRole("button", { name: "Connect apps", exact: true }).click();
   await expect(page.getByRole("button", { name: "Close integrations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close integrations", exact: true }).click();
   await page.getByTestId("user-menu-trigger").click();
-  await expect(page.getByRole("link", { name: "Get the mobile app", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Docs", exact: true })).toBeVisible();
   await expect(footer.locator('span[aria-hidden="true"] > span')).toHaveCount(3);
   if (avatarBox && pillBox) {
@@ -150,42 +148,7 @@ test("sidebar footer opens integrations and the account menu", async ({ page }, 
   await expect(footer).toBeInViewport();
 });
 
-test("sidebar footer keeps the account identity readable and installs a ready desktop update", async ({
-  page,
-}, testInfo) => {
-  await page.addInitScript(() => {
-    const state = {
-      phase: "ready",
-      currentVersion: "0.1.0",
-      availableVersion: "0.2.0",
-      percent: 100,
-      message: null,
-      checkedAt: null,
-    };
-    Object.defineProperty(window, "rakazoDesktop", {
-      value: {
-        platform: "darwin",
-        window: {
-          close: async () => {},
-          minimize: async () => {},
-          toggleMaximize: async () => {},
-          state: async () => ({ minimized: false, maximized: false, fullScreen: false }),
-        },
-        oauth: { onCallback: () => () => {} },
-        update: {
-          state: async () => state,
-          check: async () => state,
-          download: async () => state,
-          install: async () => {
-            document.documentElement.dataset.updateInstalled = String(
-              Number(document.documentElement.dataset.updateInstalled ?? 0) + 1,
-            );
-            return state;
-          },
-        },
-      },
-    });
-  });
+test("sidebar footer keeps the account identity readable", async ({ page }, testInfo) => {
   const email = `footer-${Date.now()}@rakazo.test`;
   await signup(page, email, "password12", "Footer Demo");
   await completeOnboarding(page);
@@ -195,22 +158,14 @@ test("sidebar footer keeps the account identity readable and installs a ready de
   const avatar = page.getByTestId("user-menu-trigger");
   const session = await (await page.request.get("/api/auth/get-session")).json();
   await expect(avatar).toHaveAccessibleName(`Account menu for ${session.user.name}`);
-  await expect(footer.getByRole("button", { name: "Install update", exact: true })).toBeVisible();
-  // Dismiss the existing update toast so the two footer frames stay focused.
-  await page
-    .getByRole("complementary", { name: "Desktop update" })
-    .getByRole("button", { name: "Later" })
-    .click();
   await avatar.click();
   const header = page.getByTestId("account-menu-header");
   await expect(header).toHaveText(`${session.user.name}${email}`);
   await expect(page.getByText("New update available", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Install", exact: true })).toHaveCount(0);
   await expect(footer.locator('span[aria-hidden="true"] > span')).toHaveCount(3);
-  await captureScreenshot(page, testInfo, "sidebar-footer-menu-update");
+  await captureScreenshot(page, testInfo, "sidebar-footer-menu");
   await page.keyboard.press("Escape");
-  await footer.getByRole("button", { name: "Install update", exact: true }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-update-installed", "1");
 
   await page.setViewportSize({ width: 320, height: 900 });
   await page.getByRole("button", { name: "Open navigation", exact: true }).click();
@@ -220,27 +175,10 @@ test("sidebar footer keeps the account identity readable and installs a ready de
   const pill = footer.getByRole("button", { name: "Connect apps", exact: true });
   const label = pill.locator("span").first();
   expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  const controls = [
-    avatar,
-    pill,
-    footer.getByRole("button", { name: "Install update", exact: true }),
-  ];
+  const controls = [avatar, pill];
   const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
   expect(boxes.every((box) => box?.height === 36 && box.y === boxes[0]?.y)).toBe(true);
   expect(await footer.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  const updateButton = controls[2]!;
-  await updateButton.click();
-  expect(await updateButton.evaluate((el) => el.matches(":focus-visible"))).toBe(false);
-  await avatar.click();
-  await avatar.click();
-  expect(await avatar.evaluate((el) => el.matches(":focus-visible"))).toBe(false);
-  await updateButton.focus();
-  expect(await updateButton.evaluate((el) => el.matches(":focus-visible"))).toBe(false);
-  await page.keyboard.press("Tab");
-  await updateButton.focus();
-  expect(await updateButton.evaluate((el) => el.matches(":focus-visible"))).toBe(true);
-  await updateButton.evaluate((el) => el.blur());
-
   // Width changes must drop marks before taking space from the label or padding.
   // Measure the fixed controls and label, then target the middle of each band.
   // Marks need 26px initially and 22px per additional mark, leaving 11px margin.

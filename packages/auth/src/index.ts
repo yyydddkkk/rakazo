@@ -1,4 +1,3 @@
-import { expo } from "@better-auth/expo";
 import { passkey } from "@better-auth/passkey";
 import type {
   ProductAnalytics,
@@ -57,8 +56,6 @@ export interface AuthEnv {
   signupsEnabled: string | undefined;
   signupAllowlist: string | undefined;
   extraOrigins?: string[];
-  /** SHA-256 signing certificate fingerprints of Android apps allowed to use this server's passkeys. */
-  androidAppCertFingerprints?: string[];
   email?: TransactionalEmailProvider;
   logger?: BetterAuthOptions["logger"];
   onEmailError?: (error: unknown) => void;
@@ -315,10 +312,7 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
   // SSO-only deployments keep every email credential closed, codes included.
   const emailCodeSignIn = Boolean(env.email) && env.passwordAuth !== false;
   // SSO-only deployments keep the identity provider as the only way in.
-  const relyingParty =
-    env.passwordAuth === false
-      ? null
-      : passkeyRelyingParty(env.webOrigin, env.androidAppCertFingerprints);
+  const relyingParty = env.passwordAuth === false ? null : passkeyRelyingParty(env.webOrigin);
   // Better Auth's own token key, so every stored token shares one cipher and key.
   let authContext: Promise<{ secretConfig: TokenKey }> | undefined;
   const tokenKey = async () => (await authContext!).secretConfig;
@@ -327,7 +321,7 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
     logger: env.logger,
     secret: env.secret,
     baseURL: env.baseURL,
-    trustedOrigins: [...buildTrustedOrigins(env), "rakazo://"],
+    trustedOrigins: buildTrustedOrigins(env),
     account: {
       accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: [] },
       encryptOAuthTokens: true,
@@ -458,7 +452,6 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
     },
     plugins: [
       signedBearer,
-      expo(),
       accountSecurity(env.email, env.oidc?.name, env.oidc?.issuer, env.passwordAuth !== false),
       ...(discovery ? [discovery.plugin] : []),
       ...(emailCodeSignIn

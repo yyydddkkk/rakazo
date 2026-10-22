@@ -26,7 +26,7 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
     _prisma: unknown,
     input: { computerId: string; botId: string; runId: string },
   ) => ({ ...input, fence: 7 }),
-  provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
+  provisionComputer: async () => ({ id: "computer-1", kind: "fake" }),
 }));
 
 // Group writes run against Postgres in the journeys; here only the dispatch is under test.

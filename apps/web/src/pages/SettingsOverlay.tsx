@@ -27,7 +27,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
 import { hasServerUpdates, useServerUpdateStatus } from "../components/SoftwareUpdateSection";
-import { desktopBridge } from "../lib/desktop";
 import { rpcForSpace } from "../lib/rpc";
 import { SpaceRpcProvider } from "../lib/space-rpc";
 import { errorText } from "../lib/user-error";
@@ -136,7 +135,7 @@ export function SettingsOverlay({
   const showComputer =
     keepComputerRecovery || (isDeploymentOwner && computersAreUnavailable(sandboxProvider));
   const serverUpdate = useServerUpdateStatus(isDeploymentOwner);
-  const showUpdates = Boolean(desktopBridge()?.update) || hasServerUpdates(serverUpdate);
+  const showUpdates = hasServerUpdates(serverUpdate);
   const panelBusy = memoryBusy || voiceBusy;
   const spaceScoped = SPACE_SECTIONS.has(section);
   const spaceId = spaceScoped ? (space?.id ?? null) : null;

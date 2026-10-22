@@ -5,7 +5,6 @@ import type { AdapterContext, JobPublisher, SandboxProvider } from "@rakazo/adap
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ComputerBusyError, provisionComputer, replaceComputer } from "./computer-lifecycle.js";
-import { DesktopSandboxProvider } from "./desktop-sandbox.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { LocalAgentHomeStore } from "./home.js";
 
@@ -22,11 +21,10 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture(provider: "fake" | "desktop" = "fake") {
+async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "rakazo-recovery-"));
   roots.push(root);
-  const sandbox: SandboxProvider =
-    provider === "desktop" ? new DesktopSandboxProvider({ root }) : new FakeSandboxProvider();
+  const sandbox: SandboxProvider = new FakeSandboxProvider();
   const home = new LocalAgentHomeStore(path.join(root, "homes"));
   const first = await sandbox.provision({ botId: "bot", homePath: root }, context);
   await home.writeFile("bot", "notes.txt", "checkpoint", context);
@@ -198,34 +196,6 @@ describe("computer recovery preserves live work", () => {
     expect(
       new TextDecoder().decode(await deps.sandbox.readFile(reconnected, "notes.txt", context)),
     ).toBe("live work");
-  });
-
-  it.each(["running", "error", "stopped", "suspended"])(
-    "reconnects desktop files after an adapter restart from %s without importing an old checkpoint",
-    async (state) => {
-      const { deps, row, root, first } = await fixture("desktop");
-      row.state = state;
-      deps.sandbox = new DesktopSandboxProvider({ root });
-      const restore = vi.spyOn(deps.sandbox, "importWorkspace");
-      const reconnected = await provisionComputer(deps, row.id, context);
-      expect(reconnected).toMatchObject({ providerRef: first.providerRef, fresh: false });
-      expect(restore).not.toHaveBeenCalled();
-      expect(
-        new TextDecoder().decode(await deps.sandbox.readFile(reconnected, "notes.txt", context)),
-      ).toBe("live work");
-    },
-  );
-
-  it("restores the checkpoint when a desktop workspace is actually absent after restart", async () => {
-    const { deps, row, root, first } = await fixture("desktop");
-    expect(first.fresh).toBe(true);
-    await rm(first.providerRef, { recursive: true });
-    deps.sandbox = new DesktopSandboxProvider({ root });
-    const reconnected = await provisionComputer(deps, row.id, context);
-    expect(reconnected).toMatchObject({ providerRef: first.providerRef, fresh: true });
-    expect(
-      new TextDecoder().decode(await deps.sandbox.readFile(reconnected, "notes.txt", context)),
-    ).toBe("checkpoint");
   });
 
   it.each([

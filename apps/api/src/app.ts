@@ -34,8 +34,8 @@ import {
   createMessagingTeamChatSender,
   createProductAnalytics,
   createRunExecutor,
-  createRunSandbox,
   createRunSecretWriter,
+  createSandboxProvider,
   createSecretStore,
   createTicketChangeNotifier,
   createWebProvider,
@@ -111,7 +111,6 @@ import { requestLogging } from "@rakazo/logging/hono";
 import { MarkdownMemoryStore } from "@rakazo/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { mountAppAssociation, nativePasskeys } from "./app-association.js";
 import { storeInboundAttachment } from "./artifacts.js";
 import { createBillingService } from "./billing.js";
 import { mountBillingRoutes } from "./billing-webhook.js";
@@ -128,7 +127,6 @@ import { mountDiagramScript } from "./diagram-script.js";
 import type { AppEnv } from "./env.js";
 import { loadEnv } from "./env.js";
 import { healthRoutes } from "./health.js";
-import { mountLocalSettings } from "./local-settings.js";
 import {
   createMessagingInboundHandler,
   teamChatSenderCanWakeMessageRoutines,
@@ -151,19 +149,6 @@ import {
 } from "./team-chat-startup.js";
 import { mountVoiceHttpRoutes, voiceAccountErrorStatus } from "./voice.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
-
-/**
- * Native clients always send the app scheme, including in Expo Go, so no
- * exp:// origin is trusted: it would accept any Expo host as a redirect target.
- * The loopback entries are the Expo web dev server.
- */
-export const MOBILE_AUTH_ORIGINS = [
-  "rakazo://",
-  "http://localhost:8081",
-  "http://127.0.0.1:8081",
-  "http://localhost:19006",
-  "http://127.0.0.1:19006",
-];
 
 export interface AppHandles {
   app: Hono;
@@ -339,7 +324,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   });
   const sandbox: SandboxProvider =
     sandboxOverride ??
-    createRunSandbox(env.sandboxProvider, {
+    createSandboxProvider(env.sandboxProvider, {
       ...sandboxProviderOptionsFromEnv(),
       supervisorUrl: env.sandboxSupervisorUrl,
       supervisorToken: env.sandboxSupervisorToken,
@@ -349,8 +334,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       daytonaTarget: env.daytonaTarget,
       boatApiKey: env.boatApiKey,
       boatApiUrl: env.boatApiUrl,
-      dataDir: env.dataDir,
-      prisma,
     });
   const mcpOAuth = new McpOAuthBroker(
     prisma,
@@ -472,8 +455,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         ),
     },
     onEmailError: (error) => getLogger().error("transactional email delivery failed", error),
-    extraOrigins: MOBILE_AUTH_ORIGINS,
-    androidAppCertFingerprints: env.passkeyAndroidCertFingerprints,
     beforeDeleteUser: async (userId) => {
       // First, so a provider failure aborts deletion before anything is destroyed.
       await billing?.cancelForDeletedUser(userId);
@@ -703,10 +684,8 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       emailCode: auth.emailCodeSignIn,
       billing: Boolean(billing),
       passkeyRpId: auth.passkeyRpId,
-      nativePasskeys: nativePasskeys(env, auth.passkeyRpId),
     } satisfies AuthCapabilities);
   });
-  mountAppAssociation(app, env);
   if (localEmailEmulator && env.nodeEnv === "development") {
     app.get(
       "/api/dev/emails",
@@ -749,7 +728,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     await auditAuthResponse(path, ip, response);
     return response;
   });
-  mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
   const requestSession = async (request: Request) => {
     // The bearer plugin turns a signed `Authorization: Bearer` into the session cookie.
     const session = await auth.api.getSession({ headers: request.headers });
@@ -1154,10 +1132,7 @@ export function isTrustedOrigin(
   env: Pick<AppEnv, "webOrigin" | "apiUrl" | "authUrl">,
 ) {
   if (!origin) return true;
-  if (origin.startsWith("rakazo://")) return true;
-  const allowed = new Set(
-    [env.webOrigin, env.apiUrl, env.authUrl, ...MOBILE_AUTH_ORIGINS].flatMap(originVariants),
-  );
+  const allowed = new Set([env.webOrigin, env.apiUrl, env.authUrl].flatMap(originVariants));
   return allowed.has(origin);
 }
 
@@ -1166,7 +1141,7 @@ function isLoopbackHost(host: string): boolean {
 }
 
 function originVariants(origin: string): string[] {
-  if (!origin || origin === "rakazo://") return [];
+  if (!origin) return [];
   const variants = [origin, ...loopbackTwinOrigins(origin)];
   try {
     const url = new URL(origin);

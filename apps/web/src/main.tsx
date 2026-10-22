@@ -3,7 +3,6 @@ import { StrictMode, useEffect, useLayoutEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { App } from "./App";
-import { DesktopUpdatesProvider } from "./components/DesktopUpdates";
 import { I18nBootstrap } from "./components/I18nBootstrap";
 import { applyUiDirection } from "./lib/apply-ui-direction";
 import { clientUpdates } from "./lib/client-update";
@@ -58,12 +57,10 @@ createRoot(document.getElementById("root")!, { onCaughtError: reportCaughtReactE
           land while the URL already moved. */}
       <BrowserRouter useTransitions={false}>
         <ClientUpdateOnNavigate />
-        <DesktopUpdatesProvider>
-          <TooltipProvider>
-            <App />
-          </TooltipProvider>
-          <Toaster />
-        </DesktopUpdatesProvider>
+        <TooltipProvider>
+          <App />
+        </TooltipProvider>
+        <Toaster />
       </BrowserRouter>
     </I18nBootstrap>
   </StrictMode>,

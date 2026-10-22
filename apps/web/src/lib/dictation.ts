@@ -37,26 +37,12 @@ const SILENCE_RMS = 0.035;
 export const TRANSCRIPTION_RESPONSE_TIMEOUT_MS = 70_000;
 export const MAX_TRANSCRIPTION_RESPONSE_BYTES = 64 * 1024;
 const ENDPOINT_UNSUPPORTED =
-  "This browser can't detect when you stop talking. Use Chrome, the desktop app, or hold-to-talk in the composer.";
+  "This browser can't detect when you stop talking. Use Chrome or hold-to-talk in the composer.";
 /** Web Speech codes that mean the cloud recognizer cannot be used. */
 const WEB_SPEECH_SERVICE_ERRORS = new Set(["network", "service-not-allowed"]);
 
 export function webSpeechAvailable(): boolean {
-  return Boolean(speechRecognitionCtor()) && !electronSpeechHost();
-}
-
-/**
- * Electron exposes webkitSpeechRecognition without a speech-service key, so
- * recognition fails with `network`. Don't treat that API as available there.
- */
-function electronSpeechHost(): boolean {
-  if (typeof window !== "undefined") {
-    const host = window as Window & { rakazoDesktop?: unknown };
-    if (host.rakazoDesktop) return true;
-  }
-  if (typeof navigator === "undefined") return false;
-  const agent = navigator.userAgent;
-  return typeof agent === "string" && agent.includes("Electron");
+  return Boolean(speechRecognitionCtor());
 }
 
 /**
@@ -270,7 +256,7 @@ export class Dictation {
     this.set({
       ...IDLE,
       error:
-        "This browser has no on-device dictation. Connect a voice provider with transcription, or use Chrome / the desktop app.",
+        "This browser has no on-device dictation. Connect a voice provider with transcription, or use Chrome.",
     });
   }
 

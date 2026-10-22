@@ -21,8 +21,7 @@ function currentBrowser(): PasskeyBrowser {
 
 /**
  * Whether this page can use passkeys: the server offers a relying party this host
- * belongs to, and the browser has a ready platform authenticator. Electron on macOS
- * reports none without WebAuthn configured, so it is hidden there by detection.
+ * belongs to, and the browser has a ready platform authenticator.
  */
 export async function passkeysSupported(
   rpId: string | null | undefined,

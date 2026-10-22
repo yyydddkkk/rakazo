@@ -38,7 +38,6 @@ vi.mock("./pages/Board", () => {
   return { BoardPage: () => <div>Board page</div> };
 });
 vi.mock("./pages/IntegrationSetup", () => ({ IntegrationSetupPage: () => null }));
-vi.mock("./pages/LocalSettings", () => ({ LocalSettingsPage: () => null }));
 vi.mock("./pages/McpOAuthCallback", () => ({ McpOAuthCallbackPage: () => null }));
 
 import { App } from "./App";

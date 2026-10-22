@@ -18,8 +18,8 @@ import {
   createProductAnalytics,
   createRoutineRetryNoticeReconciler,
   createRunExecutor,
-  createRunSandbox,
   createRunSecretWriter,
+  createSandboxProvider,
   createTicketChangeNotifier,
   createWebProvider,
   databaseCapacityBackoffMs,
@@ -122,12 +122,10 @@ async function main() {
   const { key: deploymentModelKey, configured: deploymentModelConfigured } =
     resolveDeploymentModel();
   const sandboxProvider = resolveSandboxProvider(process.env);
-  const sandbox = createRunSandbox(sandboxProvider, {
+  const sandbox = createSandboxProvider(sandboxProvider, {
     ...sandboxProviderOptionsFromEnv(process.env),
     supervisorUrl: process.env.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     supervisorToken: sandboxProvider === "docker" ? resolveSupervisorToken(process.env) : undefined,
-    dataDir,
-    prisma,
   });
   const allowPrivateEndpoint = process.env.MCP_ALLOW_PRIVATE_ENDPOINT === "true";
   const mcpOAuth = new McpOAuthBroker(prisma, secrets, {}, allowPrivateEndpoint);

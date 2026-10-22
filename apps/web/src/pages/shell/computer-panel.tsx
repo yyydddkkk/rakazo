@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { ComputersUnavailableHint } from "../../components/ComputersUnavailableHint";
 import { screenIframeSandbox } from "../../lib/computer-screen";
 import { RoutineListHeader, RoutineListRow } from "../RoutineEditor";
-import { computerLabel, computerPlaceholder, DesktopKindEmptyState } from "./computer-view";
+import { computerLabel, computerPlaceholder } from "./computer-view";
 
 type ComputerPanelProps = {
   bot: Bot;
@@ -65,8 +65,6 @@ export function ComputerPanel({
           <div className="grid h-full place-items-center text-sm text-muted-foreground/80">
             <Trans>Open in full window</Trans>
           </div>
-        ) : computer?.kind === "desktop" ? (
-          <DesktopKindEmptyState className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground/80" />
         ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
           <iframe
             title={t`Bot screen preview`}

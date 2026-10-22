@@ -1,7 +1,7 @@
-export function initialBootstrapTarget(pathname: string, desktop: boolean) {
+export function initialBootstrapTarget(pathname: string) {
   const appRoute = pathname === "/app" || pathname.startsWith("/app/");
-  if (!appRoute && !(desktop && pathname === "/")) return null;
-  return { botId: appRoute ? botIdFromPath(pathname) : undefined };
+  if (!appRoute) return null;
+  return { botId: botIdFromPath(pathname) };
 }
 
 function botIdFromPath(pathname: string) {

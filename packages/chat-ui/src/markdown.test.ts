@@ -1,10 +1,8 @@
-import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import {
   closeUnterminatedFence,
   inlineMarkdownImageSrc,
   linkFaviconOrigin,
-  linkifyExplicitUrls,
   linkLabel,
   markdownLinkDisplayParts,
   markdownLinkRequiresConfirmation,
@@ -12,40 +10,6 @@ import {
   sanitizeMarkdownImageUrl,
   sanitizeMarkdownUrl,
 } from "./markdown";
-
-type Token = { type: string; attrGet(name: string): string | null; children: Token[] | null };
-type Parser = Parameters<typeof linkifyExplicitUrls>[0] & {
-  parseInline(source: string, env: object): Token[];
-};
-
-// The markdown-it the native renderer ships; chat-ui has no direct dependency on it.
-const rendererRequire = createRequire(
-  createRequire(import.meta.url).resolve("@ronradtke/react-native-markdown-display/package.json"),
-);
-const markdownIt = rendererRequire("markdown-it") as (options: { typographer: boolean }) => Parser;
-
-function linkHrefs(text: string) {
-  const parser = linkifyExplicitUrls(markdownIt({ typographer: true }));
-  return (parser.parseInline(text, {})[0]?.children ?? [])
-    .filter((token) => token.type === "link_open")
-    .map((token) => token.attrGet("href"));
-}
-
-describe("linkifyExplicitUrls", () => {
-  it("links bare http(s) URLs and email addresses", () => {
-    expect(
-      linkHrefs("see http://example.test and https://example.com/a?b=1, or bob@example.com"),
-    ).toEqual(["http://example.test", "https://example.com/a?b=1", "mailto:bob@example.com"]);
-  });
-
-  it("leaves file names, bare domains and unopenable schemes as text", () => {
-    expect(
-      linkHrefs(
-        "setup.py notes.md example.com www.example.com ftp://example.com //example.com javascript:alert(1)",
-      ),
-    ).toEqual([]);
-  });
-});
 
 describe("plainTextLinkParts", () => {
   function visible(text: string) {
@@ -87,18 +51,18 @@ describe("plainTextLinkParts", () => {
     expect(visible(wrapped)).toBe(wrapped);
   });
 
-  it("matches bot autolinks when parentheses are nested or trailing", () => {
+  it("extracts links around nested parentheses and trailing punctuation", () => {
     const samples = [
-      "https://en.wikipedia.org/wiki/Foo_(bar)",
-      "(see https://example.com)",
-      "https://example.com/foo_(bar))",
-      "https://example.com/Foo_(bar_(baz))",
-      "https://example.com/path_(a)_(b).",
-    ];
-    for (const text of samples) {
+      ["https://en.wikipedia.org/wiki/Foo_(bar)", "https://en.wikipedia.org/wiki/Foo_(bar)"],
+      ["(see https://example.com)", "https://example.com"],
+      ["https://example.com/foo_(bar))", "https://example.com/foo_(bar)"],
+      ["https://example.com/Foo_(bar_(baz))", "https://example.com/Foo_(bar_(baz)"],
+      ["https://example.com/path_(a)_(b).", "https://example.com/path_(a)_(b)"],
+    ] as const;
+    for (const [text, href] of samples) {
       expect(
         plainTextLinkParts(text).flatMap((part) => (part.type === "link" ? [part.href] : [])),
-      ).toEqual(linkHrefs(text));
+      ).toEqual([href]);
       expect(visible(text)).toBe(text);
     }
   });

@@ -152,8 +152,6 @@ x-app-environment: &app-environment
   SANDBOX_PROVIDER: docker
   SANDBOX_SUPERVISOR_URL: http://supervisor:7091
   SANDBOX_SUPERVISOR_TOKEN:
-  SANDBOX_HOST_URL:
-  SANDBOX_HOST_TOKEN:
   SANDBOX_COMMAND_TIMEOUT_MS:
   SANDBOX_IDLE_MS:
   SANDBOX_MAX_COMPUTERS_PER_USER:
@@ -312,8 +310,6 @@ services:
       WEB_ORIGIN:
       AUTH_PASSWORD_ENABLED: ${AUTH_PASSWORD_ENABLED:-true}
       AUTH_BREACHED_PASSWORD_CHECK_ENABLED: ${AUTH_BREACHED_PASSWORD_CHECK_ENABLED:-false}
-      PASSKEY_APPLE_APP_IDS:
-      PASSKEY_ANDROID_CERT_SHA256:
       # Proxies whose X-Forwarded-For is believed. Unset trusts this stack's own networks: the web
       # proxy and a reverse proxy on the host. See docs/self-host.md#client-addresses.
       TRUSTED_PROXIES:
@@ -327,7 +323,6 @@ services:
       SIGNUPS_ENABLED:
       SIGNUP_ALLOWLIST:
       SCREEN_PROXY_SECRET: ${SCREEN_PROXY_SECRET:?Set SCREEN_PROXY_SECRET in .env}
-      RAKAZO_DESKTOP_STACK_TOKEN:
       RAKAZO_UPDATER_URL:
       RAKAZO_UPDATER_TOKEN:
       RAKAZO_GIT_SHA:

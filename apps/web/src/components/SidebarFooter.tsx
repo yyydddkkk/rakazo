@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ANDROID_APK_URL, IOS_APP_STORE_URL } from "@rakazo/contracts";
 import {
   AppMarkStack,
   Button,
@@ -10,19 +9,15 @@ import {
 } from "@rakazo/ui-web";
 import {
   BookOpen,
-  Download,
   FolderOpen,
   Gauge,
   LogOut,
   Plug,
   Settings,
-  Smartphone,
   SquareKanban,
   UserRound,
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
-import { useSidebarUpdate } from "./DesktopUpdates";
-import { IconTooltip } from "./IconTooltip";
 
 type Props = {
   mini?: boolean;
@@ -67,7 +62,6 @@ export function SidebarFooter({
   logOutError,
 }: Props) {
   const { t } = useLingui();
-  const update = useSidebarUpdate();
   const [failedImage, setFailedImage] = useState<string | null>(null);
   const pillRef = useRef<HTMLButtonElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
@@ -152,15 +146,6 @@ export function SidebarFooter({
             </Button>
             <a
               className={`${buttonVariants({ variant: "ghost" })} h-9 w-full justify-start gap-2.5 font-normal`}
-              href={/Android/i.test(navigator.userAgent) ? ANDROID_APK_URL : IOS_APP_STORE_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Smartphone className="text-muted-foreground" strokeWidth={1.75} />
-              <Trans>Get the mobile app</Trans>
-            </a>
-            <a
-              className={`${buttonVariants({ variant: "ghost" })} h-9 w-full justify-start gap-2.5 font-normal`}
               href="https://github.com/elie222/rakazo/blob/main/docs/self-host.md"
               target="_blank"
               rel="noreferrer"
@@ -225,19 +210,6 @@ export function SidebarFooter({
           </span>
           <AppMarkStack marks={logos.slice(0, markCount)} ringClassName="ring-sidebar-accent" />
         </Button>
-      ) : null}
-      {update.available ? (
-        <IconTooltip label={t`Install update`}>
-          <Button
-            size="icon-lg"
-            className="rounded-full"
-            aria-label={t`Install update`}
-            disabled={update.busy}
-            onClick={update.install}
-          >
-            <Download aria-hidden="true" />
-          </Button>
-        </IconTooltip>
       ) : null}
     </div>
   );

@@ -9,7 +9,6 @@
       "development": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./local-settings": "./src/local-settings.js",
     "./client-build": {
       "types": "./src/client-build.ts",
       "development": "./src/client-build.ts",

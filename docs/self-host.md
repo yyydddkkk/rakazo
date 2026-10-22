@@ -1,10 +1,10 @@
 # Self-hosting Rakazo
 
-The signed-in product is a long-running API, a Graphile Worker, Postgres, and a computer provider (Docker supervisor, E2B, Daytona, CreateOS, or Boat). It is not a static site. The marketing site in `apps/www` can be hosted separately.
+The signed-in product is a long-running API, a Graphile Worker, Postgres, and a computer provider (Docker supervisor, E2B, Daytona, CreateOS, or Boat). It is not a static site.
 
 ## Local (source checkout)
 
-Same as the README quick start: `.env` from `.env.example`, Postgres via Compose, `pnpm sandbox:build`, `pnpm dev`, then [http://127.0.0.1:5173](http://127.0.0.1:5173) (or `http://localhost:5173` — both loopback hosts are trusted). Electron: `pnpm --filter @rakazo/desktop dev` while that stack is up, choosing **Existing instance** with that address. The desktop app's **This computer** option instead installs and runs the published images itself with Docker Compose (see [Published images](#published-images-no-checkout)), using port 45173 by default so it can run alongside `pnpm dev`. If that port is occupied, the app selects and remembers another loopback port. The managed API gets a Docker-assigned loopback port; all desktop traffic uses the web origin.
+Same as the README quick start: `.env` from `.env.example`, Postgres via Compose, `pnpm sandbox:build`, `pnpm dev`, then [http://127.0.0.1:5173](http://127.0.0.1:5173) (or `http://localhost:5173` — both loopback hosts are trusted).
 
 For source development in WSL, keep the checkout and `data` directory in the Linux filesystem (for example, `~/rakazo`), and run `pnpm dev` as your normal user. The host-run supervisor matches bot container UID/GID to that user. If Docker Desktop container IPs are unreachable, set `SANDBOX_CONTROL_VIA_LOOPBACK=true` in `.env`; this publishes the token-protected control service on a random loopback port. Leave this unset for the Compose-hosted supervisor.
 
@@ -122,7 +122,7 @@ warning in its log. It keeps the first completed answer; a check that could not 
 error or timeout) fails that computer's start and runs again on the next one. An install from before the ruleset existed therefore
 keeps working when it upgrades. After installing the ruleset, recreate the supervisor, or set
 `restricted` to refuse computers whenever the rules are missing. A host-run supervisor
-(`pnpm dev`) and the desktop app's **This computer** stack default to open: Docker Desktop
+(`pnpm dev`) defaults to open: Docker Desktop
 keeps its bridges in a VM the host rules cannot reach.
 
 Screen streaming is unaffected: the supervisor and web proxy join each computer's bridge,
@@ -281,13 +281,6 @@ Register this redirect URI at the provider (using your public `BETTER_AUTH_URL` 
 https://app.example.com/api/auth/callback/oidc
 ```
 
-Web, Electron and mobile use the same provider redirect URI. Electron completes SSO in a
-sandboxed in-app popup sharing the app's session, then returns to the main window. Mobile completes the callback
-on the API, then returns to `rakazo://sign-in` (or `rakazo://account` for linking and reauthentication) through Better Auth's Expo authorization proxy
-and a native auth browser session. The `rakazo` app scheme is trusted by the auth server;
-never register a client secret in the mobile app. Mobile stores the resulting session with
-SecureStore, like password sign-in. Native builds need the Expo WebBrowser module.
-
 Provider emails are verified only when `email_verified` is the boolean `true`. False or missing
 claims stay unverified, including on subsequent sign-ins. Sign-in never links accounts by email.
 If an email belongs to another account, sign in to that existing account and choose **Link SSO**
@@ -437,7 +430,7 @@ with the server-only secret. No names,
 emails, prompts, responses, message text, DOM, URLs, search parameters, document
 contents, request metadata, or raw errors are exported. There is no browser or
 mobile analytics SDK, autocapture, session replay, or third-party script.
-Web, Electron, and mobile send only fixed screen/surface enums to the authenticated
+The web UI sends only fixed screen/surface enums to the authenticated
 API; lifecycle events come from the shared backend. This works across clients
 without giving a collector access to their content. Local and self-hosted
 installations remain off until their backend is configured.
@@ -593,14 +586,13 @@ managed endpoints, the deployment-wide fallback remains
 ### Client updates
 
 Every web build is named by the UTC time it was built (`YYYYMMDDHHMMSS`). The web app sends its
-build on each `/rpc` request in `x-rakazo-client-build` (`web/20261022093015`; the mobile app sends
-`mobile/` and the time its JavaScript bundle was built), and the API answers with the web build in
+build on each `/rpc` request in `x-rakazo-client-build` (`web/20261022093015`), and the API answers with the web build in
 its own image in `x-rakazo-build`. An open tab that sees a newer build reloads at a safe moment:
 while hidden, on its next navigation, or after a few idle minutes with nothing typed.
 
 To retire old clients immediately, set `RAKAZO_MIN_CLIENT_BUILD` on the API, for example
-`web=20261022093015` or `web=20261022093015,mobile=20261001000000`, and restart it. Older clients
-get HTTP 426 `CLIENT_UPDATE_REQUIRED`: the web app reloads, and the mobile app offers its update.
+`web=20261022093015`, and restart it. Older clients
+get HTTP 426 `CLIENT_UPDATE_REQUIRED`: the web app reloads.
 Read the current build from the `x-rakazo-build` header of any `/rpc` response. Requests that name
 no build, such as webhooks and API tools, are never refused. A malformed value stops the API from
 starting rather than being ignored.
@@ -853,7 +845,7 @@ For servers that accept standard `reasoning_effort`, enable **Supports thinking*
 Existing connections default to disabled. Reconnect former Qwen-list or deployment-local models
 via **Settings → Models** and turn it on; the old environment list is no longer read.
 
-Enabled connections default to medium thinking. Web and desktop expose **Thinking** in a bot's
+Enabled connections default to medium thinking. The web UI exposes **Thinking** in a bot's
 advanced settings; mobile inherits the same backend policy. Rakazo sends standard
 `reasoning_effort` (`minimal`, `low`, `medium`, `high`, or `none` when off); the server owns
 model-specific translation. Leave **Supports thinking** off when the server lacks standard effort
@@ -885,10 +877,6 @@ commands, add `-f docker-compose.override.yml` after the base file.
 
 ## Choosing a computer provider
 
-The Electron desktop app is a client of the same API. Docker remains the default. For an app-managed local instance, the deployment owner can choose **Use this Mac** (macOS) or **Use this computer** (Windows/Linux). After native confirmation, an authenticated bridge sends commands from the Docker backend to Electron, where they run under your OS account. **Computer Access…** in the app menu changes the choice; **Revoke Local Computer Access** immediately disconnects active operations and revokes the saved permission. Local execution requires the desktop app to remain running. Connecting to an existing remote instance does not grant it access to your computer. Browser and mobile clients use the deployment’s configured computer; they do not expose their own host. `SANDBOX_PROVIDER=desktop` is a separate, development-only configuration for backends running directly on the intended host.
-
-Native file reads and workspace exports are limited to 8 MiB per file. A larger workspace file fails the checkpoint and preserves the previous saved workspace; local files remain on the computer. Writes are bounded by the 12 MiB encoded request limit.
-
 - **Published images** (`docker-compose.images.yml`) default to `SANDBOX_PROVIDER=docker` with a
   local supervisor and published `ghcr.io/elie222/rakazo/computer` image. No E2B account required.
   Optional: set `e2b`, `daytona`, `createos`, or `boat` plus the matching API key for remote computers.
@@ -909,19 +897,6 @@ Native file reads and workspace exports are limited to 8 MiB per file. A larger 
   workspace under `/home/user/rakazo-home`, and refreshes a two-hour TTL. Boat uses the shared Linux
   desktop runtime and protected port routes for concurrent bot desktops. Each bot has its own
   persistent Chrome profile; logins are not shared between bots.
-- **Local computer access** in the app-managed Electron instance runs commands on Windows, macOS,
-  or Linux through the native bridge. Bots can read/change local files and launch installed apps
-  through OS commands, subject to your account and OS permissions. Portable file tools and
-  checkpoints remain scoped to bot workspaces; use commands for other local folders. Graphical
-  screen control is unavailable. Permission is remembered locally and can be revoked from the
-  app menu. Only enable this for a trusted personal instance: every bot on that instance can use
-  your account’s permissions.
-- **Desktop provider** (`SANDBOX_PROVIDER=desktop`) runs commands directly on the API/worker host,
-  with only a minimal shell environment (no server secrets). The API and worker refuse it unless
-  `NODE_ENV` is `development` or `test`, so a production server never runs bot commands on itself.
-  Setting this inside a container does not grant access to the physical computer. Docker deployments
-  use the authenticated native bridge when local computer access is selected; they never silently
-  fall back to executing on the backend host.
 - **Fake** is only an emulator for verification.
 - **None** boots the product without a computer host (fallback when Docker/supervisor is not
   configured, or when a remote provider is selected without its API key).
@@ -951,7 +926,6 @@ It never prints the key. Store a copy somewhere other than the server and its ba
 | Install | Unset means |
 | --- | --- |
 | Compose files, published images, Railway | `on` |
-| Desktop app, **This computer** | `off` (the computer's disk encryption covers it) |
 | Source checkout with `NODE_ENV=development` or `RAKAZO_ALLOW_DEV_SECRETS=1` | `off` |
 
 With `off`, new content and files are stored readable, so you can query your own database
@@ -1337,7 +1311,7 @@ Product contracts stay compatible across cloud and self-hosted.
 ### Upgrading to the separate app database login
 
 Releases with [database roles](#database-roles) need `POSTGRES_APP_PASSWORD` in `.env`. The
-desktop app, `install-images.sh`, the updater sidecar and `infra/compose/deploy-main.sh` add it
+`install-images.sh`, the updater sidecar and `infra/compose/deploy-main.sh` add it
 when it is missing.
 Elsewhere, add it yourself (`openssl rand -hex 16`) before you pull, or Compose stops at config
 validation with `Set POSTGRES_APP_PASSWORD in .env`. On first start, the API creates the
@@ -1568,7 +1542,6 @@ Use the same HTTPS origin for the web app, `/api`, and `/rpc`. Preserve the auth
 proxy routes. Choose a [computer provider](#choosing-a-computer-provider) appropriate to the
 service's trust boundary. `SIGNUPS_ENABLED` applies on the API's first start. A non-empty
 `SIGNUP_ALLOWLIST` applies on every API start.
-The optional marketing site in `apps/www` can be hosted separately.
 
 ## Image and video generation
 
@@ -1607,42 +1580,13 @@ budget. Provider 429 responses are returned without automatic retries. Outputs
 must fit both the 10 MiB media ceiling and the configured attachment limit;
 larger outputs are rejected.
 
-Images use existing inline chat rendering. MP4 files can be previewed with native
-video controls on web and Electron and opened/downloaded through the existing
-native file flow on mobile. No new mobile player or settings screen is required.
-
-## Connect mobile clients
-
-The iOS and Android app can also point at a self-hosted origin at runtime. On the sign-in screen, tap **Use a custom server** and enter the same HTTPS origin as `WEB_ORIGIN` (for example `https://app.example.com`). Store builds still default to `EXPO_PUBLIC_API_URL`; the in-app setting is an override for people running their own API. Changing the server signs the device out of any previous session.
-
-### Passkeys
-
-Passkeys are on whenever `WEB_ORIGIN` is an HTTPS domain (or `localhost` in development); the
-relying party is that origin's host, so existing passkeys keep working only while `WEB_ORIGIN`
-stays on the same domain. They are off when password sign-in is disabled for SSO-only
-deployments. On web, a browser offers them where it has a platform authenticator; the macOS
-desktop app does not, so it hides them.
-
-Native apps can use a domain's passkeys only when the domain vouches for them and the app was
-built for that domain (the app's associated domain comes from `EXPO_PUBLIC_API_URL` at build
-time). To let a build use this server's passkeys, set:
-
-```bash
-# iOS: <Apple Team ID>.<bundle id>, comma-separated. Served as /.well-known/apple-app-site-association.
-PASSKEY_APPLE_APP_IDS=ABCDE12345.com.rakazo.app
-# Android: SHA-256 fingerprints of the app signing certificates, comma-separated.
-# Served as /.well-known/assetlinks.json and accepted as passkey origins.
-PASSKEY_ANDROID_CERT_SHA256=AA:BB:...:FF
-```
-
-Until a platform's setting is set, the native app on that platform hides passkeys for this
-server. Both files are served through the web origin, so a reverse proxy in front of the web container
-must pass `/.well-known/` through to it.
+Images use existing inline chat rendering. MP4 files can be previewed with browser
+video controls and downloaded from the web UI.
 
 ## Upload size
 
 `MAX_UPLOAD_SIZE_MB` sets the per-file chat attachment and computer file transfer limit
 in MiB (1 MiB = 1,048,576 bytes). It defaults to `10` and must be a positive integer.
-Set it in `.env` and restart the API, worker, and Docker supervisor (when used). Web, desktop, and mobile use the
+Set it in `.env` and restart the API, worker, and Docker supervisor (when used). The web UI uses the
 limit advertised by the server. If a reverse proxy limits request bodies, allow
 room for base64 encoding (about 4/3 of the file size) and the JSON envelope.

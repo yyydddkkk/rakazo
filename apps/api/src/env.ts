@@ -31,16 +31,11 @@ export interface AppEnv {
   breachedPasswordCheck?: boolean;
   oidc?: OidcConfig;
   nodeEnv: string;
-  desktopStackToken?: string;
   databaseUrl: string;
   realtimeDatabaseUrl: string;
   authSecret: string;
   authUrl: string;
   webOrigin: string;
-  /** `<TEAM_ID>.<bundle id>` of iOS apps that may use this domain's passkeys. */
-  passkeyAppleAppIds: string[];
-  /** SHA-256 signing certificate fingerprints of Android apps that may use this domain's passkeys. */
-  passkeyAndroidCertFingerprints: string[];
   privacyPolicyUrl?: string;
   apiUrl: string;
   apiHost: string;
@@ -204,12 +199,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     nodeEnv: source.NODE_ENV ?? "",
     databaseUrl: required(source, "DATABASE_URL"),
     realtimeDatabaseUrl: source.REALTIME_DATABASE_URL ?? required(source, "DATABASE_URL"),
-    desktopStackToken: optional(source.RAKAZO_DESKTOP_STACK_TOKEN),
     authSecret,
     authUrl: source.BETTER_AUTH_URL ?? source.WEB_ORIGIN ?? "http://127.0.0.1:5173",
     webOrigin: source.WEB_ORIGIN ?? "http://127.0.0.1:5173",
-    passkeyAppleAppIds: list(source.PASSKEY_APPLE_APP_IDS),
-    passkeyAndroidCertFingerprints: androidCertFingerprints(source.PASSKEY_ANDROID_CERT_SHA256),
     privacyPolicyUrl: optional(source.PRIVACY_POLICY_URL),
     apiUrl: source.API_URL ?? "http://127.0.0.1:3100",
     apiHost: source.API_HOST ?? "127.0.0.1",
@@ -323,19 +315,4 @@ function browserMonitoringFromEnv(source: NodeJS.ProcessEnv): AppEnv["browserMon
 function optional(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
-}
-
-function list(value: string | undefined): string[] {
-  return (value ?? "").split(/[\s,]+/).filter(Boolean);
-}
-
-/** SHA-256 signing certificate fingerprints, normalized to the `AA:BB:…` form Digital Asset Links uses. */
-function androidCertFingerprints(value: string | undefined): string[] {
-  return list(value).map((fingerprint) => {
-    const hex = fingerprint.replace(/:/g, "");
-    if (!/^[0-9a-f]{64}$/i.test(hex)) {
-      throw new Error("PASSKEY_ANDROID_CERT_SHA256 must list SHA-256 fingerprints");
-    }
-    return hex.toUpperCase().match(/../g)!.join(":");
-  });
 }

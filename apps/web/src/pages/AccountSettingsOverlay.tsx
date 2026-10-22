@@ -24,7 +24,6 @@ import { Link } from "react-router-dom";
 import { AccountAccess } from "../components/AccountAccess";
 import { SuccessPop } from "../components/ai/primitives";
 import { ComputersUnavailableHint } from "../components/ComputersUnavailableHint";
-import { DesktopUpdateSection } from "../components/DesktopUpdates";
 import { PasskeySettings } from "../components/PasskeySettings";
 import type { ServerUpdateLoad } from "../components/SoftwareUpdateSection";
 import { hasServerUpdates, SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
@@ -467,7 +466,6 @@ export function ComputerSettingsPanel({
 export function UpdatesSettingsPanel({ serverUpdate }: { serverUpdate: ServerUpdateLoad }) {
   return (
     <div className="space-y-5">
-      <DesktopUpdateSection />
       {hasServerUpdates(serverUpdate) ? <SoftwareUpdateSection load={serverUpdate} /> : null}
     </div>
   );

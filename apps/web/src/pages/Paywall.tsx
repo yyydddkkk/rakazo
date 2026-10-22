@@ -39,7 +39,7 @@ export function PaywallPage({ status }: { status: BillingStatus }) {
     } catch {
       setError(t`Could not open billing`);
     } finally {
-      // Desktop opens the URL in the system browser and this page stays, so re-enable.
+      // Re-enable if the browser keeps this page open.
       setPending(false);
     }
   }
@@ -49,7 +49,6 @@ export function PaywallPage({ status }: { status: BillingStatus }) {
     t`Bots with their own computer and browser`,
     t`Routines that run while you're away`,
     t`Any model, with your own key`,
-    t`Web, desktop and mobile apps`,
   ];
   const title =
     status.canManage && status.price

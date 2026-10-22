@@ -213,7 +213,7 @@ export function CallReturnBar() {
       type="button"
       data-testid="call-return-bar"
       onClick={() => setCallMinimized(false)}
-      className="app-no-drag flex min-h-10 w-full shrink-0 items-center justify-center gap-1.5 bg-success px-3 text-sm font-medium text-background"
+      className="flex min-h-10 w-full shrink-0 items-center justify-center gap-1.5 bg-success px-3 text-sm font-medium text-background"
     >
       <span dir="auto">{t`Return to call with ${call.botName}`}</span>
       <span className="tabular-nums">

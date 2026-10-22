@@ -139,11 +139,6 @@ async function ensureGraphicalComputer(
   actor: Actor,
   bot: Awaited<ReturnType<ReturnType<typeof createRepos>["getBot"]>>,
 ) {
-  if (bot.computer?.kind === "desktop") {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "Teaching needs a graphical sandbox computer, not a desktop host",
-    });
-  }
   if (!bot.computer) throw new IsolationError();
   if (bot.computer.state !== "running" || !bot.computer.providerRef) {
     const ctx = computerContext(actor, bot.id, "skills.start");
@@ -184,11 +179,6 @@ async function ensureGraphicalComputer(
   }
   if (!bot.computer?.providerRef || bot.computer.state !== "running") {
     throw new ORPCError("BAD_REQUEST", { message: "Computer must be running to teach" });
-  }
-  if (bot.computer.kind === "desktop") {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "Teaching needs a graphical sandbox computer, not a desktop host",
-    });
   }
   return bot;
 }

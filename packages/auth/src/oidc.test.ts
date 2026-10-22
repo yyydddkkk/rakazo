@@ -502,25 +502,7 @@ describe("OIDC callbacks", () => {
     expect(response.headers.get("location")).toContain("error=unable_to_link_account");
     expect(rows("account")).toHaveLength(1);
   });
-  it("hands the native browser callback to Expo with a valid bearer session", async () => {
-    setup();
-    const callback = await start(undefined, false, "rakazo://sign-in");
-    const authorize = `${issuer}/authorize?state=${new URL(`${origin}${callback}`).searchParams.get("state")}`;
-    const proxy = await request(
-      `/expo-authorization-proxy?${new URLSearchParams({ authorizationURL: authorize })}`,
-    );
-    expect(proxy.headers.get("location")).toBe(authorize);
-    const returned = await request(callback);
-    const destination = new URL(returned.headers.get("location")!);
-    expect(destination.protocol).toBe("rakazo:");
-    const signed = destination.searchParams
-      .get("cookie")!
-      .match(/(?:__Secure-)?better-auth\.session_token=([^;]+)/)![1]!;
-    cookies = "";
-    const session = await request("/get-session", undefined, decodeURIComponent(signed));
-    expect(session.status).toBe(200);
-    expect(await session.json()).toMatchObject({ user: { email: "sso@example.test" } });
-  });
+
   it("enforces the allowlist before inserting a user", async () => {
     setup({ signupAllowlist: "allowed@example.test" });
     expect((await signIn()).headers.get("location")).toContain("error=EMAIL_NOT_ALLOWED");
@@ -1018,54 +1000,6 @@ describe("SSO-only account deletion", () => {
     ).toBe(403);
     expect(rows("user")).toHaveLength(1);
     expect((await request("/delete-user", { token: code })).status).toBe(200);
-  });
-
-  it("supports reauthentication started by native bearer without a browser session cookie", async () => {
-    setup();
-    await signIn();
-    const token = String(rows("session")[0]!.token);
-    cookies = "";
-    const response = await request(
-      "/sign-in/social",
-      {
-        provider: "oidc",
-        callbackURL: "rakazo://sign-in",
-        additionalData: { reauthenticate: true },
-      },
-      token,
-      { origin: null },
-    );
-    expect(response.status).toBe(200);
-    const url = new URL(((await response.json()) as { url: string }).url);
-    const nonce = url.searchParams.get("nonce")!;
-    codes.set("native-reauth", {
-      nonce,
-      challenge: url.searchParams.get("code_challenge")!,
-      claims: {
-        sub: "subject-1",
-        email: "sso@example.test",
-        email_verified: true,
-        auth_time: Math.floor(Date.now() / 1000),
-      },
-    });
-    const authorize = `${issuer}/authorize?state=${url.searchParams.get("state")}`;
-    await request(
-      `/expo-authorization-proxy?${new URLSearchParams({ authorizationURL: authorize })}`,
-    );
-    const returned = await request(
-      `/callback/oidc?state=${url.searchParams.get("state")}&code=native-reauth`,
-    );
-    const destination = new URL(returned.headers.get("location")!);
-    expect(destination.protocol).toBe("rakazo:");
-    const signed = destination.searchParams
-      .get("cookie")!
-      .match(/(?:__Secure-)?better-auth\.session_token=([^;]+)/)![1]!;
-    cookies = "";
-    const bearer = decodeURIComponent(signed);
-    expect(
-      await (await request("/account-security", undefined, bearer, { origin: null })).json(),
-    ).toMatchObject({ freshOidcAuth: true });
-    expect((await request("/delete-user", {}, bearer, { origin: null })).status).toBe(200);
   });
 
   it("requires an authenticated session before starting reauthentication", async () => {

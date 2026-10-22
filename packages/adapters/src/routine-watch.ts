@@ -359,8 +359,7 @@ async function readComputer(
   if (!bot?.computer) throw new RoutineWatchError("This bot has no computer to check.");
   const mode = parseComputerMode(bot.computer.scope);
   if (watch.kind === "command") {
-    const graphical =
-      bot.computer.kind !== "desktop" && deps.sandbox.describe().capabilities.graphical;
+    const graphical = deps.sandbox.describe().capabilities.graphical;
     const refusal = graphical ? deps.commandRefusal?.(watch.command ?? "") : undefined;
     if (refusal) {
       throw new RoutineWatchError(
@@ -410,7 +409,7 @@ async function readComputer(
     const resolved = resolveWatchPath(mode, bot.id, path);
     const relative = posix.relative(botFolder, resolved);
     // Inside the workspace, pass the path relative to the provider's working
-    // directory so a desktop computer resolves it under its own home.
+    // directory so the computer resolves it under its own home.
     const outside = relative === ".." || relative.startsWith("../");
     if (mode !== "team" && (outside || posix.isAbsolute(relative))) return resolved;
     // `./` keeps a name such as `-reports` from being read as a `find` option.

@@ -29,20 +29,24 @@ describe("client builds", () => {
       kind: "web",
       build: "20261022093015",
     });
-    expect(parseClientBuild("mobile/20261001000000")).toEqual({
-      kind: "mobile",
-      build: "20261001000000",
-    });
-    for (const header of [null, "", "web", "web/", "cli/20261022093015", "web/2026/1", "web/abc"]) {
+    for (const header of [
+      null,
+      "",
+      "web",
+      "web/",
+      "cli/20261022093015",
+      "mobile/20261001000000",
+      "web/2026/1",
+      "web/abc",
+    ]) {
       expect(parseClientBuild(header)).toBeNull();
     }
   });
 
   it("parses per-client minimums and throws on a typo", () => {
     expect(parseMinimumClientBuilds(undefined)).toEqual({});
-    expect(parseMinimumClientBuilds(" web=20261022093015 , mobile=20261001000000 ")).toEqual({
+    expect(parseMinimumClientBuilds(" web=20261022093015 ")).toEqual({
       web: "20261022093015",
-      mobile: "20261001000000",
     });
     expect(() => parseMinimumClientBuilds("20261022093015")).toThrow(/RAKAZO_MIN_CLIENT_BUILD/);
     expect(() => parseMinimumClientBuilds("desktop=20261022093015")).toThrow();
@@ -54,8 +58,7 @@ describe("client builds", () => {
     expect(clientUpdateRequired("web/20261022093014", minimums)).toBe(true);
     expect(clientUpdateRequired("web/20261022093015", minimums)).toBe(false);
     expect(clientUpdateRequired("web/20261023000000", minimums)).toBe(false);
-    // Mobile has no minimum here, and callers that name no build are never refused.
-    expect(clientUpdateRequired("mobile/20200101000000", minimums)).toBe(false);
+    // Callers that name no build are never refused.
     expect(clientUpdateRequired(null, minimums)).toBe(false);
     expect(clientUpdateRequired("web/old", minimums)).toBe(false);
     expect(clientUpdateRequired("web/20200101000000", {})).toBe(false);

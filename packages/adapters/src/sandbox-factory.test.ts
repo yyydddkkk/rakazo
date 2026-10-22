@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NO_SANDBOX_MESSAGE } from "./none-sandbox.js";
 import { createSandboxProvider } from "./sandbox-factory.js";
 
@@ -43,21 +43,9 @@ describe("createSandboxProvider", () => {
     );
   });
 
-  it("refuses the desktop provider in a production server process", () => {
-    vi.stubEnv("NODE_ENV", "production");
-    try {
-      expect(() => createSandboxProvider("desktop", {})).toThrow(
-        "SANDBOX_PROVIDER=desktop runs bot commands directly on this host",
-      );
-    } finally {
-      vi.unstubAllEnvs();
-    }
-    expect(createSandboxProvider("desktop", {}).describe().id).toBe("desktop");
-  });
-
   it("throws on unknown provider", () => {
     expect(() => createSandboxProvider("bogus", {})).toThrow(
-      'Unknown SANDBOX_PROVIDER "bogus". Use none | docker | e2b | daytona | createos | boat | railway | desktop | fake.',
+      'Unknown SANDBOX_PROVIDER "bogus". Use none | docker | e2b | daytona | createos | boat | railway | fake.',
     );
   });
 });

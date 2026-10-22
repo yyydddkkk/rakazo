@@ -699,8 +699,7 @@ print(json.dumps(out))
   }
 
   async keepAlive(computer: ComputerRef): Promise<void> {
-    // GET does not count as activity. An exec resets auto-pause, and callers do
-    // not pass an AdapterContext through HostAwareSandbox.
+    // GET does not count as activity. An exec resets auto-pause.
     const context: AdapterContext = {
       operationId: "computer.keepAlive",
       traceId: "computer.keepAlive",

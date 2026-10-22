@@ -28,10 +28,7 @@ let primedBootstrap: {
   promise: Promise<AppBootstrap>;
 } | null = null;
 
-const initialTarget = initialBootstrapTarget(
-  window.location.pathname,
-  Boolean(window.rakazoDesktop),
-);
+const initialTarget = initialBootstrapTarget(window.location.pathname);
 if (initialTarget) {
   const { botId } = initialTarget;
   const promise = requestBootstrap(botId);

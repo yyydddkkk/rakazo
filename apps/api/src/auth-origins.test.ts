@@ -1,6 +1,6 @@
 import { createAuth } from "@rakazo/auth";
 import { describe, expect, it } from "vitest";
-import { isTrustedOrigin, MOBILE_AUTH_ORIGINS } from "./app.js";
+import { isTrustedOrigin } from "./app.js";
 
 // Better Auth skips its origin middleware under NODE_ENV=test, so check the
 // matcher that production uses for callback URLs and request origins.
@@ -11,7 +11,6 @@ async function trusted(url: string) {
     webOrigin: "https://app.example.test",
     signupsEnabled: undefined,
     signupAllowlist: undefined,
-    extraOrigins: MOBILE_AUTH_ORIGINS,
   });
   return (await auth.$context).isTrustedOrigin(url);
 }
@@ -23,15 +22,11 @@ const env = {
 };
 
 describe("CORS origins", () => {
-  it("allows the configured site, its loopback twin, and the mobile dev servers", () => {
+  it("allows the configured site and its loopback twin", () => {
     for (const origin of [
       "http://127.0.0.1:5173",
       "http://localhost:5173",
       "http://127.0.0.1:3100",
-      "http://localhost:8081",
-      "http://127.0.0.1:19006",
-      "http://[::1]:8081",
-      "rakazo://sign-in",
       "",
     ]) {
       expect(isTrustedOrigin(origin, env), origin).toBe(true);
@@ -54,6 +49,9 @@ describe("CORS origins", () => {
       "http://localhost:45173",
       "http://[::1]:9",
       "https://evil.example",
+      "http://localhost:8081",
+      "http://127.0.0.1:19006",
+      "rakazo://sign-in",
       "exp://192.168.1.20:8081",
     ]) {
       expect(isTrustedOrigin(origin, env), origin).toBe(false);
@@ -61,7 +59,7 @@ describe("CORS origins", () => {
   });
 });
 
-describe("mobile auth origins", () => {
+describe("auth callback origins", () => {
   it("does not trust an arbitrary Expo host as a callback", async () => {
     for (const url of [
       "exp://attacker.example.test:19000/--/verification-lure",
@@ -72,13 +70,13 @@ describe("mobile auth origins", () => {
     }
   });
 
-  it("keeps the app scheme, Expo web dev server and web origin", async () => {
-    for (const url of [
-      "rakazo://sign-in",
-      "http://localhost:8081/sign-in",
-      "https://app.example.test/sign-in",
-    ]) {
-      expect(await trusted(url), url).toBe(true);
+  it("accepts the configured web origin", async () => {
+    expect(await trusted("https://app.example.test/sign-in")).toBe(true);
+  });
+
+  it("rejects the removed native scheme and dev servers", async () => {
+    for (const url of ["rakazo://sign-in", "http://localhost:8081/sign-in"]) {
+      expect(await trusted(url), url).toBe(false);
     }
   });
 });

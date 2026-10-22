@@ -12,13 +12,9 @@ export const SERVER_BUILD_HEADER = "x-rakazo-build";
 export const CLIENT_UPDATE_REQUIRED = "CLIENT_UPDATE_REQUIRED";
 export const CLIENT_UPDATE_REQUIRED_STATUS = 426;
 
-export const CLIENT_KINDS = ["web", "mobile"] as const;
+export const CLIENT_KINDS = ["web"] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 export type MinimumClientBuilds = Partial<Record<ClientKind, string>>;
-
-export const IOS_APP_STORE_URL = "https://apps.apple.com/app/rakazo/id6801531099";
-export const ANDROID_APK_URL =
-  "https://github.com/elie222/rakazo/releases/download/android/rakazo.apk";
 
 const BUILD_ID = /^\d{14}$/;
 
@@ -49,7 +45,7 @@ export function parseClientBuild(
   return { kind: kind as ClientKind, build };
 }
 
-/** Parses `web=20261022093015,mobile=20261001000000`; throws on anything else so a typo cannot pass silently. */
+/** Parses `web=20261022093015`; throws on anything else so a typo cannot pass silently. */
 export function parseMinimumClientBuilds(value: string | undefined): MinimumClientBuilds {
   const minimums: MinimumClientBuilds = {};
   for (const entry of (value ?? "").split(",")) {
@@ -57,9 +53,7 @@ export function parseMinimumClientBuilds(value: string | undefined): MinimumClie
     if (!trimmed) continue;
     const [kind, build, ...rest] = trimmed.split("=").map((part) => part.trim());
     if (rest.length || !CLIENT_KINDS.includes(kind as ClientKind) || !isBuildId(build)) {
-      throw new Error(
-        `Invalid RAKAZO_MIN_CLIENT_BUILD entry "${trimmed}": use web=YYYYMMDDHHMMSS or mobile=YYYYMMDDHHMMSS`,
-      );
+      throw new Error(`Invalid RAKAZO_MIN_CLIENT_BUILD entry "${trimmed}": use web=YYYYMMDDHHMMSS`);
     }
     minimums[kind as ClientKind] = build;
   }

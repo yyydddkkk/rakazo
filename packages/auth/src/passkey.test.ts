@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { androidApkKeyHashOrigin, passkeyRelyingParty } from "./passkey.js";
+import { passkeyRelyingParty } from "./passkey.js";
 
 describe("passkeyRelyingParty", () => {
   it("uses the web origin's host so self-hosted domains need no extra setting", () => {
@@ -22,15 +22,5 @@ describe("passkeyRelyingParty", () => {
     expect(passkeyRelyingParty("https://192.0.2.10")).toBeNull();
     expect(passkeyRelyingParty("http://chat.example.org")).toBeNull();
     expect(passkeyRelyingParty("not a url")).toBeNull();
-  });
-
-  it("accepts the configured Android app signers", () => {
-    const fingerprint = Array.from({ length: 32 }, () => "AB").join(":");
-    expect(
-      passkeyRelyingParty("https://chat.example.org", [fingerprint, "bogus"])?.origins,
-    ).toEqual(["https://chat.example.org", ...androidApkKeyHashOrigin(fingerprint)]);
-    expect(androidApkKeyHashOrigin(fingerprint)).toEqual([
-      `android:apk-key-hash:${Buffer.alloc(32, 0xab).toString("base64url")}`,
-    ]);
   });
 });

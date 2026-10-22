@@ -253,7 +253,7 @@ it("withholds memory connection controls after a failed load and retries the edi
 const updatesNav = (container: HTMLElement) =>
   container.querySelector('[data-testid="settings-nav-updates"]');
 
-it("hides Updates when neither the desktop app nor the server can update", async () => {
+it("hides Updates when the server cannot update", async () => {
   const { container, cleanup } = await render({ isDeploymentOwner: true });
   try {
     await vi.waitFor(() => expect(updaterStatus).toHaveBeenCalled());
@@ -268,16 +268,6 @@ it("shows Updates to the owner of a server that can update itself", async () => 
   const { container, cleanup } = await render({ isDeploymentOwner: true });
   try {
     await vi.waitFor(() => expect(updatesNav(container)).not.toBeNull());
-  } finally {
-    await cleanup();
-  }
-});
-
-it("shows Updates in the desktop app", async () => {
-  vi.stubGlobal("rakazoDesktop", { update: {} });
-  const { container, cleanup } = await render({});
-  try {
-    expect(updatesNav(container)).not.toBeNull();
   } finally {
     await cleanup();
   }

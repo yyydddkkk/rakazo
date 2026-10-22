@@ -49,8 +49,6 @@ export type PlaywrightScreenshotManifest = {
 
 export type PlaywrightScreenshotMetadata = Omit<PlaywrightScreenshot, "comparison" | "fileName">;
 
-export type MobileScreenshot = Pick<PlaywrightScreenshot, "fileName" | "source" | "title">;
-
 export function validatePlaywrightScreenshotBudget(count: number, totalBytes: number): void {
   if (count > MAX_PLAYWRIGHT_SCREENSHOT_COUNT) {
     throw new Error(
@@ -383,36 +381,8 @@ export function renderScreenshotGallery(input: {
   screenshotsUrl: string;
   sha: string;
 }): string {
-  return renderGalleryPage({ ...input, presentation: "review" });
-}
-
-export function renderMobileScreenshotGallery(input: {
-  createdAt: string;
-  runUrl: string;
-  screenshots: MobileScreenshot[];
-  screenshotsUrl: string;
-  sha: string;
-}): string {
-  return renderGalleryPage({ ...input, presentation: "mobile" });
-}
-
-type GalleryInput =
-  | ({
-      presentation: "review";
-    } & Parameters<typeof renderScreenshotGallery>[0])
-  | {
-      createdAt: string;
-      presentation: "mobile";
-      runUrl: string;
-      screenshots: MobileScreenshot[];
-      screenshotsUrl: string;
-      sha: string;
-    };
-
-function renderGalleryPage(input: GalleryInput): string {
-  const mobile = input.presentation === "mobile";
   const galleryBaseUrl = new URL(".", input.screenshotsUrl);
-  const reviewScreenshots = mobile ? [] : input.screenshots;
+  const reviewScreenshots = input.screenshots;
   const counts = {
     changed: reviewScreenshots.filter((screenshot) => screenshot.comparison === "changed").length,
     failed: reviewScreenshots.filter((screenshot) => screenshot.captureType === "failure").length,
@@ -424,25 +394,11 @@ function renderGalleryPage(input: GalleryInput): string {
       screenshot.comparison === "changed" ||
       screenshot.comparison === "new",
   ).length;
-  const defaultFilter = mobile
-    ? "all"
-    : !input.baselineAvailable
-      ? "all"
-      : counts.new > 0
-        ? "new"
-        : "review";
-  const screenshots = (
-    mobile
-      ? input.screenshots.map((screenshot, index) =>
-          renderGalleryFigure(screenshot, index, galleryBaseUrl),
-        )
-      : input.screenshots.map((screenshot, index) =>
-          renderGalleryFigure(screenshot, index, galleryBaseUrl, screenshot),
-        )
-  ).join("");
-  const filterScript = mobile
-    ? ""
-    : `
+  const defaultFilter = !input.baselineAvailable ? "all" : counts.new > 0 ? "new" : "review";
+  const screenshots = input.screenshots
+    .map((screenshot, index) => renderGalleryFigure(screenshot, index, galleryBaseUrl))
+    .join("");
+  const filterScript = `
     const figures = Array.from(document.querySelectorAll("figure"));
     const filters = Array.from(document.querySelectorAll(".filter"));
     const filterEmpty = document.querySelector(".filter-empty");
@@ -474,7 +430,7 @@ function renderGalleryPage(input: GalleryInput): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark" />
-  <title>${mobile ? "Android screenshots" : "Run screenshots"} · Rakazo</title>
+  <title>Run screenshots · Rakazo</title>
   <style>
     ${SHARED_PAGE_STYLES}
     body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #312e81 0, #09090b 36rem); }
@@ -526,22 +482,22 @@ function renderGalleryPage(input: GalleryInput): string {
     <header>
       <div>
         <p class="eyebrow">Rakazo · visual review</p>
-        <h1>${mobile ? "Android screenshots" : input.pullRequestNumber ? `PR #${input.pullRequestNumber} screenshots` : "Run screenshots"}</h1>
-        ${mobile ? "" : '<p class="subtitle">Review intentional checkpoints separately from automatic failure captures.</p>'}
+        <h1>${input.pullRequestNumber ? `PR #${input.pullRequestNumber} screenshots` : "Run screenshots"}</h1>
+        <p class="subtitle">Review intentional checkpoints separately from automatic failure captures.</p>
       </div>
       <div class="actions">
-        ${!mobile && input.reportUrl ? `<a class="button" href="${escapeHtml(input.reportUrl)}">Full report</a>` : ""}
-        ${!mobile && input.pullRequestUrl ? `<a class="button" href="${escapeHtml(input.pullRequestUrl)}">PR #${input.pullRequestNumber}</a>` : ""}
+        ${input.reportUrl ? `<a class="button" href="${escapeHtml(input.reportUrl)}">Full report</a>` : ""}
+        ${input.pullRequestUrl ? `<a class="button" href="${escapeHtml(input.pullRequestUrl)}">PR #${input.pullRequestNumber}</a>` : ""}
         <a class="button" href="${escapeHtml(input.runUrl)}">GitHub Actions</a>
-        ${mobile ? "" : `<a class="button" href="${escapeHtml(input.dashboardUrl)}">All runs</a>`}
+        <a class="button" href="${escapeHtml(input.dashboardUrl)}">All runs</a>
       </div>
     </header>
     <div class="toolbar">
       <section class="meta">
-        ${mobile ? "" : `<span class="pill">${escapeHtml(input.result)}</span>`}
+        <span class="pill">${escapeHtml(input.result)}</span>
         <span class="pill">${escapeHtml(input.sha.slice(0, 7))}</span>
         <span class="pill">${input.screenshots.length} screenshots</span>
-        ${mobile ? "" : `<span class="pill">${input.baselineAvailable ? "Compared with latest successful main run" : "No comparable main baseline"}</span>`}
+        <span class="pill">${input.baselineAvailable ? "Compared with latest successful main run" : "No comparable main baseline"}</span>
         <span class="pill">${escapeHtml(new Date(input.createdAt).toLocaleString("en-US", { timeZone: "UTC" }))} UTC</span>
       </section>
       ${
@@ -564,7 +520,7 @@ function renderGalleryPage(input: GalleryInput): string {
       }
     </div>
     ${
-      screenshots && !mobile
+      screenshots
         ? `<nav class="filters" aria-label="Screenshot filters">
       <button class="filter" type="button" data-filter="all" aria-pressed="${String(defaultFilter === "all")}">All (${input.screenshots.length})</button>
       <button class="filter" type="button" data-filter="review" aria-pressed="${String(defaultFilter === "review")}">Review changes (${reviewCount})</button>
@@ -575,7 +531,7 @@ function renderGalleryPage(input: GalleryInput): string {
         : ""
     }
     ${screenshots ? `<section class="gallery">${screenshots}</section>` : '<div class="empty">No screenshots were produced by this run.</div>'}
-    ${screenshots && !mobile ? '<div class="empty filter-empty" hidden>No screenshots match this filter.</div>' : ""}
+    ${screenshots ? '<div class="empty filter-empty" hidden>No screenshots match this filter.</div>' : ""}
   </main>
   <script>
     const gallery = document.querySelector(".gallery");
@@ -614,40 +570,37 @@ function renderGalleryPage(input: GalleryInput): string {
 }
 
 function renderGalleryFigure(
-  screenshot: MobileScreenshot,
+  screenshot: PlaywrightScreenshot,
   index: number,
   galleryBaseUrl: URL,
-  review?: Pick<PlaywrightScreenshot, "captureType" | "comparison" | "hash" | "testId">,
 ): string {
   const imageUrl = new URL(screenshot.fileName, galleryBaseUrl).toString();
-  const badges = review
-    ? [
-        review.captureType === "failure"
-          ? '<span class="badge failure">FAILED</span>'
-          : '<span class="badge checkpoint">CHECKPOINT</span>',
-        review.comparison === "new"
-          ? '<span class="badge new">NEW</span>'
-          : review.comparison === "changed"
-            ? '<span class="badge changed">CHANGED</span>'
-            : review.comparison === "unchanged"
-              ? '<span class="badge unchanged">UNCHANGED</span>'
-              : '<span class="badge unavailable">NO BASELINE</span>',
-      ].join("")
-    : "";
+  const badges = [
+    screenshot.captureType === "failure"
+      ? '<span class="badge failure">FAILED</span>'
+      : '<span class="badge checkpoint">CHECKPOINT</span>',
+    screenshot.comparison === "new"
+      ? '<span class="badge new">NEW</span>'
+      : screenshot.comparison === "changed"
+        ? '<span class="badge changed">CHANGED</span>'
+        : screenshot.comparison === "unchanged"
+          ? '<span class="badge unchanged">UNCHANGED</span>'
+          : '<span class="badge unavailable">NO BASELINE</span>',
+  ].join("");
 
   return `
-        <figure${review ? ` data-capture="${review.captureType}" data-comparison="${review.comparison}"` : ""}>
+        <figure data-capture="${screenshot.captureType}" data-comparison="${screenshot.comparison}">
           <a href="${escapeHtml(imageUrl)}" target="_blank" rel="noreferrer">
             <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(screenshot.title)}" loading="lazy" />
           </a>
           <figcaption>
             <span class="number">${String(index + 1).padStart(2, "0")}</span>
             <span class="caption-copy">
-              ${badges ? `<span class="badges">${badges}</span>` : ""}
+              <span class="badges">${badges}</span>
               <strong>${escapeHtml(screenshot.title)}</strong>
-              ${review ? `<small>${review.captureType === "failure" ? "Automatic failure capture" : "Intentional test checkpoint"} · ${escapeHtml(review.testId)}</small>` : ""}
+              <small>${screenshot.captureType === "failure" ? "Automatic failure capture" : "Intentional test checkpoint"} · ${escapeHtml(screenshot.testId)}</small>
               <small title="${escapeHtml(screenshot.source)}">${escapeHtml(screenshot.source)}</small>
-              ${review ? `<small>SHA-256 ${escapeHtml(review.hash.slice(0, 12))}</small>` : ""}
+              <small>SHA-256 ${escapeHtml(screenshot.hash.slice(0, 12))}</small>
             </span>
           </figcaption>
         </figure>`;

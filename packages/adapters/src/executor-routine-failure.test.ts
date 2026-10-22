@@ -7,7 +7,7 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
   acquireComputerExecutionLease: async () => null,
   acquireDedicatedScreenLeaseFence: async () => null,
-  provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
+  provisionComputer: async () => ({ id: "computer-1", kind: "fake" }),
 }));
 
 const NOW = new Date("2026-03-02T09:00:00.000Z");

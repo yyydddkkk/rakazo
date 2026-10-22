@@ -127,10 +127,10 @@ describe("screen capability lifecycle authorization", () => {
     const second = addScreenProxyCapability(upstream, secret, "https://app.example", scope);
     expect(new URL(first).pathname).not.toBe(new URL(second).pathname);
   });
-  it("passes desktop and other non-http screen URLs through unsealed", () => {
+  it("passes non-http screen URLs through unsealed", () => {
     expect(
-      addScreenProxyCapability("desktop://screen/computer", secret, "https://app.example", scope),
-    ).toBe("desktop://screen/computer");
+      addScreenProxyCapability("custom://screen/computer", secret, "https://app.example", scope),
+    ).toBe("custom://screen/computer");
     expect(addScreenProxyCapability("local://preview", secret, "https://app.example", scope)).toBe(
       "local://preview",
     );

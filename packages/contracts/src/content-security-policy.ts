@@ -1,5 +1,5 @@
 /**
- * Content-Security-Policy for documents the web server (and the desktop bundled renderer) serves.
+ * Content-Security-Policy for documents the web server serves.
  * The app talks only to its own origin: /api, /rpc, the Sentry tunnel and the /novnc screen proxy
  * all live there, so 'self' covers fetches, WebSockets and screen frames in every deployment. The
  * web server may add operator-configured https origins for a script its CDN injects.

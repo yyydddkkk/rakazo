@@ -323,7 +323,6 @@ import {
   modelAcceptsImageInput,
   modelIdSupportsImages,
 } from "./model-vision.js";
-import { nativeShellCommandArgv } from "./native-shell.js";
 import { assertAllowedOpenAiCompatibleUrl } from "./openai-compatible-url.js";
 import type { CodexLiveCatalog } from "./pi-codex-catalog.js";
 import { codexLiveListsModel } from "./pi-codex-catalog.js";
@@ -4135,8 +4134,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         ]
           .filter(Boolean)
           .join("\n\n");
-        const graphical =
-          computerKind !== "desktop" && deps.sandbox.describe().capabilities.graphical;
+        const graphical = deps.sandbox.describe().capabilities.graphical;
         // Gate on the model this run will actually call — the pair written to the run row
         // above. Deriving it a second time here dropped the deployment fallback, so a
         // vision-capable default was gated as "scripted" and lost its screenshot tools.
@@ -4375,33 +4373,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           computerKind,
           disabledBuiltinTools,
         );
-        const hostEnvironment =
-          computerKind === "desktop"
-            ? await deps.sandbox
-                .environment?.(
-                  {
-                    id: storedComputer.providerRef ?? storedComputer.id,
-                    botId: storedComputer.homeKey,
-                    kind: "desktop",
-                    providerRef: storedComputer.providerRef ?? "",
-                  },
-                  {
-                    ...context,
-                    signal: AbortSignal.any([context.signal, AbortSignal.timeout(2000)]),
-                  },
-                )
-                .catch(() => undefined)
-            : undefined;
-        const hostInstruction = hostEnvironment
-          ? `Commands run on the user's ${hostEnvironment.platform} computer with their account permissions. Home: ${JSON.stringify(hostEnvironment.home)}. Shell: ${JSON.stringify(hostEnvironment.shell)}. The shell tool executes commands with that shell. Use its native syntax, paths and installed tools; do not assume Linux or bash. Local files outside the bot workspace can be accessed through commands. App launching is available through OS commands; graphical screen control is unavailable.`
-          : undefined;
         const computerInstruction = [
           "Use the computer only when the task needs files, commands, a browser, or an installed application. Answer directly from the conversation when sufficient; use connected tools for app data. Do not inspect the computer just to prepare for an unrelated task.",
-          hostInstruction
-            ? `${baseComputerInstruction} ${hostInstruction}`
-            : dockerToolInstruction
-              ? `${baseComputerInstruction} ${dockerToolInstruction}`
-              : baseComputerInstruction,
+          dockerToolInstruction
+            ? `${baseComputerInstruction} ${dockerToolInstruction}`
+            : baseComputerInstruction,
         ].join(" ");
         const workspaceInstruction =
           computerMode === "team"
@@ -5823,29 +5799,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 return `${safe.stdout}${safe.stderr}`;
               };
               const computer = await getRunComputer("tool", name);
-              const shellEnvironment =
-                hostEnvironment ??
-                (computer.kind === "desktop"
-                  ? await deps.sandbox.environment?.(computer, context)
-                  : undefined);
               const observed = await observeShellCommand(
                 deps.sandbox.execute(
                   computer,
                   {
-                    argv: shellEnvironment
-                      ? nativeShellCommandArgv(command, shellEnvironment)
-                      : [
-                          "bash",
-                          "-c",
-                          BACKGROUND_WORK_LAUNCH,
-                          "rakazo-background-launch",
-                          // Marker id must match sleepComputerIfIdle's probe (DB id), not ComputerRef.id
-                          // (providerRef via toComputerRef). Scope launches to this run for cancel teardown.
-                          storedComputer.id,
-                          runId,
-                          randomUUID(),
-                          command,
-                        ],
+                    argv: [
+                      "bash",
+                      "-c",
+                      BACKGROUND_WORK_LAUNCH,
+                      "rakazo-background-launch",
+                      // Marker id must match sleepComputerIfIdle's probe (DB id), not ComputerRef.id
+                      // (providerRef via toComputerRef). Scope launches to this run for cancel teardown.
+                      storedComputer.id,
+                      runId,
+                      randomUUID(),
+                      command,
+                    ],
                     cwd,
                     env:
                       Object.keys(commandEnvironment.env).length > 0

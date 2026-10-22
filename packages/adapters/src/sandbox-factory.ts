@@ -2,7 +2,6 @@ import type { SandboxProvider } from "@rakazo/adapter-kit";
 import { BoatSandboxProvider } from "./boat-sandbox.js";
 import { CreateOSSandboxProvider } from "./createos-sandbox.js";
 import { DaytonaSandboxProvider } from "./daytona-sandbox.js";
-import { assertHostCommandsAllowed, DesktopSandboxProvider } from "./desktop-sandbox.js";
 import { DockerSandboxProvider } from "./docker-sandbox.js";
 import { E2BSandboxProvider } from "./e2b-sandbox.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
@@ -10,8 +9,6 @@ import { NoneSandboxProvider } from "./none-sandbox.js";
 import { RailwaySandboxProvider } from "./railway-sandbox.js";
 
 export interface SandboxProviderOptions {
-  hostComputerUrl?: string;
-  hostComputerToken?: string;
   supervisorUrl?: string;
   supervisorToken?: string;
   e2bApiKey?: string;
@@ -28,7 +25,6 @@ export interface SandboxProviderOptions {
   railwaySandboxRegion?: string;
   boatApiKey?: string;
   boatApiUrl?: string;
-  dataDir?: string;
 }
 
 function missingRemoteKey(
@@ -82,16 +78,11 @@ export function createSandboxProvider(kind: string, opts: SandboxProviderOptions
         opts.supervisorUrl ?? "http://127.0.0.1:7091",
         opts.supervisorToken,
       );
-    case "desktop":
-      assertHostCommandsAllowed();
-      return new DesktopSandboxProvider({
-        root: opts.dataDir,
-      });
     case "fake":
       return new FakeSandboxProvider();
     default:
       throw new Error(
-        `Unknown SANDBOX_PROVIDER "${kind}". Use none | docker | e2b | daytona | createos | boat | railway | desktop | fake.`,
+        `Unknown SANDBOX_PROVIDER "${kind}". Use none | docker | e2b | daytona | createos | boat | railway | fake.`,
       );
   }
 }

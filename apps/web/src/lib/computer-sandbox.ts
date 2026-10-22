@@ -42,14 +42,13 @@ export type SandboxProviderKind = "none" | "docker" | "hosted" | "other";
 
 export function classifySandboxProvider(provider: string | null | undefined): SandboxProviderKind {
   if (provider == null || provider === "" || computersAreUnavailable(provider)) return "none";
-  if (provider === "docker" || provider === "desktop") return "docker";
+  if (provider === "docker") return "docker";
   if (provider === "e2b" || provider === "daytona" || provider === "boat") return "hosted";
   return "other";
 }
 
 export function sandboxProviderLabel(provider: string): string {
   if (provider === "docker") return "Docker";
-  if (provider === "desktop") return "Desktop";
   if (provider === "e2b") return "E2B";
   if (provider === "daytona") return "Daytona";
   if (provider === "boat") return "Boat";

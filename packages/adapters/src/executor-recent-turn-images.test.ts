@@ -20,7 +20,7 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
     runId: input.runId,
     fence: 7,
   }),
-  provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
+  provisionComputer: async () => ({ id: "computer-1", kind: "fake" }),
   renewComputerExecutionLease: lifecycleMocks.renewComputerExecutionLease,
 }));
 

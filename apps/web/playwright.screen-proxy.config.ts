@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-// These local fixtures exercise the real Vite proxy without starting an API, database, or Electron.
+// These local fixtures exercise the real Vite proxy without starting an API or database.
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "screen-proxy-isolation.spec.ts",

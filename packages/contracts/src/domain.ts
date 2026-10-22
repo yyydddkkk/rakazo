@@ -1389,8 +1389,6 @@ export const DeploymentSettingsSchema = z.object({
   hasDeploymentModelCredential: z.boolean(),
   defaultProvider: z.string().nullable(),
   defaultModel: z.string().nullable(),
-  computerHost: z.enum(["docker", "this-mac"]).nullable(),
-  canChooseHostComputer: z.boolean(),
   sandboxProvider: z.string(),
 });
 
@@ -1510,8 +1508,6 @@ export const MeSchema = z.object({
   hostCredentialProvider: z.string().nullable(),
   /** Kind of those credentials, e.g. "AWS IAM"; set with hostCredentialProvider. */
   hostCredentialSource: z.string().nullable(),
-  computerHost: z.enum(["docker", "this-mac"]).nullable(),
-  canChooseHostComputer: z.boolean(),
   sandboxProvider: z.string(),
   avatarStyle: AvatarStyleSchema,
   /**

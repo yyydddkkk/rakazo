@@ -736,10 +736,6 @@ function isUniqueConstraintError(error: unknown) {
 
 export type ComputerReplaceMode = "recover" | "reset" | "update";
 
-export function computerSupportsUpdate(kind: string): boolean {
-  return kind !== "desktop";
-}
-
 /** Kinds whose provider opens a user terminal through the shared Linux screen gateway. */
 export function computerSupportsTerminal(kind: string): boolean {
   return (

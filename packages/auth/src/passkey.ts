@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 
 export interface PasskeyRelyingParty {
   rpID: string;
-  /** Exact WebAuthn client origins: the web app plus any associated Android app signers. */
+  /** Exact WebAuthn client origins. */
   origins: string[];
 }
 
@@ -12,10 +12,7 @@ export interface PasskeyRelyingParty {
  * browser cannot create passkeys at all: IP addresses and plain-HTTP hosts
  * other than localhost.
  */
-export function passkeyRelyingParty(
-  webOrigin: string,
-  androidCertFingerprints: readonly string[] = [],
-): PasskeyRelyingParty | null {
+export function passkeyRelyingParty(webOrigin: string): PasskeyRelyingParty | null {
   let url: URL;
   try {
     url = new URL(webOrigin);
@@ -33,13 +30,6 @@ export function passkeyRelyingParty(
   if (isIP(host) || url.protocol !== "https:") return null;
   return {
     rpID: host,
-    origins: [url.origin, ...androidCertFingerprints.flatMap(androidApkKeyHashOrigin)],
+    origins: [url.origin],
   };
-}
-
-/** Android Credential Manager reports `android:apk-key-hash:<base64url SHA-256 of the signer>`. */
-export function androidApkKeyHashOrigin(fingerprint: string): string[] {
-  const hex = fingerprint.replace(/:/g, "").trim();
-  if (!/^[0-9a-f]{64}$/i.test(hex)) return [];
-  return [`android:apk-key-hash:${Buffer.from(hex, "hex").toString("base64url")}`];
 }

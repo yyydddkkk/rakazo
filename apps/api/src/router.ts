@@ -59,7 +59,6 @@ import {
   commentTicket,
   compatibleThinkingLevels,
   computerSupportsTerminal,
-  computerSupportsUpdate,
   computerUpdateView,
   createFaviconResolver,
   createTicket,
@@ -1360,12 +1359,6 @@ export function createRouter(deps: RouterDeps) {
       }),
       update: authed.deployment.update.handler(async ({ context, input }) => {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        if (input.computerHost === "this-mac" && deps.env.sandboxProvider !== "docker") {
-          throw new ORPCError("BAD_REQUEST", {
-            message:
-              "This Mac mode is only available when SANDBOX_PROVIDER=docker on a personal local app.",
-          });
-        }
         await deps.prisma.deploymentSettings.upsert({
           where: { id: "default" },
           create: {
@@ -1374,7 +1367,6 @@ export function createRouter(deps: RouterDeps) {
             signupsEnabled: input.signupsEnabled ?? true,
             signupAllowlist: (input.signupAllowlist ?? []).join(","),
             signupPolicyInitialized: true,
-            computerHost: input.computerHost ?? undefined,
           },
           update: {
             ...(input.signupsEnabled === undefined ? {} : { signupsEnabled: input.signupsEnabled }),
@@ -1382,7 +1374,6 @@ export function createRouter(deps: RouterDeps) {
             ...(input.signupsEnabled === undefined && input.signupAllowlist === undefined
               ? {}
               : { signupPolicyInitialized: true }),
-            ...(input.computerHost === undefined ? {} : { computerHost: input.computerHost }),
           },
         });
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);
@@ -3031,10 +3022,6 @@ export function createRouter(deps: RouterDeps) {
       update: authed.computer.update.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId);
         if (!bot.computer) throw new IsolationError();
-        if (!computerSupportsUpdate(bot.computer.kind))
-          throw new ORPCError("BAD_REQUEST", {
-            message: "Computer update is not available on this device",
-          });
         try {
           return await queueComputerUpdate(deps, bot.computer.id, bot.id);
         } catch (error) {
@@ -7055,8 +7042,6 @@ async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
         Boolean(deps.env.deploymentModelHostCredentials),
       deps.env.defaultProvider,
     ),
-    computerHost: computerHostFor(setup.settings?.computerHost, deps.env.sandboxProvider),
-    canChooseHostComputer: actor.isDeploymentOwner && deps.env.sandboxProvider === "docker",
     sandboxProvider: deps.env.sandboxProvider,
     avatarStyle: user.avatarStyle === "robot" ? "robot" : "organic",
     timezone: user.timezone ?? null,
@@ -7211,11 +7196,6 @@ async function runComputerReplace(
   const repos = createRepos(deps.prisma);
   const bot = await repos.getBot(context.actor, botId);
   if (!bot.computer) throw new IsolationError();
-  if (mode === "update" && !computerSupportsUpdate(bot.computer.kind)) {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "Computer update is not available on this device",
-    });
-  }
   const manualRunId = `${mode}:${randomUUID()}`;
   let lease: ComputerExecutionLease | null;
   try {
@@ -7377,20 +7357,8 @@ async function deploymentDto(prisma: PrismaClient, sandboxProvider: string) {
       ? canonicalPiProviderId(settings.defaultModelProvider)
       : null,
     defaultModel: settings?.defaultModelId ?? null,
-    computerHost: computerHostFor(settings?.computerHost, sandboxProvider),
-    canChooseHostComputer: sandboxProvider === "docker",
     sandboxProvider,
   };
-}
-
-function computerHostFor(
-  stored: string | null | undefined,
-  sandboxProvider: string,
-): "docker" | "this-mac" | null {
-  if (sandboxProvider === "desktop") return "this-mac";
-  if (sandboxProvider !== "docker") return null;
-  if (stored === "this-mac" || stored === "docker") return stored;
-  return null;
 }
 
 async function persistModelCredential(

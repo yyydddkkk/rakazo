@@ -7,7 +7,7 @@ export type ResolvedAppearance = "light" | "dark";
 export const UI_APPEARANCE_STORAGE_KEY = "rakazo.uiAppearance";
 
 /**
- * Semantic palette shared by web, Electron, and Expo. Names follow the shadcn
+ * Semantic palette for the web UI. Names follow the shadcn
  * convention so the same slot means the same thing on every surface: a `border`
  * is always a border and never a fill.
  */

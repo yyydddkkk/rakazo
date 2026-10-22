@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import http from "node:http";
 import https from "node:https";
@@ -6,7 +6,6 @@ import net from "node:net";
 import path from "node:path";
 import tls from "node:tls";
 import { lingui } from "@lingui/vite-plugin";
-import type { DesktopStackProbeResponse } from "@rakazo/contracts";
 import { buildIdAt } from "@rakazo/contracts/client-build";
 import {
   appContentSecurityPolicy,
@@ -43,8 +42,6 @@ import {
 } from "./src/screen-proxy.js";
 
 const webPort = Number(process.env.WEB_PORT ?? 5173);
-const DESKTOP_STACK_PROBE_PATH = "/.well-known/rakazo-desktop-stack";
-const DESKTOP_STACK_TOKEN_HEADER = "x-rakazo-desktop-stack-token";
 const SCREEN_UPSTREAM_TIMEOUT_MS = 20_000;
 const screenLog = createServiceLogger({ service: "rakazo-web" });
 
@@ -55,39 +52,6 @@ function screenPolicy(url: string | undefined) {
 function socketErrorCode(error: unknown) {
   const code = (error as NodeJS.ErrnoException | null)?.code;
   return typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? code : "UNKNOWN";
-}
-
-function equalStackToken(expected: string, supplied: string | string[] | undefined) {
-  if (expected === "" || typeof supplied !== "string") return false;
-  const expectedBytes = Buffer.from(expected);
-  const suppliedBytes = Buffer.from(supplied);
-  return (
-    expectedBytes.byteLength === suppliedBytes.byteLength &&
-    timingSafeEqual(expectedBytes, suppliedBytes)
-  );
-}
-
-function attachDesktopStackProbe(
-  server: ViteDevServer | PreviewServer,
-  token: string,
-  imageTag: string,
-) {
-  server.middlewares.use((req, res, next) => {
-    if (req.url?.split("?", 1)[0] !== DESKTOP_STACK_PROBE_PATH) {
-      next();
-      return;
-    }
-    if (!equalStackToken(token, req.headers[DESKTOP_STACK_TOKEN_HEADER])) {
-      res.statusCode = 404;
-      res.end("Not found");
-      return;
-    }
-    const body: DesktopStackProbeResponse = { ok: true, imageTag };
-    res.statusCode = 200;
-    res.setHeader("cache-control", "no-store");
-    res.setHeader("content-type", "application/json; charset=utf-8");
-    res.end(JSON.stringify(body));
-  });
 }
 
 function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string, api: string) {
@@ -438,9 +402,6 @@ export default defineConfig(({ command, mode }) => {
       BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? rootEnv.BETTER_AUTH_SECRET,
     });
   const performanceAssetDelayMs = Number(process.env.RAKAZO_PERFORMANCE_ASSET_DELAY_MS ?? 0);
-  const desktopStackToken =
-    process.env.RAKAZO_DESKTOP_STACK_TOKEN ?? rootEnv.RAKAZO_DESKTOP_STACK_TOKEN ?? "";
-  const imageTag = process.env.RAKAZO_IMAGE_TAG ?? rootEnv.RAKAZO_IMAGE_TAG ?? "edge";
   // Invalid origins throw here, so the server refuses to start rather than serve a wider policy.
   const appPolicy = appContentSecurityPolicy({
     scriptSrc: parseContentSecuritySources(
@@ -492,12 +453,6 @@ export default defineConfig(({ command, mode }) => {
             ),
           );
         },
-      },
-      {
-        name: "rakazo-desktop-stack-probe",
-        configureServer: (server) => attachDesktopStackProbe(server, desktopStackToken, imageTag),
-        configurePreviewServer: (server) =>
-          attachDesktopStackProbe(server, desktopStackToken, imageTag),
       },
       {
         name: "rakazo-performance-asset-delay",

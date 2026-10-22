@@ -5,7 +5,6 @@ import { Bell, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useState } from "react";
 import { IconTooltip } from "../../components/IconTooltip";
 import type { Panel } from "../../lib/right-panel-state";
-import { WindowChrome } from "../WindowChrome";
 import { BotCreatePicker } from "./bot-picker";
 
 export function SidebarHeader({
@@ -36,9 +35,8 @@ export function SidebarHeader({
   const toggleLabel = mini ? t`Show bots` : t`Minimize bots`;
   return (
     <div
-      className={`app-drag flex items-center pb-3 pt-4 ${mini ? "flex-col gap-3 px-1" : "justify-between px-[18px]"}`}
+      className={`flex items-center pb-3 pt-4 ${mini ? "flex-col gap-3 px-1" : "justify-end px-[18px]"}`}
     >
-      <WindowChrome />
       <div className={`relative flex items-center ${mini ? "flex-col gap-1" : "gap-2.5"}`}>
         <IconTooltip label={t`Activity`}>
           <Button
@@ -48,7 +46,7 @@ export function SidebarHeader({
             aria-pressed={activityMode}
             data-activity-mode={activityMode ? "on" : "off"}
             onClick={toggleActivityMode}
-            className={`app-no-drag flex h-7 w-7 items-center justify-center rounded-full ${
+            className={`flex h-7 w-7 items-center justify-center rounded-full ${
               activityMode
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground/70 hover:text-foreground/75"
@@ -66,7 +64,7 @@ export function SidebarHeader({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="app-no-drag hidden h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 hover:text-foreground/75 md:inline-flex"
+            className="hidden h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 hover:text-foreground/75 md:inline-flex"
             aria-label={toggleLabel}
             data-testid={mini ? "restore-bots-sidebar" : "minimize-bots-sidebar"}
             onClick={() => setBotsSidebarCollapsedPref(!mini)}
@@ -81,7 +79,7 @@ export function SidebarHeader({
         <Popover open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
           <IconTooltip label={t`Create`}>
             <PopoverTrigger
-              className="app-no-drag flex size-7 items-center justify-center rounded-full text-[21px] text-muted-foreground/70 outline-none hover:text-foreground/75 focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex size-7 items-center justify-center rounded-full text-[21px] text-muted-foreground/70 outline-none hover:text-foreground/75 focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={t`Create`}
               data-testid="create-menu-trigger"
             >
@@ -92,7 +90,7 @@ export function SidebarHeader({
           {createMenuOpen ? (
             <PopoverContent
               align="end"
-              className="app-no-drag w-auto gap-0 overflow-hidden p-0 data-closed:animate-none"
+              className="w-auto gap-0 overflow-hidden p-0 data-closed:animate-none"
             >
               <BotCreatePicker
                 bots={bots}

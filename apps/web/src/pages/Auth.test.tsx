@@ -83,7 +83,6 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.restoreAllMocks();
-  delete window.rakazoDesktop;
 });
 async function render(mode: "in" | "up" | "forgot" = "in") {
   await act(async () =>
@@ -166,25 +165,6 @@ it("hides SSO in password recovery", async () => {
   vi.mocked(fetchAuthCapabilities).mockResolvedValue({ ...capabilities, passwordAuth: true });
   await render("forgot");
   expect(host.textContent).not.toContain("Continue with Example");
-});
-
-it("selects a non-redirecting SSO request on desktop", async () => {
-  vi.spyOn(window, "open").mockReturnValue({ close: vi.fn() } as unknown as Window);
-  window.rakazoDesktop = {} as NonNullable<Window["rakazoDesktop"]>;
-  vi.mocked(fetchAuthCapabilities).mockResolvedValue(capabilities);
-  vi.mocked(authClient.signIn.social).mockResolvedValue({
-    data: null,
-    error: { message: "Unavailable", status: 503, statusText: "Unavailable" },
-  });
-  await render();
-  const button = Array.from(host.querySelectorAll("button")).find((button) =>
-    button.textContent?.includes("Continue with"),
-  );
-  expect(button).toBeDefined();
-  await act(async () => button!.click());
-  expect(authClient.signIn.social).toHaveBeenCalledWith(
-    expect.objectContaining({ provider: "oidc", disableRedirect: true }),
-  );
 });
 
 it("keeps SSO available for retry while an authorization request is pending", async () => {

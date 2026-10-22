@@ -557,7 +557,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
     const signIn = (password: string) =>
       app.request("/api/auth/sign-in/email", {
         method: "POST",
-        headers: { "content-type": "application/json", origin: "rakazo://" },
+        headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
         body: JSON.stringify({ email, password }),
       });
     const responses = {
@@ -570,7 +570,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
         body: "{}",
       }),
       me: await rpc("me", phone.headers),
-      signedOutMe: await rpc("me", { origin: "rakazo://" }),
+      signedOutMe: await rpc("me", { origin: "http://127.0.0.1:5173" }),
       unknownProcedure: await rpc("not-a-procedure", phone.headers),
     };
 
@@ -621,7 +621,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
         await app.request("/rpc/me", {
           method: "POST",
           headers: {
-            origin: "rakazo://",
+            origin: "http://127.0.0.1:5173",
             authorization: `Bearer ${token}`,
             "content-type": "application/json",
           },
@@ -632,7 +632,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       const response = await app.request(`/api/auth${path}`, {
         method: "POST",
         headers: {
-          origin: "rakazo://",
+          origin: "http://127.0.0.1:5173",
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
@@ -657,7 +657,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(await me(stored.token)).toBe(401);
     expect(await me(`${stored.token}.${"A".repeat(43)}=`)).toBe(401);
     const rawSession = await app.request("/api/auth/get-session", {
-      headers: { origin: "rakazo://", authorization: `Bearer ${stored.token}` },
+      headers: { origin: "http://127.0.0.1:5173", authorization: `Bearer ${stored.token}` },
     });
     expect(await rawSession.json()).toBeNull();
 
@@ -1898,12 +1898,12 @@ async function signup(app: App, email: string, name: string) {
 async function phoneSession(app: App, email: string) {
   const response = await app.request("/api/auth/sign-up/email", {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://" },
+    headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
     body: JSON.stringify({ email, password: "password12", name: "Phone" }),
   });
   const { token, user } = (await response.json()) as { token: string; user: { id: string } };
   const cookie = sessionCookieHeader(response);
-  const headers = { origin: "rakazo://", authorization: `Bearer ${token}` };
+  const headers = { origin: "http://127.0.0.1:5173", authorization: `Bearer ${token}` };
   const me = async () =>
     (
       await app.request("/rpc/me", {

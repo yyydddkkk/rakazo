@@ -51,7 +51,7 @@ describe("procedureSecurityEvent", () => {
   it("lists which deployment settings changed without the allowlist itself", () => {
     const event = procedureSecurityEvent(
       ["deployment", "update"],
-      { signupsEnabled: true, signupAllowlist: ["owner@example.test"], computerHost: undefined },
+      { signupsEnabled: true, signupAllowlist: ["owner@example.test"] },
       actor,
     );
     expect(event?.type).toBe("deployment.settings.changed");

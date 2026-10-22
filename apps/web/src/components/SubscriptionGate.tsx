@@ -61,7 +61,7 @@ export function SubscriptionGate({
   const paywalled = state.kind === "paywall";
   useEffect(() => {
     if (!paywalled) return;
-    // Checkout can finish in another window (the system browser on desktop).
+    // Checkout can finish in another window.
     let active = true;
     const recheck = () => {
       if (document.visibilityState === "hidden") return;

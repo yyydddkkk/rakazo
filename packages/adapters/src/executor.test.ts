@@ -1604,7 +1604,7 @@ describe("dockerComputerToolInstruction", () => {
     expect(dockerComputerToolInstruction("docker", new Set(["shell"]))).not.toContain(
       "`python3 -c`",
     );
-    expect(dockerComputerToolInstruction("desktop")).toBeUndefined();
+    expect(dockerComputerToolInstruction("fake")).toBeUndefined();
     expect(dockerComputerToolInstruction("e2b")).toBeUndefined();
   });
 

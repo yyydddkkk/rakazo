@@ -758,20 +758,6 @@ describe("dictation engine choice", () => {
     expect(webSpeechAvailable()).toBe(true);
   });
 
-  it("treats Electron as having no usable Web Speech", () => {
-    vi.stubGlobal("window", {
-      webkitSpeechRecognition: class {},
-      rakazoDesktop: { platform: "darwin" },
-    });
-    expect(webSpeechAvailable()).toBe(false);
-  });
-
-  it("treats an Electron user agent as having no usable Web Speech", () => {
-    vi.stubGlobal("window", { webkitSpeechRecognition: class {} });
-    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 Electron/44.2.0" });
-    expect(webSpeechAvailable()).toBe(false);
-  });
-
   it("falls back only for service failures when transcription is connected", () => {
     expect(webSpeechNeedsServerFallback("network", true)).toBe(true);
     expect(webSpeechNeedsServerFallback("service-not-allowed", true)).toBe(true);
@@ -1176,37 +1162,6 @@ describe("Dictation web speech", () => {
     rec?.onend?.();
     expect(rec?.start).toHaveBeenCalledTimes(2);
     expect(dictation.state.status).toBe("listening");
-  });
-
-  it("records through the connected voice provider in Electron", async () => {
-    const constructed = vi.fn();
-    class FakeRecognition {
-      start = vi.fn();
-      stop = vi.fn();
-      abort = vi.fn();
-      constructor() {
-        constructed();
-      }
-    }
-    vi.stubGlobal("window", {
-      webkitSpeechRecognition: FakeRecognition,
-      rakazoDesktop: { platform: "darwin" },
-    });
-    const fetchMock = vi.fn(async () => Response.json({ text: "from fish" }));
-    stubRecorderFallback(fetchMock);
-
-    const onFinal = vi.fn();
-    const dictation = new Dictation();
-    await dictation.listen({ mode: "hold", transcribe: true, onFinal });
-    expect(constructed).not.toHaveBeenCalled();
-    expect(dictation.state.error).toBeUndefined();
-    expect(dictation.state.status).toBe("listening");
-    dictation.submitHold();
-    await vi.waitFor(() => expect(onFinal).toHaveBeenCalledWith("from fish"));
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/voice/transcribe",
-      expect.objectContaining({ method: "POST" }),
-    );
   });
 
   it.each(["network", "service-not-allowed"])(

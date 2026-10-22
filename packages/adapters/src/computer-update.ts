@@ -10,11 +10,7 @@ import {
   revokeScreenControl,
 } from "./computer-control.js";
 import { scheduleComputerSleep } from "./computer-idle.js";
-import {
-  ComputerBusyError,
-  computerSupportsUpdate,
-  replaceComputer,
-} from "./computer-lifecycle.js";
+import { ComputerBusyError, replaceComputer } from "./computer-lifecycle.js";
 
 type Deps = Parameters<typeof replaceComputer>[0];
 type QueueDeps = Pick<Deps, "prisma" | "jobs"> &
@@ -63,8 +59,6 @@ export async function queueComputerUpdate(
     // The following statement then observes their committed reservation.
     await tx.$queryRaw`SELECT id FROM computers WHERE id = ${computerId} FOR UPDATE`;
     const computer = await tx.computer.findUniqueOrThrow({ where: { id: computerId } });
-    if (action === "update" && !computerSupportsUpdate(computer.kind))
-      throw new Error("Computer update is not available on this device");
     // A run bound to this takeover must keep it. Maintenance does not resume that run.
     if (
       computer.controlHolder === "user" &&

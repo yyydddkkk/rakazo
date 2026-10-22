@@ -1,13 +1,7 @@
-import { mkdtemp, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import type { PortableFile, SandboxProvider } from "@rakazo/adapter-kit";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { fakeBoatProvider as fakeBoat } from "./boat-sandbox.test-support.js";
-import { DesktopSandboxProvider } from "./desktop-sandbox.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
-import { HostComputerSandbox } from "./host-computer-sandbox.js";
-import { startHostComputerServer } from "./host-computer-server.js";
 import { provisionPrepared } from "./sandbox-test-support.js";
 
 const context = {
@@ -18,43 +12,9 @@ const context = {
   signal: new AbortController().signal,
 };
 
-const temporaryRoots: string[] = [];
-const hostServers: Array<Awaited<ReturnType<typeof startHostComputerServer>>> = [];
-
-afterEach(async () => {
-  await Promise.all(hostServers.splice(0).map((server) => server.close()));
-  await Promise.all(
-    temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-  );
-});
-
 describe.each([
-  [
-    "native host bridge",
-    async () => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-host-contract-"));
-      temporaryRoots.push(root);
-      const token = "ab".repeat(32);
-      const server = await startHostComputerServer({
-        root: await realpath(root),
-        token,
-        hostname: "127.0.0.1",
-      });
-      hostServers.push(server);
-      server.setEnabled(true);
-      return new HostComputerSandbox(`http://127.0.0.1:${server.port}`, token);
-    },
-  ],
   ["fake", () => Promise.resolve(new FakeSandboxProvider())],
   ["Boat over a fake API", () => Promise.resolve(fakeBoat())],
-  [
-    "desktop",
-    async () => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-sandbox-faults-"));
-      temporaryRoots.push(root);
-      return new DesktopSandboxProvider({ root: await realpath(root) });
-    },
-  ],
 ] as const)("%s sandbox negative contract", (_name, makeProvider) => {
   it("rejects traversal through every portable workspace entry point", async () => {
     const provider = await makeProvider();
@@ -121,11 +81,6 @@ describe.each([
       },
       context,
     );
-    if (provider instanceof HostComputerSandbox) {
-      await expect(provider.observe()).rejects.toThrow("Local screen control is unavailable");
-      await expect(provider.act()).rejects.toThrow("Local screen control is unavailable");
-      return;
-    }
     const before = await provider.observe(computer, context);
 
     await expect(
@@ -170,18 +125,10 @@ describe.each([
     await provider.destroy(resumed, context);
     await provider.destroy(resumed, context);
     const replacement = await provisionPrepared(provider, reconnect, context);
-    if (provider instanceof DesktopSandboxProvider || provider instanceof HostComputerSandbox) {
-      // A configured desktop root retains its workspace through destroy.
-      expect(replacement.fresh).toBe(false);
-      expect(
-        new TextDecoder().decode(await provider.readFile(replacement, "state.txt", context)),
-      ).toBe("preserved");
-    } else {
-      expect(replacement.fresh).toBe(true);
-      await expect(provider.readFile(replacement, "state.txt", context)).rejects.toThrow(
-        /not found/i,
-      );
-    }
+    expect(replacement.fresh).toBe(true);
+    await expect(provider.readFile(replacement, "state.txt", context)).rejects.toThrow(
+      /not found/i,
+    );
     await provider.destroy(replacement, context);
   });
 
@@ -221,8 +168,8 @@ describe.each([
 
 describe("portable workspace transfer", () => {
   it("preserves binary bytes and executable metadata across every provider pairing", async () => {
-    const sourceProviders = await providerSet("source");
-    const targetProviders = await providerSet("target");
+    const sourceProviders = await providerSet();
+    const targetProviders = await providerSet();
     const binary = Uint8Array.from([0, 255, 1, 128, 2, 127]);
 
     for (const [sourceName, source] of sourceProviders) {
@@ -296,13 +243,10 @@ function faultOnce(provider: SandboxProvider, methods: FaultableMethod[]): Sandb
   });
 }
 
-async function providerSet(label: string): Promise<Array<[string, SandboxProvider]>> {
-  const root = await mkdtemp(path.join(tmpdir(), `rakazo-sandbox-transfer-${label}-`));
-  temporaryRoots.push(root);
+async function providerSet(): Promise<Array<[string, SandboxProvider]>> {
   return [
     ["fake", new FakeSandboxProvider()],
     ["boat", fakeBoat()],
-    ["desktop", new DesktopSandboxProvider({ root: await realpath(root) })],
   ];
 }
 

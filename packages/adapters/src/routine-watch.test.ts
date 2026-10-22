@@ -426,18 +426,18 @@ describe("tickRoutineWatch on a computer", () => {
     return { deps, routine, updateMany, messages, execute };
   }
 
-  it.each(["team", "dedicated"])("checks files in a %s desktop workspace", async (scope) => {
+  it.each(["team", "dedicated"])("checks files in a %s sandbox workspace", async (scope) => {
     const computer = {
-      id: "desktop-computer-1",
+      id: "sandbox-computer-1",
       botId: "computer-home",
-      kind: "desktop" as const,
-      providerRef: "/tmp/watch-fixture/desktop-computers/computer-home",
+      kind: "fake" as const,
+      providerRef: "sandbox-computer-home",
     };
     vi.mocked(provisionComputer).mockResolvedValueOnce(computer);
     const { deps, routine, execute } = setupComputer(
       { kind: "files", paths: ["inbox/"] },
       { stdout: "inbox/note.txt\t3\t1.25\n" },
-      { id: "computer-1", scope, kind: "desktop" },
+      { id: "computer-1", scope, kind: "fake" },
     );
     const result = await checkRoutineWatch(deps, routine);
     expect(result.state.entries).toEqual({ "inbox/note.txt": "3:1.25" });
@@ -466,18 +466,18 @@ describe("tickRoutineWatch on a computer", () => {
     );
   });
 
-  it("runs a team desktop command in the provider-relative bot folder", async () => {
+  it("runs a team sandbox command in the provider-relative bot folder", async () => {
     const computer = {
-      id: "desktop-computer-1",
+      id: "sandbox-computer-1",
       botId: "computer-home",
-      kind: "desktop" as const,
-      providerRef: "/tmp/watch-fixture/desktop-computers/computer-home",
+      kind: "fake" as const,
+      providerRef: "sandbox-computer-home",
     };
     vi.mocked(provisionComputer).mockResolvedValueOnce(computer);
     const { deps, routine, execute } = setupComputer(
       { kind: "command", command: "ls inbox" },
       { stdout: "note.txt\n" },
-      { id: "computer-1", scope: "team", kind: "desktop" },
+      { id: "computer-1", scope: "team", kind: "fake" },
     );
     expect((await checkRoutineWatch(deps, routine)).state.detail).toBe("note.txt");
     expect(execute).toHaveBeenCalledWith(

@@ -14,14 +14,12 @@
       "!**/coverage",
       "!**/design",
       "!**/packages/db/src/generated",
-      "!**/apps/mobile/.expo",
       "!**/playwright-report",
       "!**/test-results",
       "!**/test-report",
       "!**/verify-report",
       "!**/data",
-      "!**/*.astro",
-      "!**/apps/www"
+      "!**/*.astro"
     ]
   },
   "formatter": {

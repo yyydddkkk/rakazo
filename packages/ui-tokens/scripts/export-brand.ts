@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { darkTokens } from "../src/index.ts";
@@ -51,8 +51,8 @@ async function ico(input: Buffer, name: string, sizes: number[]) {
   await writeFile(path(name), Buffer.concat([header, ...frames]));
 }
 
-for (const app of ["web", "www"]) {
-  const publicDir = `apps/${app}/public`;
+{
+  const publicDir = "apps/web/public";
   await png(rounded, `${publicDir}/favicon-16x16.png`, 16);
   await png(rounded, `${publicDir}/favicon-32x32.png`, 32);
   await png(rounded, `${publicDir}/favicon.png`, 128);
@@ -61,26 +61,3 @@ for (const app of ["web", "www"]) {
   await png(square, `${publicDir}/icon-512.png`, 512);
   await ico(rounded, `${publicDir}/favicon.ico`, [16, 32, 48]);
 }
-await mkdir(path("apps/www/public/brand"), { recursive: true });
-await png(rounded, "apps/www/public/brand/rakazo-mark.png", 256);
-await png(rounded, "apps/mobile/assets/favicon.png", 128);
-await png(square, "apps/desktop/assets/icon.png", 1024);
-await ico(rounded, "apps/desktop/assets/icon.ico", [16, 32, 48, 64, 128, 256]);
-
-// The splash shows the character alone, with no plate, so it sits on either splash colour.
-// Keep the existing transparent padding so its visual size stays stable.
-await sharp(await roundedCorners(await framed("transparent")))
-  .resize(620, 620)
-  .extend({ top: 202, bottom: 202, left: 202, right: 202, background: "transparent" })
-  .png()
-  .toFile(path("apps/mobile/assets/splash-icon.png"));
-
-// Android notification icons must be white alpha silhouettes, with transparent eyes.
-const silhouette = await sharp(path("apps/mobile/assets/monochrome-icon.png"))
-  .resize(72, 72)
-  .extractChannel("alpha")
-  .toBuffer();
-await sharp({ create: { width: 72, height: 72, channels: 3, background: "white" } })
-  .joinChannel(silhouette)
-  .png()
-  .toFile(path("apps/mobile/assets/notification-icon.png"));
