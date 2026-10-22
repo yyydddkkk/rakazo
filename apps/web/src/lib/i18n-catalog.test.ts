@@ -7,7 +7,7 @@ import { UI_LOCALES } from "./ui-locale";
 
 describe("lingui catalogs", () => {
   it("translates sign-out failures in every supported language", () => {
-    for (const locale of ["de", "es", "fr", "hi", "ko", "nl", "pt-BR", "ru", "tr", "zh-CN"]) {
+    for (const locale of UI_LOCALES.filter((locale) => locale !== "en")) {
       const catalog = readFileSync(
         fileURLToPath(new URL(`../locales/${locale}/messages.po`, import.meta.url)),
         "utf8",
@@ -37,7 +37,7 @@ describe("lingui catalogs", () => {
       "{provider} took too long to respond. Try again.",
       "Details",
     ];
-    for (const locale of ["de", "es", "fr", "he", "hi", "ko", "nl", "pt-BR", "ru", "tr", "zh-CN"]) {
+    for (const locale of UI_LOCALES.filter((locale) => locale !== "en")) {
       const catalog = readFileSync(
         fileURLToPath(new URL(`../locales/${locale}/messages.po`, import.meta.url)),
         "utf8",
@@ -48,10 +48,8 @@ describe("lingui catalogs", () => {
           .find((block) => block.includes(`msgid ${JSON.stringify(message)}\n`));
         const translated = entry?.split("msgstr ")[1];
         expect(translated, `${locale}: ${message}`).toBeTruthy();
-        // "Details" is also the German and Dutch label.
-        if ((locale !== "de" && locale !== "nl") || message !== "Details") {
-          expect(translated, `${locale}: ${message}`).not.toBe(JSON.stringify(message));
-        }
+        expect(translated, `${locale}: ${message}`).not.toBe('""');
+        expect(translated, `${locale}: ${message}`).not.toBe(JSON.stringify(message));
         for (const placeholder of message.match(/\{\w+\}/g) ?? []) {
           expect(translated).toContain(placeholder);
         }
@@ -71,20 +69,7 @@ describe("lingui catalogs", () => {
       "{commandVariable} is reserved and cannot be used as a command variable. Choose another name.",
       "Values are encrypted and never shown again.",
     ];
-    for (const locale of [
-      "en",
-      "de",
-      "es",
-      "fr",
-      "he",
-      "hi",
-      "ko",
-      "nl",
-      "pt-BR",
-      "ru",
-      "tr",
-      "zh-CN",
-    ]) {
+    for (const locale of UI_LOCALES) {
       const catalog = readFileSync(
         fileURLToPath(new URL(`../locales/${locale}/messages.po`, import.meta.url)),
         "utf8",
@@ -102,7 +87,7 @@ describe("lingui catalogs", () => {
   });
 
   it("translates model connection preflight feedback in every non-English catalog", () => {
-    const locales = ["de", "es", "fr", "he", "hi", "ko", "nl", "pt-BR", "ru", "tr", "zh-CN"];
+    const locales = UI_LOCALES.filter((locale) => locale !== "en");
     const messages = [
       "A subscription credential is stored securely.",
       'Model "{modelId}" was not listed.',
@@ -132,17 +117,6 @@ describe("lingui catalogs", () => {
         }
       }
     }
-
-    const russian = readFileSync(
-      fileURLToPath(new URL("../locales/ru/messages.po", import.meta.url)),
-      "utf8",
-    );
-    expect(russian).toContain(
-      "msgstr " +
-        '"Список моделей в порядке. {modelCount, plural, one {Доступна # модель} ' +
-        "few {Доступны # модели} many {Доступно # моделей} other {Доступно # модели}}. " +
-        'Чат не проверялся."',
-    );
   });
 
   it("translates the peer marker toggle names and fills in the marker label", () => {

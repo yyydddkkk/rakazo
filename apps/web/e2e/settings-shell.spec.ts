@@ -6,23 +6,29 @@ test("changing language updates settings overflow without resizing", async ({ pa
   await setupAdmin(page, `settings-language-${stamp}@rakazo.test`, "password12", "Settings");
   await completeOnboarding(page);
   const settings = await openUserSettings(page);
-  await page.setViewportSize({ width: 660, height: 700 });
-  const nav = settings.getByTestId("settings-nav");
-  const next = settings.getByRole("button", { name: "Next settings sections" });
-  await expect.poll(() => nav.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-  await expect(next).toBeHidden();
-
   const language = settings.getByTestId("ui-locale-select");
   await language.click();
-  await page.getByRole("option", { name: "Deutsch", exact: true }).click();
-  await expect(settings.getByRole("heading", { name: "Allgemein", exact: true })).toBeVisible();
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(2);
+  await expect(page.getByRole("option", { name: "English", exact: true })).toBeVisible();
+  await page.getByRole("option", { name: "简体中文", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "通用", exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 560, height: 700 });
+  const nav = settings.getByTestId("settings-nav");
+  const next = settings.getByRole("button", { name: /^(Next settings sections|后续设置分区)$/ });
+  await expect.poll(() => nav.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await expect(next).toBeHidden();
+  await captureScreenshot(page, testInfo, "settings-tabs-chinese");
+
+  await language.click();
+  await page.getByRole("option", { name: "English", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
   await expect(next).toBeVisible();
   await expect(next).toBeEnabled();
   await captureScreenshot(page, testInfo, "settings-tabs-language-overflow");
 
   await language.click();
-  await page.getByRole("option", { name: "English", exact: true }).click();
-  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await page.getByRole("option", { name: "简体中文", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "通用", exact: true })).toBeVisible();
   await expect(next).toBeHidden();
 });
 

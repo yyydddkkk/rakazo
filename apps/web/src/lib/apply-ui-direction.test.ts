@@ -11,10 +11,10 @@ describe("applyUiDirection", () => {
     } as Document;
   });
 
-  it("sets rtl document direction for Hebrew", () => {
-    expect(applyUiDirection("he-IL")).toBe("rtl");
-    expect(document.documentElement.dir).toBe("rtl");
-    expect(document.documentElement.lang).toBe("he-IL");
+  it("sets ltr document direction for Simplified Chinese", () => {
+    expect(applyUiDirection("zh-CN")).toBe("ltr");
+    expect(document.documentElement.dir).toBe("ltr");
+    expect(document.documentElement.lang).toBe("zh-CN");
   });
 
   it("sets ltr document direction for English", () => {

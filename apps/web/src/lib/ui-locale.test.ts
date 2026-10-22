@@ -7,156 +7,93 @@ import {
 } from "./ui-locale";
 
 describe("normalizeUiLocale", () => {
-  it("maps regional tags onto supported locales", () => {
-    expect(normalizeUiLocale("de-DE")).toBe("de");
-    expect(normalizeUiLocale("ko-KR")).toBe("ko");
-    expect(normalizeUiLocale("en-US")).toBe("en");
-    expect(normalizeUiLocale("pt-BR")).toBe("pt-BR");
-    expect(normalizeUiLocale("pt")).toBe("pt-BR");
-    expect(normalizeUiLocale("hi-IN")).toBe("hi");
-    expect(normalizeUiLocale("DE")).toBe("de");
-    expect(normalizeUiLocale("es")).toBe("es");
-    expect(normalizeUiLocale("es-ES")).toBe("es");
-    expect(normalizeUiLocale("es-MX")).toBe("es");
-    expect(normalizeUiLocale("es-419")).toBe("es");
-    expect(normalizeUiLocale("ES")).toBe("es");
-    expect(normalizeUiLocale("es_AR")).toBe("es");
-    expect(normalizeUiLocale("ru-RU")).toBe("ru");
-    expect(normalizeUiLocale("ru_KZ")).toBe("ru");
-    expect(normalizeUiLocale(" RU ")).toBe("ru");
-    expect(normalizeUiLocale("fr")).toBe("fr");
-    expect(normalizeUiLocale("fr-FR")).toBe("fr");
-    expect(normalizeUiLocale("fr-CA")).toBe("fr");
-    expect(normalizeUiLocale("FR")).toBe("fr");
-    expect(normalizeUiLocale("fr_BE")).toBe("fr");
-    expect(normalizeUiLocale("he")).toBe("he");
-    expect(normalizeUiLocale("he-IL")).toBe("he");
-    expect(normalizeUiLocale("HE")).toBe("he");
-    expect(normalizeUiLocale("he_IL")).toBe("he");
-    expect(normalizeUiLocale("nl")).toBe("nl");
-    expect(normalizeUiLocale("nl-NL")).toBe("nl");
-    expect(normalizeUiLocale("nl-BE")).toBe("nl");
-    expect(normalizeUiLocale("NL")).toBe("nl");
-    expect(normalizeUiLocale("nl_nl")).toBe("nl");
-    expect(normalizeUiLocale("iw")).toBe("he");
-    expect(normalizeUiLocale("iw-IL")).toBe("he");
-    expect(normalizeUiLocale("zh-CN")).toBe("zh-CN");
-    expect(normalizeUiLocale("zh")).toBe("zh-CN");
-    expect(normalizeUiLocale("zh-Hans")).toBe("zh-CN");
-    expect(normalizeUiLocale("zh-Hans-CN")).toBe("zh-CN");
-    expect(normalizeUiLocale("zh-Hans-SG")).toBe("zh-CN");
-    expect(normalizeUiLocale("zh-SG")).toBe("zh-CN");
-    expect(normalizeUiLocale("zh_cn")).toBe("zh-CN");
-    expect(normalizeUiLocale("ZH-cn")).toBe("zh-CN");
-    expect(normalizeUiLocale(" zh-CN ")).toBe("zh-CN");
-    expect(normalizeUiLocale("zh_Hans_CN")).toBe("zh-CN");
+  it("maps English and Simplified Chinese regional tags onto supported locales", () => {
+    for (const tag of ["en", "en-US", "en_GB", " EN "]) expect(normalizeUiLocale(tag)).toBe("en");
+    for (const tag of [
+      "zh-CN",
+      "zh",
+      "zh-Hans",
+      "zh-Hans-CN",
+      "zh-Hans-SG",
+      "zh-SG",
+      "zh_cn",
+      "ZH-cn",
+      " zh-CN ",
+      "zh_Hans_CN",
+    ]) {
+      expect(normalizeUiLocale(tag)).toBe("zh-CN");
+    }
   });
 
   it("does not fold Traditional Chinese into Simplified", () => {
-    expect(normalizeUiLocale("zh-TW")).toBe("en");
-    expect(normalizeUiLocale("zh-HK")).toBe("en");
-    expect(normalizeUiLocale("zh-MO")).toBe("en");
-    expect(normalizeUiLocale("zh-Hant")).toBe("en");
-    expect(normalizeUiLocale("zh-Hant-TW")).toBe("en");
-    expect(normalizeUiLocale("zh-Hant-HK")).toBe("en");
+    for (const tag of ["zh-TW", "zh-HK", "zh-MO", "zh-Hant", "zh-Hant-TW", "zh-Hant-HK"]) {
+      expect(normalizeUiLocale(tag)).toBe("en");
+    }
   });
 
-  it("falls back to English for unknown locales", () => {
-    expect(normalizeUiLocale("sv-SE")).toBe("en");
-    expect(normalizeUiLocale("")).toBe("en");
-    expect(normalizeUiLocale(null)).toBe("en");
+  it("falls back to English for removed or unknown locales", () => {
+    for (const tag of [
+      "de-DE",
+      "ko-KR",
+      "pt-BR",
+      "hi-IN",
+      "es-MX",
+      "ru-RU",
+      "fr-CA",
+      "he-IL",
+      "iw-IL",
+      "nl-BE",
+      "tr",
+      "sv-SE",
+      "",
+      null,
+    ]) {
+      expect(normalizeUiLocale(tag)).toBe("en");
+    }
   });
 });
 
 describe("resolveUiLocale", () => {
   it("prefers the saved choice over env and navigator", () => {
-    expect(
-      resolveUiLocale({
-        stored: "ko",
-        envDefault: "de",
-        navigatorLanguage: "en-US",
-      }),
-    ).toBe("ko");
+    expect(resolveUiLocale({ stored: "en", envDefault: "zh-CN", navigatorLanguage: "zh-CN" })).toBe(
+      "en",
+    );
+    expect(resolveUiLocale({ stored: "zh-CN", envDefault: "en", navigatorLanguage: "en-US" })).toBe(
+      "zh-CN",
+    );
   });
 
   it("uses VITE_DEFAULT_UI_LOCALE when nothing is saved", () => {
     expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: "de-AT",
-        navigatorLanguage: "ko-KR",
-      }),
-    ).toBe("de");
+      resolveUiLocale({ stored: null, envDefault: "zh-Hans-SG", navigatorLanguage: "en-US" }),
+    ).toBe("zh-CN");
   });
 
   it("uses navigator.language next, then English", () => {
-    expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: null,
-        navigatorLanguage: "ko-KR",
-      }),
-    ).toBe("ko");
-    expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: null,
-        navigatorLanguage: "zh-CN",
-      }),
-    ).toBe("zh-CN");
-    expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: null,
-        navigatorLanguage: "es-MX",
-      }),
-    ).toBe("es");
-    expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: null,
-        navigatorLanguage: "ru-RU",
-      }),
-    ).toBe("ru");
-    expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: null,
-        navigatorLanguage: "fr-FR",
-      }),
-    ).toBe("fr");
-    expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: null,
-        navigatorLanguage: "nl-NL",
-      }),
-    ).toBe("nl");
-    expect(
-      resolveUiLocale({
-        stored: null,
-        envDefault: null,
-        navigatorLanguage: null,
-      }),
-    ).toBe("en");
+    for (const [navigatorLanguage, expected] of [
+      ["zh-CN", "zh-CN"],
+      ["en-US", "en"],
+      ["de-DE", "en"],
+      [null, "en"],
+    ]) {
+      expect(resolveUiLocale({ stored: null, envDefault: null, navigatorLanguage })).toBe(expected);
+    }
   });
 
   it("reads localStorage via the storage helper", () => {
-    const storage = {
-      getItem: (key: string) => (key === UI_LOCALE_STORAGE_KEY ? "de" : null),
-    };
-    expect(resolveUiLocale({ storage, envDefault: null, navigatorLanguage: null })).toBe("de");
+    const storage = { getItem: (key: string) => (key === UI_LOCALE_STORAGE_KEY ? "zh-CN" : null) };
+    expect(resolveUiLocale({ storage, envDefault: null, navigatorLanguage: null })).toBe("zh-CN");
   });
 });
 
 describe("persistUiLocale", () => {
   it("writes the storage key", () => {
     const store = new Map<string, string>();
-    persistUiLocale("ko", {
+    persistUiLocale("zh-CN", {
       setItem: (key, value) => {
         store.set(key, value);
       },
     });
-    expect(store.get(UI_LOCALE_STORAGE_KEY)).toBe("ko");
+    expect(store.get(UI_LOCALE_STORAGE_KEY)).toBe("zh-CN");
   });
 });

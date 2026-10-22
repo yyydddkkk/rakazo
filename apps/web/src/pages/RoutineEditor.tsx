@@ -85,13 +85,6 @@ const SCHEDULE_PRESETS: CronFreq[] = [
   "Advanced",
 ];
 
-const COMING_SOON = [
-  { id: "teams", label: () => t`Teams message` },
-  { id: "linear", label: () => t`Linear issue` },
-  { id: "sentry", label: () => t`Sentry alert` },
-  { id: "pagerduty", label: () => t`PagerDuty incident` },
-] as const;
-
 export type RoutineDraftState = {
   name: string;
   prompt: string;
@@ -227,9 +220,7 @@ export function routineTriggerSummary(routine: Routine): string {
   const parts: string[] = [];
   if (routine.webhookEnabled) parts.push(t`When a webhook fires`);
   if (routine.githubEnabled) parts.push(t`Git event`);
-  if (routine.messageProvider === "slack") parts.push(t`Slack message`);
-  else if (routine.messageProvider === "teams") parts.push(t`Teams message`);
-  else if (routine.messageProvider) parts.push(t`Message event`);
+  if (routine.messageProvider) parts.push(t`Message event`);
   for (const cron of routine.crons) parts.push(formatCron(cron));
   if (routine.watch) parts.push(t`When something changes`);
   return parts.length > 0 ? parts.join(" · ") : t`No trigger`;
@@ -311,7 +302,6 @@ export function RoutineEditor({
   timezone,
   webhook,
   githubPath,
-  messageProviders,
   saving,
   running,
   error,
@@ -328,7 +318,6 @@ export function RoutineEditor({
   timezone: string;
   webhook: { path: string; secret: string | null; configured: boolean };
   githubPath: string;
-  messageProviders: string[];
   saving: boolean;
   running: boolean;
   error: string | null;
@@ -369,8 +358,6 @@ export function RoutineEditor({
     []
   ).filter((level) => level !== "off");
   const defaultThinkingLevel = selectedCredential?.thinkingLevel ?? "medium";
-  const slackAvailable = messageProviders.includes("slack");
-  const slackDisabledReasonId = `${fieldId}-slack-disabled-reason`;
   const hasTriggers =
     draft.schedules.length > 0 ||
     draft.webhookEnabled ||
@@ -400,10 +387,6 @@ export function RoutineEditor({
     if (!webhook.configured) {
       await onEnsureWebhook().catch(() => undefined);
     }
-  }
-
-  function addMessageProvider(provider: string) {
-    onChange({ ...draft, messageProvider: provider });
   }
 
   return (
@@ -617,10 +600,7 @@ export function RoutineEditor({
           ) : null}
 
           {draft.messageProvider ? (
-            <MessageTriggerCard
-              provider={draft.messageProvider}
-              onRemove={() => onChange({ ...draft, messageProvider: null })}
-            />
+            <MessageTriggerCard onRemove={() => onChange({ ...draft, messageProvider: null })} />
           ) : null}
 
           {needsOneShotArm ? (
@@ -659,39 +639,6 @@ export function RoutineEditor({
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-
-            <span className="block" title={slackAvailable ? undefined : t`Slack not enabled`}>
-              <DropdownMenuItem
-                disabled={draft.messageProvider === "slack" || !slackAvailable}
-                aria-describedby={slackAvailable ? undefined : slackDisabledReasonId}
-                onClick={() => addMessageProvider("slack")}
-              >
-                <MessageSquare />
-                <Trans>Slack message</Trans>
-              </DropdownMenuItem>
-              {!slackAvailable ? (
-                <span id={slackDisabledReasonId} className="sr-only">
-                  <Trans>Slack not enabled</Trans>
-                </span>
-              ) : null}
-            </span>
-
-            {COMING_SOON.map((item) => (
-              <span
-                key={item.id}
-                className="block"
-                title={item.id === "teams" ? t`Teams not enabled` : t`Coming soon`}
-              >
-                <DropdownMenuItem disabled>
-                  <span
-                    aria-hidden
-                    className="inline-block size-3.5 rounded-[4px]"
-                    style={{ background: comingSoonColor(item.id), opacity: 0.55 }}
-                  />
-                  {item.label()}
-                </DropdownMenuItem>
-              </span>
-            ))}
 
             <DropdownMenuItem
               disabled={Boolean(draft.watch) || draft.schedules.length > 0}
@@ -885,19 +832,15 @@ function WatchTriggerCard({
   );
 }
 
-function MessageTriggerCard({ provider, onRemove }: { provider: string; onRemove: () => void }) {
+function MessageTriggerCard({ onRemove }: { onRemove: () => void }) {
   const { t } = useLingui();
-  const label =
-    provider === "slack"
-      ? t`Slack message`
-      : provider === "teams"
-        ? t`Teams message`
-        : t`Message event`;
   return (
     <div className="rounded-xl border border-border p-3">
       <div className="flex items-center gap-2.5 px-0.5">
         <MessageSquare size={16} strokeWidth={1.6} className="text-muted-foreground" aria-hidden />
-        <span className="flex-1 text-[14.5px] text-foreground">{label}</span>
+        <span className="flex-1 text-[14.5px] text-foreground">
+          <Trans>Message event</Trans>
+        </span>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -1023,18 +966,5 @@ function schedulePresetLabel(freq: CronFreq): string {
       return t`Advanced...`;
     default:
       return freq;
-  }
-}
-
-function comingSoonColor(id: string): string {
-  switch (id) {
-    case "teams":
-      return "#6264A7";
-    case "linear":
-      return "#5E6AD2";
-    case "sentry":
-      return "#A467FD";
-    default:
-      return "#06AC38";
   }
 }

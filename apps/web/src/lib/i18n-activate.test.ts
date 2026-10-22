@@ -8,9 +8,7 @@ import {
 } from "./i18n";
 import { UI_LOCALE_STORAGE_KEY } from "./ui-locale";
 
-vi.mock("./apply-ui-direction", () => ({
-  applyUiDirection: vi.fn(),
-}));
+vi.mock("./apply-ui-direction", () => ({ applyUiDirection: vi.fn() }));
 
 function stubLocaleStorage() {
   const store = new Map<string, string>();
@@ -42,23 +40,11 @@ describe("activateUiLocale", () => {
   it("falls back to English when the preferred catalog fails to load", async () => {
     setCatalogLoadersForTests({
       en: async () => ({ messages: { Settings: "Settings" } }),
-      de: async () => {
-        throw new Error("de catalog missing");
+      "zh-CN": async () => {
+        throw new Error("Chinese catalog missing");
       },
-      ko: async () => ({ messages: { Settings: "설정" } }),
-      tr: async () => ({ messages: { Settings: "Ayarlar" } }),
-      hi: async () => ({ messages: { Settings: "सेटिंग्स" } }),
-      "pt-BR": async () => ({ messages: { Settings: "Configurações" } }),
-      "zh-CN": async () => ({ messages: { Settings: "设置" } }),
-      es: async () => ({ messages: { Settings: "Configuración" } }),
-      ru: async () => ({ messages: { Settings: "Настройки" } }),
-      fr: async () => ({ messages: { Settings: "Paramètres" } }),
-      he: async () => ({ messages: { Settings: "הגדרות" } }),
-      nl: async () => ({ messages: { Settings: "Instellingen" } }),
     });
-
-    const locale = await activateUiLocale("de");
-    expect(locale).toBe("en");
+    expect(await activateUiLocale("zh-CN")).toBe("en");
     expect(getActiveUiLocale()).toBe("en");
     expect(i18n.locale).toBe("en");
     expect(i18n._({ id: "Settings", message: "Settings" })).toBe("Settings");
@@ -67,109 +53,50 @@ describe("activateUiLocale", () => {
   it("falls back to empty English when every catalog fails", async () => {
     setCatalogLoadersForTests({
       en: async () => {
-        throw new Error("en missing");
-      },
-      de: async () => {
-        throw new Error("de missing");
-      },
-      ko: async () => {
-        throw new Error("ko missing");
-      },
-      tr: async () => {
-        throw new Error("tr missing");
-      },
-      hi: async () => {
-        throw new Error("hi missing");
-      },
-      "pt-BR": async () => {
-        throw new Error("pt-BR missing");
+        throw new Error("English catalog missing");
       },
       "zh-CN": async () => {
-        throw new Error("zh-CN missing");
-      },
-      es: async () => {
-        throw new Error("es missing");
-      },
-      ru: async () => {
-        throw new Error("ru missing");
-      },
-      fr: async () => {
-        throw new Error("fr missing");
-      },
-      he: async () => {
-        throw new Error("he missing");
-      },
-      nl: async () => {
-        throw new Error("nl missing");
+        throw new Error("Chinese catalog missing");
       },
     });
-
-    const locale = await activateUiLocale("ko");
-    expect(locale).toBe("en");
+    expect(await activateUiLocale("zh-CN")).toBe("en");
     expect(i18n.locale).toBe("en");
   });
 
   it("lets the latest locale selection win under concurrency", async () => {
-    let resolveDe!: (value: { messages: Record<string, string> }) => void;
-    const dePromise = new Promise<{ messages: Record<string, string> }>((resolve) => {
-      resolveDe = resolve;
+    let resolveEnglish!: (value: { messages: Record<string, string> }) => void;
+    const english = new Promise<{ messages: Record<string, string> }>((resolve) => {
+      resolveEnglish = resolve;
     });
-
     setCatalogLoadersForTests({
-      en: async () => ({ messages: { Settings: "Settings" } }),
-      de: async () => dePromise,
-      ko: async () => ({ messages: { Settings: "설정" } }),
-      tr: async () => ({ messages: { Settings: "Ayarlar" } }),
-      hi: async () => ({ messages: { Settings: "सेटिंग्स" } }),
-      "pt-BR": async () => ({ messages: { Settings: "Configurações" } }),
+      en: async () => english,
       "zh-CN": async () => ({ messages: { Settings: "设置" } }),
-      es: async () => ({ messages: { Settings: "Configuración" } }),
-      ru: async () => ({ messages: { Settings: "Настройки" } }),
-      fr: async () => ({ messages: { Settings: "Paramètres" } }),
-      he: async () => ({ messages: { Settings: "הגדרות" } }),
-      nl: async () => ({ messages: { Settings: "Instellingen" } }),
     });
-
-    const first = activateUiLocale("de");
-    const second = activateUiLocale("ko");
-    resolveDe({ messages: { Settings: "Einstellungen" } });
-
-    await expect(first).resolves.toBe("ko");
-    await expect(second).resolves.toBe("ko");
-    expect(getActiveUiLocale()).toBe("ko");
-    expect(i18n._({ id: "Settings", message: "Settings" })).toBe("설정");
+    const first = activateUiLocale("en");
+    const second = activateUiLocale("zh-CN");
+    resolveEnglish({ messages: { Settings: "Settings" } });
+    await expect(first).resolves.toBe("zh-CN");
+    await expect(second).resolves.toBe("zh-CN");
+    expect(getActiveUiLocale()).toBe("zh-CN");
+    expect(i18n._({ id: "Settings", message: "Settings" })).toBe("设置");
   });
 
   it("cancels a pending activation when re-selecting the already-active locale", async () => {
-    let resolveDe!: (value: { messages: Record<string, string> }) => void;
-    const dePromise = new Promise<{ messages: Record<string, string> }>((resolve) => {
-      resolveDe = resolve;
+    let resolveChinese!: (value: { messages: Record<string, string> }) => void;
+    const chinese = new Promise<{ messages: Record<string, string> }>((resolve) => {
+      resolveChinese = resolve;
     });
-
     setCatalogLoadersForTests({
       en: async () => ({ messages: { Settings: "Settings" } }),
-      de: async () => dePromise,
-      ko: async () => ({ messages: { Settings: "설정" } }),
-      tr: async () => ({ messages: { Settings: "Ayarlar" } }),
-      hi: async () => ({ messages: { Settings: "सेटिंग्स" } }),
-      "pt-BR": async () => ({ messages: { Settings: "Configurações" } }),
-      "zh-CN": async () => ({ messages: { Settings: "设置" } }),
-      es: async () => ({ messages: { Settings: "Configuración" } }),
-      ru: async () => ({ messages: { Settings: "Настройки" } }),
-      fr: async () => ({ messages: { Settings: "Paramètres" } }),
-      he: async () => ({ messages: { Settings: "הגדרות" } }),
-      nl: async () => ({ messages: { Settings: "Instellingen" } }),
+      "zh-CN": async () => chinese,
     });
-
     await activateUiLocale("en");
     expect(getActiveUiLocale()).toBe("en");
-
-    const pendingDe = activateUiLocale("de");
-    const backToEn = activateUiLocale("en");
-    resolveDe({ messages: { Settings: "Einstellungen" } });
-
-    await expect(pendingDe).resolves.toBe("en");
-    await expect(backToEn).resolves.toBe("en");
+    const pending = activateUiLocale("zh-CN");
+    const backToEnglish = activateUiLocale("en");
+    resolveChinese({ messages: { Settings: "设置" } });
+    await expect(pending).resolves.toBe("en");
+    await expect(backToEnglish).resolves.toBe("en");
     expect(getActiveUiLocale()).toBe("en");
     expect(i18n.locale).toBe("en");
     expect(i18n._({ id: "Settings", message: "Settings" })).toBe("Settings");
@@ -177,35 +104,21 @@ describe("activateUiLocale", () => {
 
   it("does not let a stale setUiLocale fallback overwrite the latest stored locale", async () => {
     const store = stubLocaleStorage();
-    let resolveDe!: (value: { messages: Record<string, string> }) => void;
-    const dePromise = new Promise<{ messages: Record<string, string> }>((resolve) => {
-      resolveDe = resolve;
+    let rejectEnglish!: (error: Error) => void;
+    const english = new Promise<never>((_resolve, reject) => {
+      rejectEnglish = reject;
     });
-
     setCatalogLoadersForTests({
-      en: async () => ({ messages: { Settings: "Settings" } }),
-      de: async () => dePromise,
-      ko: async () => ({ messages: { Settings: "설정" } }),
-      tr: async () => ({ messages: { Settings: "Ayarlar" } }),
-      hi: async () => ({ messages: { Settings: "सेटिंग्स" } }),
-      "pt-BR": async () => ({ messages: { Settings: "Configurações" } }),
+      en: async () => english,
       "zh-CN": async () => ({ messages: { Settings: "设置" } }),
-      es: async () => ({ messages: { Settings: "Configuración" } }),
-      ru: async () => ({ messages: { Settings: "Настройки" } }),
-      fr: async () => ({ messages: { Settings: "Paramètres" } }),
-      he: async () => ({ messages: { Settings: "הגדרות" } }),
-      nl: async () => ({ messages: { Settings: "Instellingen" } }),
     });
-
-    await activateUiLocale("en");
-    const pendingDe = setUiLocale("de");
-    const pendingKo = setUiLocale("ko");
-    expect(store.get(UI_LOCALE_STORAGE_KEY)).toBe("ko");
-
-    resolveDe({ messages: { Settings: "Einstellungen" } });
-    await expect(pendingDe).resolves.toBe("ko");
-    await expect(pendingKo).resolves.toBe("ko");
-    expect(getActiveUiLocale()).toBe("ko");
-    expect(store.get(UI_LOCALE_STORAGE_KEY)).toBe("ko");
+    const pendingEnglish = setUiLocale("en");
+    const pendingChinese = setUiLocale("zh-CN");
+    expect(store.get(UI_LOCALE_STORAGE_KEY)).toBe("zh-CN");
+    rejectEnglish(new Error("English catalog missing"));
+    await expect(pendingEnglish).resolves.toBe("zh-CN");
+    await expect(pendingChinese).resolves.toBe("zh-CN");
+    expect(getActiveUiLocale()).toBe("zh-CN");
+    expect(store.get(UI_LOCALE_STORAGE_KEY)).toBe("zh-CN");
   });
 });

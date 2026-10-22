@@ -181,27 +181,27 @@ test("messaging settings show linked chat apps, channels, connections, and team 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
   await page.getByRole("button", { name: "Settings" }).click();
   await settings.getByTestId("ui-locale-select").click();
-  await page.getByRole("option", { name: "한국어", exact: true }).click();
-  await expect(settings.getByRole("heading", { name: "메시징", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "메시징 설정 관리" }).click();
+  await page.getByRole("option", { name: "简体中文", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "消息", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "管理消息设置" }).click();
 
   await expect(page.getByTestId("messaging-settings")).toBeVisible();
-  await expect(page.getByText("Feishu")).toBeVisible();
+  await expect(page.getByText("Feishu", { exact: true })).toBeVisible();
   await expect(page.getByText("Feishu · +15551230001")).toBeVisible();
   await expect(page.getByText("→ Chief")).toBeVisible();
   await expect(page.getByText("Feishu · 424242")).toBeVisible();
   await expect(page.getByText("→ Lead")).toBeVisible();
-  await expect(page.getByRole("button", { name: "연결 해제" })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "取消关联" })).toHaveCount(2);
   await expect(page.getByText("Family")).toBeVisible();
   await expect(page.getByText("Dana's Assistant")).toBeVisible();
-  await expect(page.getByRole("button", { name: "승인" })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "批准" })).toHaveCount(2);
 
   // Linking flow: pick a bot, request a code, read it back.
-  await page.getByLabel("연결할 Bot").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "채팅 앱 연결" }).click();
+  await page.getByLabel("要关联的 Bot").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "关联聊天应用" }).click();
   await expect(page.getByTestId("messaging-link-code")).toContainText("ABCD-2345");
-  await captureScreenshot(page, testInfo, "messaging-settings-ko");
+  await captureScreenshot(page, testInfo, "messaging-settings-zh");
 
-  await page.getByRole("button", { name: "메시징 설정 닫기" }).click();
+  await page.getByRole("button", { name: "关闭消息设置" }).click();
   await expect(page.getByTestId("messaging-settings")).toHaveCount(0);
 });

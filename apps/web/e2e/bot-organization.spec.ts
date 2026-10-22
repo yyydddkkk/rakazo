@@ -439,13 +439,11 @@ test("built-in sidebar headings follow the language without renaming custom sect
   await page.getByRole("menuitem", { name: "Pin", exact: true }).click();
   const settings = await openUserSettings(page);
   await settings.getByTestId("ui-locale-select").click();
-  await page.getByRole("option", { name: "Deutsch", exact: true }).click();
-  await page.getByRole("button", { name: "Benutzereinstellungen schließen", exact: true }).click();
+  await page.getByRole("option", { name: "简体中文", exact: true }).click();
+  await page.getByRole("button", { name: "关闭用户设置", exact: true }).click();
   await expect(settings).not.toBeVisible();
-  await expect(sidebar.locator('[data-sidebar-group="pinned"]')).toContainText("Angeheftet");
-  await expect(sidebar.locator('[data-sidebar-group="unassigned"]')).toContainText(
-    "Nicht zugewiesen",
-  );
+  await expect(sidebar.locator('[data-sidebar-group="pinned"]')).toContainText("置顶");
+  await expect(sidebar.locator('[data-sidebar-group="unassigned"]')).toContainText("未分配");
   await expect(sidebar.locator('[data-sidebar-group^="section:"]')).toContainText("Pinned");
-  await captureScreenshot(page, testInfo, "localized-sidebar-headings-de");
+  await captureScreenshot(page, testInfo, "localized-sidebar-headings-zh");
 });

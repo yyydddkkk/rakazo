@@ -419,7 +419,6 @@ export function ShellPage() {
     false,
   );
   const [messagingSurfaceEnabled, setMessagingSurfaceEnabled] = useState(false);
-  const [messagingProviders, setMessagingProviders] = useState<string[]>([]);
   const [dismissedRunErrorIds, setDismissedRunErrorIds] =
     useState<ReadonlySet<string>>(readSeenRunErrorIds);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -589,7 +588,6 @@ export function ShellPage() {
       .then((status) => {
         if (!cancelled) {
           setMessagingSurfaceEnabled(status.enabled);
-          setMessagingProviders(status.providers);
         }
       })
       .catch(() => undefined);
@@ -685,7 +683,6 @@ export function ShellPage() {
     setBots,
     refreshThread,
     setPanel,
-    messageProviders: messagingProviders,
   });
   const screenRequest = useRef(0);
   const contextBot =

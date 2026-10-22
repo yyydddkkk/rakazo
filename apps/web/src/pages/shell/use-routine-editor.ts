@@ -25,13 +25,11 @@ export function useRoutineEditor({
   setBots,
   refreshThread,
   setPanel,
-  messageProviders,
 }: {
   rpc: ReturnType<typeof createSpaceRpc>;
   active: Bot | undefined;
   activeBotId: RefObject<string | undefined>;
   timezone: string | null | undefined;
-  messageProviders: string[];
   setBots: Dispatch<SetStateAction<Bot[]>>;
   refreshThread: (botId: string) => Promise<ThreadSnapshot>;
   setPanel: (panel: Panel) => void;
@@ -107,7 +105,6 @@ export function useRoutineEditor({
           typeof window !== "undefined"
             ? `${window.location.origin}/api/v1/bots/${active.id}/github`
             : `/api/v1/bots/${active.id}/github`,
-        messageProviders,
         saving: savingRoutine,
         running: runningRoutine,
         error: routineError,

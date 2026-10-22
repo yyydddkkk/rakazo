@@ -2,17 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Routine } from "@rakazo/contracts";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
 
-test("Slack message and GitHub event triggers persist their settings", async ({
-  page,
-}, testInfo) => {
-  await page.route("**/rpc/messaging/status", (route) =>
-    route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        json: { enabled: true, providers: ["slack"], openSignup: false, identities: [] },
-      }),
-    }),
-  );
+test("GitHub event triggers persist their settings", async ({ page }, testInfo) => {
   const stamp = Date.now();
   await setupAdmin(page, `routine-triggers-${stamp}@rakazo.test`, "password12", "Trigger Routine");
   await completeOnboarding(page);
@@ -29,29 +19,7 @@ test("Slack message and GitHub event triggers persist their settings", async ({
 
   await page.getByRole("button", { name: "Agent computer", exact: true }).click();
   await page.getByRole("button", { name: "Create Routine" }).click();
-  await page.getByPlaceholder("Name this routine").fill("Triage Slack updates");
-  await page
-    .getByPlaceholder("What should this routine do each time it runs?")
-    .fill("Review the verified message event");
-  await page.getByRole("button", { name: "Add trigger" }).click();
-  await page.getByRole("menuitem", { name: "Slack message", exact: true }).click();
-
   const panel = page.getByTestId("side-panel");
-  await expect(panel.getByText("Slack message", { exact: true })).toBeVisible();
-  await expect(
-    panel.getByText("Runs when this bot receives a verified message from this provider."),
-  ).toBeVisible();
-
-  expect(await savedRoutine("Triage Slack updates")).toMatchObject({
-    crons: [],
-    webhookEnabled: false,
-    githubEnabled: false,
-    messageProvider: "slack",
-  });
-  await captureScreenshot(page, testInfo, "routine-slack-message");
-
-  await page.getByRole("button", { name: "Back" }).click();
-  await page.getByRole("button", { name: "Create Routine" }).click();
   await page.getByPlaceholder("Name this routine").fill("Review repository events");
   await page
     .getByPlaceholder("What should this routine do each time it runs?")
@@ -71,35 +39,31 @@ test("Slack message and GitHub event triggers persist their settings", async ({
   await captureScreenshot(page, testInfo, "routine-github-event");
 });
 
-test("Korean webhook routine keeps technical field labels in English", async ({
-  page,
-}, testInfo) => {
+test("Chinese webhook routine shows its delivery fields", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  const userName = `Korean Routine ${stamp}`;
-  await setupAdmin(page, `routine-ko-${stamp}@rakazo.test`, "password12", userName);
+  const userName = `Chinese Routine ${stamp}`;
+  await setupAdmin(page, `routine-zh-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
   await page.getByRole("button", { name: "Settings" }).click();
   const settings = page.getByTestId("user-settings");
   await settings.getByTestId("ui-locale-select").click();
-  await page.getByRole("option", { name: "한국어", exact: true }).click();
-  await page.getByRole("button", { name: "계정 설정 닫기" }).click();
+  await page.getByRole("option", { name: "简体中文", exact: true }).click();
+  await page.getByRole("button", { name: "关闭用户设置" }).click();
 
-  await page.getByRole("button", { name: "Agent 컴퓨터", exact: true }).click();
-  await page.getByRole("button", { name: "자동 실행 만들기" }).click();
-  await page.getByPlaceholder("이 루틴의 이름을 정하세요").fill("한국어 웹훅 확인");
-  await page
-    .getByPlaceholder("이 루틴이 실행될 때마다 무엇을 해야 하나요?")
-    .fill("웹훅을 확인합니다.");
-  await page.getByRole("button", { name: "트리거 추가" }).click();
-  await page.getByRole("menuitem", { name: "웹훅", exact: true }).click();
+  await page.getByRole("button", { name: "Agent 电脑", exact: true }).click();
+  await page.getByRole("button", { name: "创建例行任务" }).click();
+  await page.getByPlaceholder("给这个例行任务命名").fill("中文 Webhook 检查");
+  await page.getByPlaceholder("每次运行时，这个例行任务应做什么？").fill("检查 Webhook。");
+  await page.getByRole("button", { name: "添加触发器" }).click();
+  await page.getByRole("menuitem", { name: "Webhook", exact: true }).click();
 
-  await expect(page.getByText("웹훅이 실행될 때", { exact: true })).toBeVisible();
-  await expect(page.getByText("POST 대상")).toBeVisible();
-  await expect(page.getByText("key", { exact: true })).toBeVisible();
-  await expect(page.getByText("header")).toBeVisible();
-  await captureScreenshot(page, testInfo, "routine-webhook-ko");
+  await expect(page.getByText("当 Webhook 触发时", { exact: true })).toBeVisible();
+  await expect(page.getByText("POST 到")).toBeVisible();
+  await expect(page.getByText("密钥", { exact: true })).toBeVisible();
+  await expect(page.getByText("请求头")).toBeVisible();
+  await captureScreenshot(page, testInfo, "routine-webhook-zh");
 });
 
 test("routine test-run completes and survives reload", async ({ page }, testInfo) => {

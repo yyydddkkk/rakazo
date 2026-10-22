@@ -1,17 +1,4 @@
-export const UI_LOCALES = [
-  "en",
-  "de",
-  "ko",
-  "tr",
-  "hi",
-  "pt-BR",
-  "zh-CN",
-  "es",
-  "ru",
-  "fr",
-  "he",
-  "nl",
-] as const;
+export const UI_LOCALES = ["en", "zh-CN"] as const;
 
 export type UiLocale = (typeof UI_LOCALES)[number];
 
@@ -19,45 +6,18 @@ export const UI_LOCALE_STORAGE_KEY = "rakazo.uiLocale";
 
 export const UI_LOCALE_LABELS: Record<UiLocale, string> = {
   en: "English",
-  de: "Deutsch",
-  ko: "한국어",
-  tr: "Türkçe",
-  hi: "हिन्दी",
-  "pt-BR": "Português (Brasil)",
   "zh-CN": "简体中文",
-  es: "Español",
-  ru: "Русский",
-  fr: "Français",
-  he: "עברית",
-  nl: "Nederlands",
 };
 
 /** Return whether a value is one of the supported web UI locales. */
 export function isUiLocale(value: string | null | undefined): value is UiLocale {
-  return (
-    value === "en" ||
-    value === "de" ||
-    value === "ko" ||
-    value === "tr" ||
-    value === "hi" ||
-    value === "pt-BR" ||
-    value === "zh-CN" ||
-    value === "es" ||
-    value === "ru" ||
-    value === "fr" ||
-    value === "he" ||
-    value === "nl"
-  );
+  return value === "en" || value === "zh-CN";
 }
 
-/** Normalize BCP-47 tags (`de-DE`, `ko-KR`, `pt-BR`, `zh-CN`, `es-ES`) to a supported UI locale, else `en`. */
+/** Normalize supported English and Simplified Chinese tags, else use English. */
 export function normalizeUiLocale(raw: string | null | undefined): UiLocale {
   if (!raw) return "en";
   const normalized = raw.trim().toLowerCase().replace(/_/g, "-");
-  if (normalized === "pt" || normalized.startsWith("pt-")) return "pt-BR";
-  if (normalized === "es" || normalized.startsWith("es-")) return "es";
-  // `iw` is the legacy ISO 639 code for Hebrew that some browsers and Android still report.
-  if (normalized === "iw" || normalized.startsWith("iw-")) return "he";
   // Simplified Chinese only. Do not fold zh-TW / zh-HK / zh-Hant into zh-CN.
   if (
     normalized === "zh" ||
