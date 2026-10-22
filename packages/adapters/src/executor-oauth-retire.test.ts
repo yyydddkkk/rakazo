@@ -69,9 +69,6 @@ function oauthPrisma() {
           ).length,
       ),
     },
-    userVoiceCredential: {
-      count: vi.fn(async () => 0),
-    },
     spaceModelPreference: {
       deleteMany: vi.fn(async (args: { where: { userId: string; credentialId: string } }) => {
         const before = state.preferences.length;

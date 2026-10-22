@@ -17,7 +17,7 @@ import {
 } from "../../components/ToolActivityDisclosure";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
 import type { ArtifactTarget } from "../../lib/artifact-open";
-import { messageProviderLabel } from "../../lib/messaging";
+import { providerLabel } from "../../lib/messaging";
 import {
   isToolOnlyNarration,
   renderableMessageBlocks,
@@ -271,8 +271,7 @@ export const MessageView = memo(function MessageView({
                 className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-muted-foreground"
               >
                 <span>
-                  {messageProviderLabel(block.provider, block.transport)} · {block.fromLabel}:{" "}
-                  {block.text}
+                  {providerLabel(block.provider)} · {block.fromLabel}: {block.text}
                 </span>
               </div>
             );

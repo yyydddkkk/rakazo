@@ -7,23 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Unused since slim/web-only; drop in a later migration.
-model AiDataConsent {
-  userId String
-  spaceId String
-  recipientKey String
-  version String
-  grantedAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  spaceMember SpaceMember @relation(fields: [spaceId, userId], references: [spaceId, userId], onDelete: Cascade)
-
-  @@id([userId, spaceId, recipientKey])
-  @@map("ai_data_consents")
-}
-
 model User {
-  aiDataConsents AiDataConsent[]
   id                          String                       @id
   name                        String
   email                       String
@@ -36,11 +20,8 @@ model User {
   timezone                    String?
   sessions                    Session[]
   accounts                    Account[]
-  passkeys                    Passkey[]
   members                     Member[]
-  invitations                 Invitation[]
   modelCredentials            UserModelCredential[]
-  voiceCredentials            UserVoiceCredential[]
   secrets                     Secret[]
   mcpServers                  McpServer[]
   botSections                 BotSection[]
@@ -106,26 +87,6 @@ model Verification {
 }
 
 /// Better Auth WebAuthn credentials. `publicKey` is the base64 COSE key.
-/// Unused since slim/web-only; drop in a later migration.
-model Passkey {
-  id           String    @id
-  name         String?
-  publicKey    String
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  credentialID String
-  counter      Int
-  deviceType   String
-  backedUp     Boolean
-  transports   String?
-  createdAt    DateTime? @default(now())
-  aaguid       String?
-
-  @@unique([credentialID])
-  @@index([userId])
-  @@map("passkey")
-}
-
 /// Better Auth credential rate limits. `lastRequest` is epoch milliseconds.
 model RateLimit {
   id          String @id
@@ -144,34 +105,9 @@ model Organization {
   createdAt   DateTime
   metadata    String?
   members     Member[]
-  invitations Invitation[]
   spaces      Space[]
-  billing     BillingAccount?
-
   @@unique([slug])
   @@map("organization")
-}
-
-/// Unused since slim/web-only; drop in a later migration.
-model BillingAccount {
-  organizationId      String       @id
-  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customerId          String       @unique
-  subscriptionId      String?
-  subscriptionItemId  String?
-  priceId             String?
-  status              String?
-  seats               Int?
-  trialEndsAt         DateTime?
-  currentPeriodEndsAt DateTime?
-  cancelAtPeriodEnd   Boolean      @default(false)
-  endedAt             DateTime?
-  subscribedAt        DateTime?
-  syncedAt            DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-
-  @@map("billing_accounts")
 }
 
 model ActionApprovalRule {
@@ -221,7 +157,6 @@ model Member {
 }
 
 model Space {
-  aiDataConsents AiDataConsent[]
   id                          String                       @id
   organizationId              String
   organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -251,7 +186,6 @@ model Space {
   browserProfiles             BrowserProfile[]
   artifacts                   Artifact[]
   usageRecords                UsageRecord[]
-  notificationPreferences     NotificationPreference[]
   computers                   Computer[]
   externalEffects             ExternalEffect[]
   mcpServers                  McpServer[]
@@ -260,7 +194,6 @@ model Space {
   messagingIdentities         MessagingIdentity[]
   actionApprovalRules         ActionApprovalRule[]
   actionAutoReviewPreferences ActionAutoReviewPreference[]
-  memoryConfig                SpaceMemoryConfig?
   secrets                     Secret[]
   chatGroups                  ChatGroup[]
   botSecrets BotSecret[]
@@ -302,32 +235,12 @@ model SpaceMember {
   role             String                 @default("member")
   createdAt        DateTime
   modelPreferences SpaceModelPreference[]
-  voicePreferences SpaceVoicePreference[]
-  aiDataConsents AiDataConsent[]
   backupModels SpaceBackupModel[]
 
   @@unique([spaceId, userId])
   @@index([organizationId, userId])
   @@index([userId, createdAt])
   @@map("space_members")
-}
-
-/// Unused since slim/web-only; drop in a later migration.
-model Invitation {
-  id             String       @id
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email          String
-  role           String?
-  status         String
-  expiresAt      DateTime
-  createdAt      DateTime     @default(now())
-  inviterId      String
-  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@index([email])
-  @@map("invitation")
 }
 
 model DeploymentSettings {
@@ -349,24 +262,6 @@ model DeploymentSettings {
 /// Append-only security audit trail. No foreign keys, so an account deletion
 /// keeps the record of what happened; retention pruning is the only delete.
 /// Never stores message content, secrets, or tokens.
-/// Unused since slim/web-only; drop in a later migration.
-model SecurityEvent {
-  id        String   @id @default(cuid())
-  type      String
-  userId    String?
-  spaceId   String?
-  ip        String?
-  userAgent String?
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([type, createdAt])
-  @@index([ip, createdAt])
-  @@index([userId, createdAt])
-  @@map("security_events")
-}
-
 model UserModelCredential {
   id          String                 @id @default(cuid())
   userId      String
@@ -382,22 +277,6 @@ model UserModelCredential {
   @@unique([id, userId])
   @@index([userId, provider, updatedAt])
   @@map("user_model_credentials")
-}
-
-/// Unused since slim/web-only; drop in a later migration.
-model UserVoiceCredential {
-  id          String                 @id @default(cuid())
-  userId      String
-  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider    String
-  secretId    String
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  preferences SpaceVoicePreference[]
-
-  @@unique([id, userId])
-  @@index([userId, provider, updatedAt])
-  @@map("user_voice_credentials")
 }
 
 model SpaceModelPreference {
@@ -431,28 +310,6 @@ model SpaceBackupModel {
   @@id([spaceId, userId, position])
   @@unique([spaceId, userId, provider, modelId])
   @@map("space_backup_models")
-}
-
-/// Unused since slim/web-only; drop in a later migration.
-model SpaceVoicePreference {
-  id           String              @id @default(cuid())
-  spaceId      String
-  userId       String
-  spaceMember  SpaceMember         @relation(fields: [spaceId, userId], references: [spaceId, userId], onDelete: Cascade)
-  credentialId String
-  credential   UserVoiceCredential @relation(fields: [credentialId, userId], references: [id, userId], onDelete: Cascade)
-  voiceId      String              @default("")
-  // Fish speech-model override. Null keeps the deployment default.
-  speechModel  String?
-  isDefault    Boolean             @default(false)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-
-  @@unique([spaceId, userId, credentialId])
-  @@index([spaceId, userId, isDefault, updatedAt])
-  @@index([credentialId])
-  // Partial unique index space_voice_preferences_default_key is created in SQL.
-  @@map("space_voice_preferences")
 }
 
 model Bot {
@@ -1183,37 +1040,6 @@ model UsageRecord {
   @@map("usage_records")
 }
 
-/// Unused since slim/web-only; drop in a later migration.
-model NotificationPreference {
-  id       String  @id @default(cuid())
-  spaceId  String
-  space    Space   @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  userId   String
-  finish   Boolean @default(true)
-  help     Boolean @default(true)
-  takeover Boolean @default(true)
-
-  @@unique([spaceId, userId])
-  @@map("notification_preferences")
-}
-
-/// Unused since slim/web-only; drop in a later migration.
-model SpaceMemoryConfig {
-  id                 String   @id @default(cuid())
-  spaceId            String   @unique
-  space              Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  userId             String
-  provider           String
-  settings           Json
-  secretId           String   @unique
-  secret             Secret   @relation(fields: [secretId], references: [id], onDelete: Cascade)
-  defaultMemoryScope String   @default("isolated")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  @@map("space_memory_configs")
-}
-
 model Secret {
   id                String             @id @default(cuid())
   userId            String
@@ -1224,7 +1050,6 @@ model Secret {
   ciphertext        String
   createdAt         DateTime           @default(now())
   mcpServers        McpServer[]
-  spaceMemoryConfig SpaceMemoryConfig?
   agentSecret       AgentSecret?
 
   @@index([userId, spaceId])

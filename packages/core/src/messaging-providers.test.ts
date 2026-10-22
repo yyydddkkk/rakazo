@@ -1,20 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { messagingProviderLabel, messagingProviderName } from "./messaging-providers.js";
+import { messagingProviderName } from "./messaging-providers.js";
 
-describe("messaging provider labels", () => {
+describe("messaging provider names", () => {
   it("names known providers and falls back to the raw id", () => {
-    expect(messagingProviderName("sendblue")).toBe("iMessage");
-    expect(messagingProviderName("telegram")).toBe("Telegram");
+    expect(messagingProviderName("lark")).toBe("Feishu");
     expect(messagingProviderName("teams")).toBe("teams");
-  });
-
-  it("names extra Telegram bots after their configured name", () => {
-    expect(messagingProviderName("telegram-work")).toBe("Telegram (work)");
-    expect(messagingProviderLabel("telegram-work")).toBe("Telegram (work)");
-  });
-
-  it("narrows iMessage to its transport", () => {
-    expect(messagingProviderLabel("sendblue", "SMS")).toBe("SMS");
-    expect(messagingProviderLabel("sendblue", "fax")).toBe("iMessage");
   });
 });

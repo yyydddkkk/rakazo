@@ -65,7 +65,6 @@ function rowsFor(t: Tenant, tag: string): Array<[string, Record<string, unknown>
       "agentSkill",
       { spaceId: t.spaceId, userId: t.userId, name: `n-${tag}`, description: "d", content: "c" },
     ],
-    ["userVoiceCredential", { userId: t.userId, provider: "p", secretId: t.personalSecretId }],
   ];
 }
 
@@ -187,17 +186,14 @@ describePostgres("row-level security (PostgreSQL)", () => {
   const threadIds = () => tenants.map((t) => t.threadId);
   const owners = () =>
     Promise.all(
-      ["botSecret", "agentSecret", "taughtSkill", "agentSkill", "userVoiceCredential"].map(
-        async (table) => {
-          const scope = table === "userVoiceCredential" ? "userId" : "spaceId";
-          const ids = tenants.map((t) => t[scope]);
-          const rows = (await Reflect.get(db, table).findMany({
-            where: { [scope]: { in: ids } },
-            select: { [scope]: true },
-          })) as Array<Record<string, string>>;
-          return [table, rows.map((row) => row[scope]).sort()] as const;
-        },
-      ),
+      ["botSecret", "agentSecret", "taughtSkill", "agentSkill"].map(async (table) => {
+        const ids = tenants.map((t) => t.spaceId);
+        const rows = (await Reflect.get(db, table).findMany({
+          where: { spaceId: { in: ids } },
+          select: { spaceId: true },
+        })) as Array<Record<string, string>>;
+        return [table, rows.map((row) => row.spaceId).sort()] as const;
+      }),
     ).then(Object.fromEntries);
   const visible = () =>
     Promise.all([
@@ -242,27 +238,6 @@ describePostgres("row-level security (PostgreSQL)", () => {
     expect(databaseUrls(process.env).separate).toBe(true);
     await expect(db.$executeRawUnsafe("CREATE TABLE rls_probe (id int)")).rejects.toThrow(
       /permission denied/,
-    );
-  });
-
-  it("keeps security events append-only and system-only for the runtime login", async () => {
-    const id = `rls-security-event-${suffix}`;
-    const system = <T>(fn: () => Promise<T>) => runAsSystem("row-level security test", fn);
-    await system(
-      () => db.$executeRaw`INSERT INTO security_events (id, type) VALUES (${id}, 'rls.test')`,
-    );
-    await expect(
-      system(() => db.$executeRaw`UPDATE security_events SET type = 'changed' WHERE id = ${id}`),
-    ).rejects.toThrow(/permission denied/);
-    // A tenant can neither read nor write the deployment's security log.
-    expect(await runAsTenant(a, () => db.securityEvent.count({ where: { id } }))).toBe(0);
-    await expect(
-      runAsTenant(a, () =>
-        db.securityEvent.create({ data: { type: "rls.test", spaceId: a.spaceId } }),
-      ),
-    ).rejects.toThrow(/row-level security/);
-    expect(await system(() => db.$executeRaw`DELETE FROM security_events WHERE id = ${id}`)).toBe(
-      1,
     );
   });
 
@@ -599,13 +574,12 @@ describePostgres("row-level security (PostgreSQL)", () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it("applies the same rules to secrets, skills and voice credentials", async () => {
+  it("applies the same rules to secrets and skills", async () => {
     const none = {
       botSecret: [],
       agentSecret: [],
       taughtSkill: [],
       agentSkill: [],
-      userVoiceCredential: [],
     };
     expect(await owners()).toEqual(none);
     expect(await runAsTenant(a, owners)).toEqual({
@@ -613,7 +587,6 @@ describePostgres("row-level security (PostgreSQL)", () => {
       agentSecret: [a.spaceId],
       taughtSkill: [a.spaceId],
       agentSkill: [a.spaceId],
-      userVoiceCredential: [a.userId],
     });
     const everyone = await runAsSystem("row-level security test", owners);
     expect(everyone.agentSkill).toEqual(tenants.map((t) => t.spaceId).sort());
