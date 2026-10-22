@@ -8,8 +8,6 @@ import type {
   ComputerStatus,
   Group,
   Me,
-  MessageReaction,
-  ProductEvent,
   Routine,
   SearchHit,
   Space,
@@ -17,53 +15,29 @@ import type {
   ThreadMessage,
   ThreadSnapshot,
 } from "@rakazo/contracts";
-import {
-  ATTACHMENT_MAX_COUNT,
-  attachmentMaxBytes,
-  attachmentSizeLabel,
-  normalizeCreateBotProfile,
-} from "@rakazo/contracts";
-import type { ComposerMention } from "@rakazo/core";
+import { normalizeCreateBotProfile } from "@rakazo/contracts";
 import {
   accountDisplay,
   answerableAskMessageIds,
-  anySignal,
   attachmentsForThread,
   buildComposerMentionOptions,
   dismissableAskMessageIds,
   foldPeerReplies,
-  inferAttachmentMimeType,
   isActive,
   isRetryableError,
   isRunTerminalEvent,
   isRunWorking,
-  reorderBotTo,
-  resolveComposerSendPlan,
   runThreadSubscription,
   searchHitThreadTarget,
   withLiveStreamingProgress,
 } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
-import {
-  AvatarStyleProvider,
-  BotAvatar,
-  Button,
-  GroupAvatar,
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-  Sidebar,
-  Spinner,
-} from "@rakazo/ui-web";
+import { AvatarStyleProvider, Button } from "@rakazo/ui-web";
 import { useIsMobile } from "@rakazo/ui-web/hooks/use-mobile";
-import { Menu, Monitor, Plus, Search, Settings, SlidersHorizontal, X } from "lucide-react";
-import type { MutableRefObject } from "react";
+import { Plus } from "lucide-react";
 import {
-  Suspense,
   useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -71,15 +45,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ComputerMaintenanceActions } from "../components/ComputerMaintenanceActions";
-import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
-import { lazyOverlay } from "../components/ErrorBoundary";
-import { IconTooltip } from "../components/IconTooltip";
-import { SidebarFooter } from "../components/SidebarFooter";
-import type { ActivityListFilters } from "../lib/activity-list-filters";
-import { emptyActivityFilters } from "../lib/activity-list-filters";
-import { readActivityMode, writeActivityMode } from "../lib/activity-mode";
 import type { ArtifactTarget } from "../lib/artifact-open";
 import { authClient } from "../lib/auth";
 import { takeInitialBootstrap } from "../lib/bootstrap";
@@ -89,33 +55,15 @@ import {
   subscribeBotsSidebarDensity,
 } from "../lib/bots-sidebar-density-pref";
 import { readBotsSidebarCollapsed, writeBotsSidebarCollapsed } from "../lib/bots-sidebar-pref";
-import {
-  deliverBrowserNotification as deliverNativeBrowserNotification,
-  requestBrowserNotificationPermission,
-  shouldNotifyBrowser,
-} from "../lib/browser-notifications";
-import { newClientId } from "../lib/client-id";
 import { setComposerUnsavedWork } from "../lib/composer-draft";
 import {
   getComposerEnterToSend,
   subscribeComposerEnterToSend,
 } from "../lib/composer-enter-to-send-pref";
-import {
-  bootComputerOnce,
-  embeddableScreenUrl,
-  isProxiedScreenUrl,
-  loadComputerScreen,
-  probeScreen,
-  SCREEN_FRAME_LOAD_TIMEOUT_MS,
-  screenFrameError,
-  screenFrameMessage,
-  screenFrameStarted,
-} from "../lib/computer-screen";
-import { connectedAppMarks } from "../lib/connected-apps";
+import { bootComputerOnce, embeddableScreenUrl, loadComputerScreen } from "../lib/computer-screen";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { localTimezone } from "../lib/local-timezone";
 import {
-  readFileAsBase64,
   revokePendingAttachmentPreviews,
   usePendingAttachmentPreviewCleanup,
 } from "../lib/pending-attachments";
@@ -128,93 +76,54 @@ import {
   rightPanelStorageKey,
   writeRightPanelState,
 } from "../lib/right-panel-state";
-import { clearSpaceSelection, createSpaceRpc, selectedSpaceId } from "../lib/rpc";
+import { createSpaceRpc, selectedSpaceId } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
 import { guardShellNavigate } from "../lib/shell-navigation";
-import { useSignOut } from "../lib/sign-out";
 import {
   activeThreadRuns,
-  applyThreadSendReceipt,
-  clearActiveThreadRuns,
-  computerPanelNeedsMaintenance,
   computerPanelNeedsScreen,
   computerTakeoverBlocked,
   isComputerStatusEvent,
-  isThreadSnapshotEvent,
   prependThreadMessagePage,
   reconcileRefreshedThread,
-  reduceComputerStatus,
-  reduceThreadSnapshot,
   threadRunError,
   userHoldsComputerControl,
 } from "../lib/thread-events";
 import { getToolActivityEnabled, subscribeToolActivity } from "../lib/tool-activity-preference";
 import { transcriptCanSnapAfterFrame, transcriptIsNearEnd } from "../lib/transcript-scroll";
 import { errorText } from "../lib/user-error";
-import { ActivityList } from "./ActivityList";
-import { CreateGroupForm, GroupSettings, memberName } from "./GroupPanel";
-import { ResizableSidePanel } from "./ResizableSidePanel";
-import { RoutineEditor } from "./RoutineEditor";
+import { memberName } from "./GroupPanel";
 import type { SettingsSection } from "./SettingsOverlay";
-import { SpaceSearchResults } from "./SpaceSearch";
-import { ArchivedChats } from "./shell/archived-chats";
-import { BotSettings, CreateBotForm } from "./shell/bot-panel";
+import { BotContextMenuContent } from "./shell/bot-context-menu-content";
 import type { PendingAttachment } from "./shell/chat-shared";
 import { FALLBACK_BOT_COLOR } from "./shell/chat-shared";
-import { CommandPalette, isCommandPaletteHotkey } from "./shell/command-palette";
 import { Composer } from "./shell/composer";
 import { ComputerOverlay } from "./shell/computer-overlay";
-import { ComputerPanel } from "./shell/computer-panel";
-import {
-  ClearConversationDialog,
-  DeleteBotDialog,
-  DeleteItemDialog,
-  NewBotSectionDialog,
-  PickerInfoDialog,
-  RenameBotSectionDialog,
-} from "./shell/dialogs";
-import type { RosterDropTarget } from "./shell/roster-drop";
-import { resolveRosterDrop } from "./shell/roster-drop";
-import { SidebarHeader } from "./shell/sidebar-header";
+import { ComputerBootingStatus, ComputerScreenError } from "./shell/computer-screen-status";
+import type { ChatTarget, SectionTarget } from "./shell/dialog-targets";
+import { ShellDialogs } from "./shell/shell-dialogs";
+import { ShellMainHeader } from "./shell/shell-main-header";
+import { ShellSettingsOverlays } from "./shell/shell-settings-overlays";
+import { ShellSidePanel } from "./shell/shell-side-panel";
+import { ShellSidebar } from "./shell/shell-sidebar";
 import { BotsSidebarLayout } from "./shell/sidebar-layout";
-import { SidebarRoster } from "./shell/sidebar-roster";
 import { sidebarGroupsForSpaces } from "./shell/space-sidebar";
+import { applyThreadEvent, firstThreadRoute, threadSnapshotSignal } from "./shell/thread-helpers";
 import { Transcript } from "./shell/transcript";
+import { useActivityMode } from "./shell/use-activity-mode";
+import { useBotReadState } from "./shell/use-bot-read-state";
+import { useBrowserNotifications } from "./shell/use-browser-notifications";
+import { useComposerActions } from "./shell/use-composer-actions";
+import { useComputerRecoveryHold } from "./shell/use-computer-recovery-hold";
+import { useComputerScreenFrame, useComputerViewport } from "./shell/use-computer-screen-frame";
+import { useMentionSources } from "./shell/use-mention-sources";
+import { useMobileSidebar } from "./shell/use-mobile-sidebar";
+import { useRosterReorder } from "./shell/use-roster-reorder";
 import { useRoutineEditor } from "./shell/use-routine-editor";
+import { useSettingsStatus } from "./shell/use-settings-status";
+import { useShellHotkeys } from "./shell/use-shell-hotkeys";
 import { useSidebarExpansion } from "./shell/use-sidebar-expansion";
-
-const BotContextMenu = lazyOverlay(() =>
-  import("./BotContextMenu").then((module) => module.BotContextMenu),
-);
-const MessagingSettingsOverlay = lazyOverlay(() =>
-  import("./MessagingSettingsOverlay").then((module) => module.MessagingSettingsOverlay),
-);
-const SettingsOverlay = lazyOverlay(() =>
-  import("./SettingsOverlay").then((module) => module.SettingsOverlay),
-);
-const PeerMessagesOverlay = lazyOverlay(() =>
-  import("./PeerMessagesOverlay").then((module) => module.PeerMessagesOverlay),
-);
-const PluginsOverlay = lazyOverlay(() =>
-  import("./PluginsOverlay").then((module) => module.PluginsOverlay),
-);
-const McpServersOverlay = lazyOverlay(() =>
-  import("./McpServersOverlay").then((module) => module.McpServersOverlay),
-);
-
-type PendingBrowserNotification = {
-  event: Pick<ProductEvent, "id" | "type" | "threadId" | "botId" | "payload">;
-  botId: string;
-  botName: string;
-  groupNotification: boolean;
-};
-
-const THREAD_SNAPSHOT_TIMEOUT_MS = 2_000;
-const MOBILE_SIDEBAR_SWIPE_EDGE_PX = 32;
-const MOBILE_SIDEBAR_SWIPE_DISTANCE_PX = 56;
-function threadSnapshotSignal(parent: AbortSignal): AbortSignal {
-  return anySignal([parent, AbortSignal.timeout(THREAD_SNAPSHOT_TIMEOUT_MS)]);
-}
+import { useSpaceSearch } from "./shell/use-space-search";
 
 export function ShellPage() {
   const { t } = useLingui();
@@ -267,8 +176,6 @@ export function ShellPage() {
     setBotsSidebarCollapsed(readBotsSidebarCollapsed(userId));
   }, [userId]);
   const [query, setQuery] = useState("");
-  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const snapshotRef = useRef<ThreadSnapshot | null>(null);
   const streamResponses = useSyncExternalStore(
@@ -304,11 +211,6 @@ export function ShellPage() {
   }, [sending, pendingAttachments.length]);
   const sendingRef = useRef(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [logOutError, setLogOutError] = useState<string | null>(null);
-  const { signingOut, logOut } = useSignOut(() => {
-    clearSpaceSelection();
-    navigate("/");
-  }, setLogOutError);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panel, setPanelState] = useState<Panel>(null);
@@ -342,16 +244,6 @@ export function ShellPage() {
   const [taughtSkills, setTaughtSkills] = useState<TaughtSkill[]>([]);
   const [taughtSkillsBotId, setTaughtSkillsBotId] = useState<string | null>(null);
   const [agentSkills, setAgentSkills] = useState<AgentSkillCatalogEntry[]>([]);
-  const [mentionRoutines, setMentionRoutines] = useState<Array<Routine & { botName?: string }>>([]);
-  const [footerLogos, setFooterLogos] = useState<Array<{ name: string; logo: string | null }>>([]);
-  const [mentionConnectors, setMentionConnectors] = useState<
-    Array<{
-      id: string;
-      name: string;
-      authStatus: "connected" | "needs_auth";
-      connectionId?: string;
-    }>
-  >([]);
   const [teachBusy, setTeachBusy] = useState(false);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const computerRef = useRef<ComputerStatus | null>(null);
@@ -418,14 +310,9 @@ export function ShellPage() {
     "messaging",
     false,
   );
-  const [messagingSurfaceEnabled, setMessagingSurfaceEnabled] = useState(false);
   const [dismissedRunErrorIds, setDismissedRunErrorIds] =
     useState<ReadonlySet<string>>(readSeenRunErrorIds);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const mobileSidebarSwipeRef = useRef<{ startX: number; startY: number } | null>(null);
-  const [draggedBotId, setDraggedBotId] = useState<string | null>(null);
-  const [rosterDropKey, setRosterDropKey] = useState<string | null>(null);
+  const { mobileSidebarOpen, setMobileSidebarOpen, swipeHandlers } = useMobileSidebar();
   const [botsSidebarCollapsed, setBotsSidebarCollapsed] = useState(false);
   const focusPromptAbortRef = useRef<AbortController | null>(null);
   const focusPromptBotIdRef = useRef<string | null>(null);
@@ -434,50 +321,23 @@ export function ShellPage() {
   const [pickerInfoTopic, setPickerInfoTopic] = useState<"group" | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  useEffect(() => {
-    const desktop = window.matchMedia("(min-width: 768px)");
-    function closeMobileSidebar() {
-      if (desktop.matches) setMobileSidebarOpen(false);
-    }
-    closeMobileSidebar();
-    desktop.addEventListener("change", closeMobileSidebar);
-    return () => desktop.removeEventListener("change", closeMobileSidebar);
-  }, []);
-  const [activityMode, setActivityMode] = useState(readActivityMode);
-  const [activityFilters, setActivityFilters] = useState<ActivityListFilters>(emptyActivityFilters);
-  const [activityFiltersExpanded, setActivityFiltersExpanded] = useState(false);
-  const activityFiltersId = useId();
-  const activityFilterCount =
-    Number(activityFilters.status !== "all") +
-    Number(Boolean(activityFilters.dateRange.from)) +
-    Number(Boolean(activityFilters.dateRange.to));
-  const toggleActivityMode = useCallback(() => {
-    setQuery("");
-    setActivityFilters(emptyActivityFilters());
-    setActivityFiltersExpanded(false);
-    setActivityMode((on) => {
-      const next = !on;
-      writeActivityMode(next);
-      return next;
-    });
-  }, []);
+  const {
+    activityMode,
+    activityFilters,
+    setActivityFilters,
+    activityFiltersExpanded,
+    setActivityFiltersExpanded,
+    activityFiltersId,
+    activityFilterCount,
+    toggleActivityMode,
+  } = useActivityMode(setQuery);
   const [botMenu, setBotMenu] = useState<{ kind: "bot" | "group"; id: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Bot | null>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
-  const [clearTarget, setClearTarget] = useState<
-    { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group } | null
-  >(null);
-  const [newSectionTarget, setNewSectionTarget] = useState<
-    { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group } | null
-  >(null);
-  const [renameSectionTarget, setRenameSectionTarget] = useState<{
-    section: BotSection;
-    spaceId: string;
-  } | null>(null);
-  const [deleteSectionTarget, setDeleteSectionTarget] = useState<{
-    section: BotSection;
-    spaceId: string;
-  } | null>(null);
+  const [clearTarget, setClearTarget] = useState<ChatTarget | null>(null);
+  const [newSectionTarget, setNewSectionTarget] = useState<ChatTarget | null>(null);
+  const [renameSectionTarget, setRenameSectionTarget] = useState<SectionTarget | null>(null);
+  const [deleteSectionTarget, setDeleteSectionTarget] = useState<SectionTarget | null>(null);
   // The bot whose boot shows progress, and every bot whose boot request is still out.
   const [bootingBotId, setBootingBotId] = useState<string | null>(null);
   const booting = bootingBotId !== null && bootingBotId === computer?.botId;
@@ -486,27 +346,8 @@ export function ShellPage() {
   const [initialBotsLoaded, setInitialBotsLoaded] = useState(false);
   const [bootstrapMe, setBootstrapMe] = useState<Me | null>();
   const settingsSpace = spaces.find((space) => space.id === bootstrapMe?.spaceId) ?? null;
-  const [keepComputerRecovery, setKeepComputerRecovery] = useState(false);
-  const recoveryHoldTimer = useRef<number | undefined>(undefined);
-  const showComputerRecoveryHint =
-    computersAreUnavailable(bootstrapMe?.sandboxProvider) || keepComputerRecovery;
-  const releaseComputerRecovery = useCallback(() => {
-    window.clearTimeout(recoveryHoldTimer.current);
-    recoveryHoldTimer.current = undefined;
-    setKeepComputerRecovery(false);
-  }, []);
-  const holdComputerRecovery = useCallback(() => {
-    setKeepComputerRecovery(true);
-    window.clearTimeout(recoveryHoldTimer.current);
-    recoveryHoldTimer.current = window.setTimeout(() => {
-      recoveryHoldTimer.current = undefined;
-      setKeepComputerRecovery(false);
-    }, 4000);
-  }, []);
-  useEffect(() => {
-    if (panel !== "computer") releaseComputerRecovery();
-  }, [panel, releaseComputerRecovery]);
-  useEffect(() => () => window.clearTimeout(recoveryHoldTimer.current), []);
+  const { showComputerRecoveryHint, holdComputerRecovery, releaseComputerRecovery } =
+    useComputerRecoveryHold(bootstrapMe?.sandboxProvider, panel);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const [computerOpen, setComputerOpen] = useState(false);
   const [computerBotId, setComputerBotId] = useState<string | undefined>();
@@ -514,99 +355,18 @@ export function ShellPage() {
   const computerBotIdRef = useRef<string | undefined>(undefined);
   const computerBootEpoch = useRef(0);
   const openComputerRef = useRef<(botId?: string) => Promise<boolean>>(async () => false);
-  const [computerViewport, setComputerViewport] = useState<{
-    height: number;
-    offsetTop: number;
-  } | null>(null);
   const [computerError, setComputerError] = useState<string | null>(null);
   // Screen-load failures can sit beside a still-valid embed URL; boot and
   // takeover failures must stay visible even when a URL remains.
   const [computerErrorFromScreen, setComputerErrorFromScreen] = useState(false);
   const computerErrorFromScreenRef = useRef(false);
   computerErrorFromScreenRef.current = computerErrorFromScreen;
-  // The framed screen cannot be inspected from here. The proxy says when it refuses the page,
-  // and the page reports its own state; nothing past "loading" by the timeout means it stalled.
-  const [screenFrame, setScreenFrame] = useState<HTMLIFrameElement | null>(null);
-  const [screenLoadError, setScreenLoadError] = useState<string | null>(null);
-  const screenFrameReported = useRef(false);
-  useEffect(() => {
-    // Only a mounted frame resets the error: its own failure unmounts it, and Retry remounts it.
-    if (!screenFrame) return;
-    setScreenLoadError(null);
-    screenFrameReported.current = false;
-    const url = embeddableScreenUrl(screenUrl);
-    if (!isProxiedScreenUrl(url)) return;
-    let cancelled = false;
-    const fallback = t`Could not connect to the computer screen`;
-    void probeScreen(url, fallback).then((error) => {
-      if (!cancelled && error && !screenFrameReported.current) setScreenLoadError(error);
-    });
-    const timer = setTimeout(() => {
-      if (!cancelled && !screenFrameReported.current) setScreenLoadError(fallback);
-    }, SCREEN_FRAME_LOAD_TIMEOUT_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [screenFrame, screenUrl]);
-  useEffect(() => {
-    if (!screenFrame) return;
-    const fallback = t`Could not connect to the computer screen`;
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== screenFrame.contentWindow) return;
-      const message = screenFrameMessage(event.data);
-      if (!message) return;
-      if (screenFrameStarted(message)) screenFrameReported.current = true;
-      setScreenLoadError(screenFrameError(message, fallback));
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [screenFrame]);
-  useEffect(() => {
-    if (!computerOpen) {
-      setComputerViewport(null);
-      return;
-    }
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const sync = () => {
-      setComputerViewport({ height: viewport.height, offsetTop: viewport.offsetTop });
-    };
-    sync();
-    viewport.addEventListener("resize", sync);
-    viewport.addEventListener("scroll", sync);
-    return () => {
-      viewport.removeEventListener("resize", sync);
-      viewport.removeEventListener("scroll", sync);
-    };
-  }, [computerOpen]);
-  useEffect(() => {
-    if (!session.data?.user) return;
-    let cancelled = false;
-    void rpc.messaging
-      .status()
-      .then((status) => {
-        if (!cancelled) {
-          setMessagingSurfaceEnabled(status.enabled);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [session.data?.user]);
-  const [usage, setUsage] = useState<{
-    inputTokens: number | null;
-    outputTokens: number | null;
-    totalTokens?: number | null;
-    runs: number;
-  } | null>(null);
-  const refreshUsage = useCallback(() => {
-    void rpc.usage
-      .summary()
-      .then(setUsage)
-      .catch(() => undefined);
-  }, []);
+  const { setScreenFrame, screenLoadError, setScreenLoadError } = useComputerScreenFrame(screenUrl);
+  const computerViewport = useComputerViewport(computerOpen);
+  const { messagingSurfaceEnabled, usage, refreshUsage } = useSettingsStatus(
+    rpc,
+    session.data?.user,
+  );
   const autoBooted = useRef<string | null>(null);
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
@@ -627,10 +387,7 @@ export function ShellPage() {
     messages: ThreadMessage[];
     olderCursor: number | null;
   } | null>(null);
-  const manuallyUnread = useRef(new Set<string>());
   const readVisibleGroups = useRef(new Set<string>());
-  const notifiedBrowserEvents = useRef(new Set<string>());
-  const pendingBrowserNotifications = useRef(new Map<string, PendingBrowserNotification>());
   const computerVisible = useRef(false);
   computerVisible.current = panel === "computer" || computerOpen;
 
@@ -689,114 +446,13 @@ export function ShellPage() {
     botMenu?.kind === "bot" ? bots.find((bot) => bot.id === botMenu.id) : undefined;
   const contextGroup =
     botMenu?.kind === "group" ? groups.find((group) => group.id === botMenu.id) : undefined;
-  const contextChat = contextBot ?? contextGroup;
   const closeBotMenu = useCallback(() => setBotMenu(null), []);
-  const updateBotUnread = useCallback((id: string, unread: boolean) => {
-    setBots((current) => {
-      const bot = current.find((candidate) => candidate.id === id);
-      if (!bot || bot.unread === unread) return current;
-      return current.map((candidate) =>
-        candidate.id === id ? { ...candidate, unread } : candidate,
-      );
-    });
-  }, []);
-  const markBotRead = useCallback(
-    async (id: string) => {
-      await rpc.threads.markRead({ botId: id });
-      manuallyUnread.current.delete(id);
-      updateBotUnread(id, false);
-    },
-    [updateBotUnread],
+  const { manuallyUnread, markBotRead, markBotUnread, markBotReadIfVisible } = useBotReadState(
+    rpc,
+    setBots,
   );
-  const markBotUnread = useCallback(
-    async (id: string) => {
-      manuallyUnread.current.add(id);
-      try {
-        await rpc.threads.markUnread({ botId: id });
-      } catch (err) {
-        manuallyUnread.current.delete(id);
-        throw err;
-      }
-      updateBotUnread(id, true);
-    },
-    [updateBotUnread],
-  );
-  // A bot the user marked unread by hand stays unread until they open it again,
-  // otherwise the auto-read below would undo the action on the next window focus.
-  const markBotReadIfVisible = useCallback(
-    (id: string) => {
-      if (manuallyUnread.current.has(id)) return;
-      if (document.visibilityState === "visible" && document.hasFocus()) {
-        void markBotRead(id).catch(() => undefined);
-      }
-    },
-    [markBotRead],
-  );
-  const deliverBrowserNotification = useCallback((pending: PendingBrowserNotification): boolean => {
-    const currentBot = botsRef.current.find((bot) => bot.id === pending.botId);
-    if (!currentBot || typeof Notification === "undefined") return true;
-    const result = deliverNativeBrowserNotification(
-      pending.event,
-      currentBot.name || pending.botName,
-      {
-        enabled: pending.groupNotification || currentBot.notifyOnFinish,
-        pageVisible: document.visibilityState === "visible",
-        windowFocused: document.hasFocus(),
-        permission: Notification.permission,
-        notifiedEventIds: notifiedBrowserEvents.current,
-        show: (title, body, tag) => new Notification(title, { body, tag }),
-      },
-    );
-    return result !== "pending";
-  }, []);
-  const flushPendingBrowserNotifications = useCallback(() => {
-    for (const [threadId, pending] of pendingBrowserNotifications.current) {
-      if (deliverBrowserNotification(pending)) {
-        pendingBrowserNotifications.current.delete(threadId);
-      }
-    }
-  }, [deliverBrowserNotification]);
-  const notifyBrowserForEvent = useCallback(
-    (
-      event: Pick<ProductEvent, "id" | "type" | "threadId" | "seq" | "botId" | "payload">,
-      subscribedThreadId: string | undefined,
-      initialCursor: number,
-      streamReady: boolean,
-      botName: string,
-      enabled: boolean,
-      groupNotification: boolean,
-    ) => {
-      const botId = event.botId;
-      if (typeof botId !== "string") return;
-      const eligible = shouldNotifyBrowser(event, {
-        subscribedThreadId: subscribedThreadId ?? "",
-        initialCursor,
-        streamReady,
-        pageVisible: document.visibilityState === "visible",
-        windowFocused: document.hasFocus(),
-        permission: "granted",
-        notifiedEventIds: notifiedBrowserEvents.current,
-      });
-      if (!eligible || !enabled) return;
-      const pending = {
-        event,
-        botId,
-        botName,
-        groupNotification,
-      } satisfies PendingBrowserNotification;
-      if (typeof Notification === "undefined" || Notification.permission === "denied") return;
-      if (Notification.permission === "default") {
-        pendingBrowserNotifications.current.set(event.threadId, pending);
-        return;
-      }
-      if (deliverBrowserNotification(pending)) {
-        pendingBrowserNotifications.current.delete(event.threadId);
-      } else {
-        pendingBrowserNotifications.current.set(event.threadId, pending);
-      }
-    },
-    [deliverBrowserNotification],
-  );
+  const { flushPendingBrowserNotifications, notifyBrowserForEvent } =
+    useBrowserNotifications(botsRef);
 
   const refreshBots = useCallback(
     async (includeArchived = false, replaceBotOrder = false) => {
@@ -1400,115 +1056,32 @@ export function ShellPage() {
     },
     [navigate],
   );
-  const flushBotOrder = useCallback(async () => {
-    if (savingBotOrderRef.current) return;
-    savingBotOrderRef.current = true;
-    try {
-      while (pendingBotOrderRef.current) {
-        const botIds = pendingBotOrderRef.current;
-        pendingBotOrderRef.current = null;
-        try {
-          await rpc.bots.reorder({ botIds });
-        } catch {
-          // Keep a newer order queued during this failed save; only roll back
-          // when nothing else is pending.
-          if (pendingBotOrderRef.current === null) {
-            await refreshBots(false, true).catch(() => undefined);
-          }
-        }
-      }
-    } finally {
-      savingBotOrderRef.current = false;
-      // A reorder may have arrived while saving=true and returned early.
-      if (pendingBotOrderRef.current) {
-        void flushBotOrder();
-      }
-    }
-  }, [refreshBots]);
-  const reorderRosterBot = useCallback(
-    (sourceId: string, targetId: string, groupBotIds: string[]) => {
-      if (!groupBotIds.includes(sourceId) || !groupBotIds.includes(targetId)) return;
-      const current = botsRef.current;
-      const reordered = reorderBotTo(current, sourceId, targetId);
-      if (reordered === current) return;
-      const next = [...reordered];
-      botOrderEpochRef.current += 1;
-      botsRef.current = next;
-      setBots(next);
-      pendingBotOrderRef.current = next.map((bot) => bot.id);
-      void flushBotOrder();
-    },
-    [flushBotOrder],
+  const {
+    draggedBotId,
+    setDraggedBotId,
+    rosterDropKey,
+    setRosterDropKey,
+    reorderRosterBot,
+    rosterDropAction,
+    applyRosterDrop,
+  } = useRosterReorder({
+    rpc,
+    bots,
+    botsRef,
+    setBots,
+    botOrderEpochRef,
+    pendingBotOrderRef,
+    savingBotOrderRef,
+    refreshBots,
+    refreshGroupThread,
+    activeGroupId,
+    setSendError,
+  });
+  const { searchHits, setSearchHits, searchLoading, showSpaceSearch } = useSpaceSearch(
+    rpc,
+    query,
+    activityMode,
   );
-  // Drags only act on bots of the active space; other spaces are read-only here.
-  const draggedBot = draggedBotId ? bots.find((bot) => bot.id === draggedBotId) : undefined;
-  const rosterDropAction = useCallback(
-    (target: RosterDropTarget, sameParent: boolean) =>
-      draggedBot ? resolveRosterDrop({ dragged: draggedBot, target, sameParent }) : null,
-    [draggedBot],
-  );
-  const applyRosterDrop = useCallback(
-    (target: RosterDropTarget, sameParent: boolean, groupBotIds: string[]) => {
-      const action = rosterDropAction(target, sameParent);
-      setDraggedBotId(null);
-      setRosterDropKey(null);
-      if (!action || !draggedBot) return;
-      setSendError(null);
-      if (action.action === "reorder") {
-        reorderRosterBot(draggedBot.id, action.targetBotId, groupBotIds);
-        return;
-      }
-      const request =
-        action.action === "move"
-          ? rpc.bots.update({ botId: draggedBot.id, sectionId: action.sectionId })
-          : rpc.groups.update({
-              groupId: action.groupId,
-              botIds: action.botIds,
-              expectedBotIds: action.botIds.filter((id) => id !== draggedBot.id),
-            });
-      void request
-        .then(async () => {
-          await refreshBots();
-          if (action.action === "join" && activeGroupId.current === action.groupId) {
-            await refreshGroupThread(action.groupId);
-          }
-        })
-        .catch((error) => {
-          setSendError(errorText(error, t`Could not save`));
-          void refreshBots().catch(() => undefined);
-        });
-    },
-    [draggedBot, refreshBots, reorderRosterBot, rosterDropAction, t],
-  );
-  const spaceQuery = query.trim();
-  const showSpaceSearch = !activityMode && spaceQuery.length > 0;
-
-  useEffect(() => {
-    if (!showSpaceSearch) {
-      setSearchHits([]);
-      setSearchLoading(false);
-      return;
-    }
-    const abort = new AbortController();
-    const timer = window.setTimeout(() => {
-      setSearchLoading(true);
-      void rpc.search
-        .query({ q: spaceQuery })
-        .then((result) => {
-          if (!abort.signal.aborted) setSearchHits(result.hits);
-        })
-        .catch(() => {
-          if (!abort.signal.aborted) setSearchHits([]);
-        })
-        .finally(() => {
-          if (!abort.signal.aborted) setSearchLoading(false);
-        });
-    }, 200);
-    return () => {
-      abort.abort();
-      window.clearTimeout(timer);
-    };
-  }, [showSpaceSearch, spaceQuery]);
 
   async function jumpToSearchHit(hit: SearchHit) {
     setQuery("");
@@ -1702,6 +1275,26 @@ export function ShellPage() {
       ? t`You`
       : (resolveTranscriptMemberName(activeReplyTarget.botId) ?? active?.name ?? t`Bot`)
     : undefined;
+  const shellReady =
+    initialBotsLoaded &&
+    (inGroup
+      ? Boolean(activeGroup && activeSnapshot)
+      : bots.length === 0 || Boolean(active && activeSnapshot));
+  const refreshThreadRef = useRef(refreshThread);
+  refreshThreadRef.current = refreshThread;
+  const refreshGroupThreadRef = useRef(refreshGroupThread);
+  refreshGroupThreadRef.current = refreshGroupThread;
+  const loadOlderMessagesRef = useRef(loadOlderMessages);
+  loadOlderMessagesRef.current = loadOlderMessages;
+  const jumpToMessageRef = useRef(jumpToMessage);
+  jumpToMessageRef.current = jumpToMessage;
+
+  const { mentionRoutines, mentionConnectors, footerLogos, setFooterLogos } = useMentionSources(
+    rpc,
+    bots,
+    initialBotsLoaded,
+  );
+
   const composerMentionTargets = useMemo(
     () =>
       buildComposerMentionOptions({
@@ -1721,94 +1314,6 @@ export function ShellPage() {
       }),
     [bots, groupId, groups, inGroup, mentionConnectors, mentionRoutines],
   );
-  const shellReady =
-    initialBotsLoaded &&
-    (inGroup
-      ? Boolean(activeGroup && activeSnapshot)
-      : bots.length === 0 || Boolean(active && activeSnapshot));
-  const refreshThreadRef = useRef(refreshThread);
-  refreshThreadRef.current = refreshThread;
-  const refreshGroupThreadRef = useRef(refreshGroupThread);
-  refreshGroupThreadRef.current = refreshGroupThread;
-  const loadOlderMessagesRef = useRef(loadOlderMessages);
-  loadOlderMessagesRef.current = loadOlderMessages;
-  const jumpToMessageRef = useRef(jumpToMessage);
-  jumpToMessageRef.current = jumpToMessage;
-
-  const mentionBotsKey = useMemo(
-    () => bots.map((bot) => `${bot.id}:${bot.name}`).join(","),
-    [bots],
-  );
-  const botsForMentionsRef = useRef(bots);
-  botsForMentionsRef.current = bots;
-
-  useEffect(() => {
-    const bots = botsForMentionsRef.current;
-    if (!initialBotsLoaded || bots.length === 0) {
-      setMentionRoutines([]);
-      setMentionConnectors([]);
-      if (!initialBotsLoaded) return;
-    }
-    let cancelled = false;
-    const botNameById = new Map(bots.map((bot) => [bot.id, bot.name]));
-    void Promise.all(
-      bots.map((bot) =>
-        rpc.routines
-          .list({ botId: bot.id })
-          .then((rows) =>
-            rows.map((routine) => ({
-              ...routine,
-              botName: botNameById.get(bot.id) ?? bot.name,
-            })),
-          )
-          .catch(() => [] as Array<Routine & { botName?: string }>),
-      ),
-    ).then((lists) => {
-      if (!cancelled) setMentionRoutines(lists.flat());
-    });
-    // The catalog call reconciles connection rows, so list them after it.
-    const catalogRequest = rpc.connections.catalog({}).catch(() => null);
-    void Promise.all([
-      catalogRequest.then(() => rpc.connections.list().catch(() => null)),
-      catalogRequest,
-    ]).then(([connections, catalog]) => {
-      if (cancelled) return;
-      const connected = connections?.filter((row) => row.status === "connected") ?? [];
-      if (catalog && connections) setFooterLogos(connectedAppMarks(catalog, connections));
-      const options: Array<{
-        id: string;
-        name: string;
-        authStatus: "connected" | "needs_auth";
-        connectionId?: string;
-      }> = connected.map((row) => ({
-        id: row.id,
-        name: row.displayName,
-        authStatus: "connected" as const,
-        connectionId: row.id,
-      }));
-      for (const item of catalog ?? []) {
-        if (item.connected || item.noAuth) continue;
-        if (
-          connected.some(
-            (row) =>
-              row.provider.toLowerCase() === item.slug.toLowerCase() ||
-              row.displayName.toLowerCase() === item.name.toLowerCase(),
-          )
-        ) {
-          continue;
-        }
-        options.push({
-          id: `catalog:${item.connectorId}:${item.slug}`,
-          name: item.name,
-          authStatus: "needs_auth",
-        });
-      }
-      setMentionConnectors(bots.length ? options : []);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [initialBotsLoaded, mentionBotsKey]);
 
   useLayoutEffect(() => {
     if (initialBotsLoaded) {
@@ -1864,319 +1369,42 @@ export function ShellPage() {
     const botId = activeBotId.current;
     if (botId) void jumpToMessageRef.current({ botId, messageId }).catch(() => undefined);
   }, []);
-  const answerMessage = useCallback(
-    async (message: ThreadMessage, text: string, username?: string, dismiss?: boolean) => {
-      const botId = activeBotId.current;
-      const groupId = activeGroupId.current;
-      if (!botId && !groupId) return;
-      await rpc.threads.answer({
-        ...(groupId ? { groupId } : { botId: botId! }),
-        runId: message.runId ?? "",
-        messageId: message.id,
-        answer: text,
-        ...(username ? { username } : {}),
-        ...(dismiss ? { dismiss: true as const } : {}),
-      });
-      // The answer is saved; live events can reconcile a failed refresh.
-      try {
-        if (groupId && activeGroupId.current === groupId) {
-          await refreshGroupThreadRef.current(groupId);
-        } else if (botId && activeBotId.current === botId) {
-          await refreshThreadRef.current(botId);
-        }
-      } catch {}
-    },
-    [],
-  );
-  const reactToMessage = useCallback(
-    async (message: ThreadMessage, reaction: MessageReaction) => {
-      const botId = activeBotId.current;
-      const groupId = activeGroupId.current;
-      if (!botId && !groupId) return;
-      try {
-        const result = await rpc.threads.react({
-          ...(groupId ? { groupId } : { botId: botId! }),
-          messageId: message.id,
-          reaction,
-          clientNonce: newClientId(),
-        });
-        if (result.runIds?.length) {
-          // The reaction is saved; a failed refresh is caught up by live events.
-          try {
-            if (groupId && activeGroupId.current === groupId) {
-              await refreshGroupThreadRef.current(groupId);
-            } else if (botId && activeBotId.current === botId) {
-              await refreshThreadRef.current(botId);
-            }
-          } catch {}
-        }
-      } catch (error) {
-        const stillHere = groupId
-          ? activeGroupId.current === groupId
-          : activeBotId.current === botId;
-        if (!stillHere) return;
-        setSendError(errorText(error, t`Could not update reaction`));
-      }
-    },
-    [t],
-  );
-  const onAttachmentPick = useCallback(
-    (files: FileList | null) => {
-      const threadKey = activeGroupId.current ?? activeBotId.current;
-      if (!threadKey || !files?.length) return false;
-      const existing = attachmentsForThread(pendingAttachments, threadKey);
-      const next: PendingAttachment[] = [];
-      const skipped: string[] = [];
-      for (const file of Array.from(files)) {
-        if (existing.length + next.length >= ATTACHMENT_MAX_COUNT) {
-          skipped.push(t`${file.name} (max ${ATTACHMENT_MAX_COUNT} attachments)`);
-          continue;
-        }
-        if (file.size > attachmentMaxBytes(bootstrapMe)) {
-          skipped.push(
-            t`${file.name} (over ${attachmentSizeLabel(attachmentMaxBytes(bootstrapMe))})`,
-          );
-          continue;
-        }
-        const mimeType = inferAttachmentMimeType(file.name, file.type);
-        if (!mimeType) {
-          skipped.push(file.name);
-          continue;
-        }
-        next.push({
-          id: `${file.name}-${file.size}-${file.lastModified}-${next.length}`,
-          threadKey,
-          file,
-          previewUrl: mimeType.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-        });
-      }
-      if (next.length) setPendingAttachments((current) => [...current, ...next]);
-      setAttachmentNotice(skipped.length ? t`Skipped ${skipped.join(", ")}` : null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return next.length > 0;
-    },
-    [pendingAttachments, bootstrapMe, t],
-  );
-  const removeAttachment = useCallback((attachment: PendingAttachment) => {
-    revokePendingAttachmentPreviews([attachment]);
-    setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id));
-  }, []);
-  const sendMessage = useCallback(
-    async (text: string, mentions: ComposerMention[], clientNonce: string) => {
-      const initialBotTarget = activeBotId.current;
-      const initialGroupTarget = activeGroupId.current;
-      if ((!initialBotTarget && !initialGroupTarget) || sending) return false;
-      const originThreadKey = initialGroupTarget ?? initialBotTarget;
-      const attachments = attachmentsForThread(pendingAttachments, originThreadKey);
-      const plan = resolveComposerSendPlan({
-        text,
-        mentions,
-        hasAttachments: attachments.length > 0,
-      });
-      if (plan.isNoOp) return false;
-      const reroutedToGroup = Boolean(
-        plan.rerouteGroupId && plan.rerouteGroupId !== initialGroupTarget,
-      );
-      const groupTarget = plan.rerouteGroupId ?? initialGroupTarget;
-      const botTarget = reroutedToGroup ? undefined : initialBotTarget;
-      if (
-        plan.shouldSend &&
-        (groupTarget || botsRef.current.find((bot) => bot.id === botTarget)?.notifyOnFinish)
-      ) {
-        const permissionRequest = requestBrowserNotificationPermission();
-        if (permissionRequest) void permissionRequest.then(flushPendingBrowserNotifications);
-      }
-      const trimmed = plan.trimmed;
-      sendingRef.current = true;
-      setSending(true);
-      setSendError(null);
-      const dropDelayedSetup = () => {
-        // Only after successful engagement so a failed upload/send keeps the setup card.
-        if (initialBotTarget && focusPromptBotIdRef.current === initialBotTarget) {
-          cancelFocusPrompt();
-        }
-      };
-      // Keep the draft cleared once any part of the submission is confirmed accepted.
-      let accepted = false;
-      try {
-        if (plan.shouldRunRoutines) {
-          // Settle every run first so one that was accepted is never repeated.
-          const runs = await Promise.allSettled(
-            plan.routineIds.map((routineId) =>
-              rpc.routines.testRun({
-                routineId,
-                clientNonce: `routine-mention:${clientNonce}:${routineId}`,
-              }),
-            ),
-          );
-          accepted = runs.some((run) => run.status === "fulfilled");
-          for (const run of runs) if (run.status === "rejected") throw run.reason;
-        }
-        if (!plan.shouldSend) {
-          dropDelayedSetup();
-          clearReply();
-          revokePendingAttachmentPreviews(attachments);
-          setPendingAttachments((current) =>
-            current.filter((attachment) => attachment.threadKey !== originThreadKey),
-          );
-          setAttachmentNotice(null);
-          if (reroutedToGroup && groupTarget) {
-            navigate(`/app/g/${groupTarget}`);
-            return true;
-          }
-          if (groupTarget && activeGroupId.current === groupTarget) {
-            await refreshGroupThreadRef.current(groupTarget);
-          } else if (botTarget && activeBotId.current === botTarget) {
-            await refreshThreadRef.current(botTarget);
-          }
-          return true;
-        }
-        const artifactIds: string[] = [];
-        for (const pending of attachments) {
-          const mimeType = inferAttachmentMimeType(pending.file.name, pending.file.type);
-          if (!mimeType) {
-            throw new Error(t`Unsupported file type: ${pending.file.name}`);
-          }
-          const contentBase64 = await readFileAsBase64(pending.file);
-          const artifact = await rpc.artifacts.create(
-            groupTarget
-              ? { groupId: groupTarget, name: pending.file.name, mimeType, contentBase64 }
-              : { botId: botTarget!, name: pending.file.name, mimeType, contentBase64 },
-          );
-          artifactIds.push(artifact.id);
-        }
-        if (groupTarget) {
-          await rpc.threads.send({
-            groupId: groupTarget,
-            clientNonce,
-            text: trimmed || undefined,
-            mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
-            artifactIds: artifactIds.length ? artifactIds : undefined,
-            replyToMessageId: reroutedToGroup ? undefined : activeReplyTarget?.id,
-            replyQuote: reroutedToGroup ? undefined : (activeReplyQuote ?? undefined),
-          });
-          accepted = true;
-        } else if (botTarget) {
-          const sent = await rpc.threads.send({
-            botId: botTarget,
-            clientNonce,
-            text: trimmed || undefined,
-            mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
-            artifactIds: artifactIds.length ? artifactIds : undefined,
-            replyToMessageId: activeReplyTarget?.id,
-            replyQuote: activeReplyQuote ?? undefined,
-          });
-          accepted = true;
-          if (activeBotId.current === botTarget) {
-            updateSnapshot((current) =>
-              applyThreadSendReceipt(
-                current,
-                {
-                  botId: botTarget,
-                  runId: sent.runId,
-                  taskId: sent.taskId,
-                },
-                terminalRunReceipts.current,
-              ),
-            );
-          }
-        }
-        dropDelayedSetup();
-        clearReply();
-        revokePendingAttachmentPreviews(attachments);
-        setPendingAttachments((current) =>
-          current.filter((attachment) => attachment.threadKey !== originThreadKey),
-        );
-        // Refresh sidebar status even when a bot→group reroute navigates away below.
-        void refreshBots().catch(() => undefined);
-        if (reroutedToGroup && groupTarget) {
-          navigate(`/app/g/${groupTarget}`);
-          return true;
-        }
-        if (groupTarget && activeGroupId.current === groupTarget) setAttachmentNotice(null);
-        if (botTarget && activeBotId.current === botTarget) setAttachmentNotice(null);
-        if (groupTarget) void refreshGroupThreadRef.current(groupTarget).catch(() => undefined);
-        else if (botTarget) void refreshThreadRef.current(botTarget).catch(() => undefined);
-        return true;
-      } catch (error) {
-        if (reroutedToGroup && groupTarget) {
-          setSendError(errorText(error, t`Failed to send message`));
-        } else if (groupTarget && activeGroupId.current === groupTarget) {
-          setSendError(errorText(error, t`Failed to send message`));
-        } else if (botTarget && activeBotId.current === botTarget) {
-          setSendError(errorText(error, t`Failed to send message`));
-        }
-        return accepted;
-      } finally {
-        sendingRef.current = false;
-        setSending(false);
-      }
-    },
-    [
-      activeReplyTarget?.id,
-      activeReplyQuote,
-      clearReply,
-      flushPendingBrowserNotifications,
-      navigate,
-      pendingAttachments,
-      sending,
-      t,
-    ],
-  );
-  const stopRun = useCallback(async () => {
-    if (sending) return;
-    sendingRef.current = true;
-    setSending(true);
-    try {
-      const botTarget = activeBotId.current;
-      const groupTarget = activeGroupId.current;
-      if (groupTarget) {
-        setSendError(null);
-        try {
-          await rpc.threads.stop({ groupId: groupTarget });
-        } catch (error) {
-          if (activeGroupId.current === groupTarget) {
-            setSendError(errorText(error, t`Failed to stop`));
-          }
-          return;
-        }
-        // Clear run UI ahead of the run.cancelled event so refresh races with in-flight gets.
-        if (activeGroupId.current === groupTarget) {
-          updateSnapshot((prev) =>
-            prev && prev.groupId === groupTarget ? clearActiveThreadRuns(prev) : prev,
-          );
-        }
-        await refreshGroupThreadRef.current(groupTarget).catch(() => undefined);
-        return;
-      }
-      if (!botTarget) return;
-      setSendError(null);
-      try {
-        await rpc.threads.stop({ botId: botTarget });
-      } catch (error) {
-        if (activeBotId.current === botTarget) {
-          setSendError(errorText(error, t`Failed to stop`));
-        }
-        return;
-      }
-      // Clear local run/busy immediately rather than waiting for run.cancelled so a
-      // superseded in-flight refresh (older cursor) cannot leave Stop enabled / Take control
-      // blocked while the API is already idle.
-      if (activeBotId.current === botTarget) {
-        updateSnapshot((prev) =>
-          !prev || (prev.botId !== botTarget && prev.botId) ? prev : clearActiveThreadRuns(prev),
-        );
-        const currentComputer = computerRef.current;
-        if (currentComputer?.busyBotName) {
-          commitComputer({ ...currentComputer, busyBotName: null });
-        }
-      }
-      await refreshThreadRef.current(botTarget).catch(() => undefined);
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
-    }
-  }, [sending, t]);
+  const {
+    answerMessage,
+    reactToMessage,
+    onAttachmentPick,
+    removeAttachment,
+    sendMessage,
+    stopRun,
+  } = useComposerActions({
+    rpc,
+    activeBotId,
+    activeGroupId,
+    refreshThreadRef,
+    refreshGroupThreadRef,
+    setSendError,
+    pendingAttachments,
+    setPendingAttachments,
+    setAttachmentNotice,
+    fileInputRef,
+    bootstrapMe,
+    sending,
+    setSending,
+    sendingRef,
+    botsRef,
+    flushPendingBrowserNotifications,
+    cancelFocusPrompt,
+    focusPromptBotIdRef,
+    clearReply,
+    activeReplyTarget,
+    activeReplyQuote,
+    navigate,
+    refreshBots,
+    updateSnapshot,
+    terminalRunReceipts,
+    computerRef,
+    commitComputer,
+  });
   const stopTeaching = useCallback(async () => {
     const id = activeBotId.current;
     if (!id || teachBusy) return;
@@ -2482,24 +1710,7 @@ export function ShellPage() {
     setSendError(null);
   }, [active?.id, clearReply, groupId, inGroup]);
 
-  useEffect(() => {
-    if (!computerOpen) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setComputerOpen(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [computerOpen]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (!isCommandPaletteHotkey(event)) return;
-      event.preventDefault();
-      setCommandPaletteOpen((open) => !open);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useShellHotkeys(computerOpen, setComputerOpen, setCommandPaletteOpen);
 
   useEffect(() => {
     const heartbeatBotId = computerBot?.id ?? active?.id;
@@ -2598,40 +1809,29 @@ export function ShellPage() {
           ? t`Computer failed to boot`
           : null;
   const computerScreenError = computerFailure ? (
-    <div role="alert" className="flex flex-col items-center gap-3 px-6 text-center text-sm">
-      <p className="text-destructive">{computerFailure}</p>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          if (!computerBot) return;
-          setScreenLoadError(null);
-          if (computer?.state === "running") {
-            // An explicit retry clears any error; background screen reads clear only their own.
-            setComputerError(null);
-            setComputerErrorFromScreen(false);
-            void refreshComputerScreen(computerBot.id);
-          } else
-            void bootComputer({
-              botId: computerBot.id,
-              takeControl: false,
-              showProgress: true,
-              force: true,
-            }).catch(() => undefined);
-        }}
-      >
-        <Trans>Retry screen</Trans>
-      </Button>
-    </div>
+    <ComputerScreenError
+      message={computerFailure}
+      onRetry={() => {
+        if (!computerBot) return;
+        setScreenLoadError(null);
+        if (computer?.state === "running") {
+          // An explicit retry clears any error; background screen reads clear only their own.
+          setComputerError(null);
+          setComputerErrorFromScreen(false);
+          void refreshComputerScreen(computerBot.id);
+        } else
+          void bootComputer({
+            botId: computerBot.id,
+            takeControl: false,
+            showProgress: true,
+            force: true,
+          }).catch(() => undefined);
+      }}
+    />
   ) : null;
   // Booting shows inline with the screen's own Close; leaving it lets the boot finish.
   const computerBooting =
-    booting || computer?.state === "booting" ? (
-      <span className="flex flex-col items-center gap-3">
-        <Spinner aria-hidden className="size-5 motion-reduce:animate-none" />
-        {t`Booting live desktop…`}
-      </span>
-    ) : null;
+    booting || computer?.state === "booting" ? <ComputerBootingStatus /> : null;
   const computerPreviewScreen =
     !computerOpen &&
     computer?.state === "running" &&
@@ -2642,110 +1842,55 @@ export function ShellPage() {
 
   const { label: userName, initial: initials } = accountDisplay(session.data?.user ?? {}, t`You`);
 
-  const botMenuContent = contextChat ? (
-    <BotContextMenu
-      bot={contextChat}
+  const botMenuContent = (
+    <BotContextMenuContent
+      rpc={rpc}
+      contextBot={contextBot}
+      contextGroup={contextGroup}
+      botSections={botSections}
+      userId={userId}
+      spaceId={bootstrapMe?.spaceId}
       onClose={closeBotMenu}
-      sections={botSections}
-      onTogglePinned={() => {
-        setBotMenu(null);
-        const request = contextBot
-          ? rpc.bots.update({ botId: contextBot.id, pinned: !contextBot.pinned })
-          : rpc.groups.update({
-              groupId: contextGroup!.id,
-              pinned: !contextGroup!.pinned,
-            });
-        void request.then(() => refreshBots());
-      }}
-      onToggleUnread={() => {
-        const unread = !contextChat.unread;
-        setBotMenu(null);
-        if (contextBot) {
-          const request = unread ? markBotUnread(contextBot.id) : markBotRead(contextBot.id);
-          void request.catch(() => undefined);
-        } else {
-          const request = unread
-            ? rpc.threads.markUnread({ groupId: contextGroup!.id })
-            : rpc.threads.markRead({ groupId: contextGroup!.id });
-          void request
-            .then(() =>
-              setGroups((current) =>
-                current.map((group) =>
-                  group.id === contextGroup!.id ? { ...group, unread } : group,
-                ),
-              ),
-            )
-            .catch(() => undefined);
-        }
-      }}
-      onMoveToSection={(sectionId) => {
-        setBotMenu(null);
-        if (sectionId === contextChat.sectionId) return;
-        const request = contextBot
-          ? rpc.bots.update({ botId: contextBot.id, sectionId })
-          : rpc.groups.update({ groupId: contextGroup!.id, sectionId });
-        void request.then(() => refreshBots());
-      }}
-      onCreateSection={() => {
-        setNewSectionTarget(
-          contextBot ? { kind: "bot", chat: contextBot } : { kind: "group", chat: contextGroup! },
-        );
-        setBotMenu(null);
-      }}
-      onRenameSection={(sectionId) => {
-        const section = botSections.find((item) => item.id === sectionId);
-        const spaceId = bootstrapMe?.spaceId;
-        if (section && spaceId) setRenameSectionTarget({ section, spaceId });
-        setBotMenu(null);
-      }}
-      onEdit={() => {
-        const destKey =
-          userId && bootstrapMe?.spaceId
-            ? rightPanelStorageKey(
-                userId,
-                bootstrapMe.spaceId,
-                contextBot ? "bot" : "group",
-                contextChat.id,
-              )
-            : null;
+      refreshBots={refreshBots}
+      markBotRead={markBotRead}
+      markBotUnread={markBotUnread}
+      setGroups={setGroups}
+      setNewSectionTarget={setNewSectionTarget}
+      setRenameSectionTarget={setRenameSectionTarget}
+      setDeleteTarget={setDeleteTarget}
+      setDeleteGroupTarget={setDeleteGroupTarget}
+      setClearTarget={setClearTarget}
+      beginExplicitPanel={(destKey) => {
         explicitPanelTarget.current = destKey;
         pendingPanelRestore.current = null;
-        navigate(contextBot ? `/app/${contextBot.id}` : `/app/g/${contextGroup!.id}`);
-        // Mark the destination key restored so we do not write settings onto the source chat.
-        setPanelState(contextBot ? "settings" : "group-settings");
+      }}
+      showPanel={(next, destKey) => {
+        setPanelState(next);
         setRestoredPanelKey(destKey);
-        setBotMenu(null);
       }}
-      onDuplicate={() => {
-        setBotMenu(null);
-        const request = contextBot
-          ? rpc.bots.duplicate({ botId: contextBot.id })
-          : rpc.groups.duplicate({ groupId: contextGroup!.id });
-        void request.then(async (chat) => {
-          await refreshBots();
-          navigate(contextBot ? `/app/${chat.id}` : `/app/g/${chat.id}`);
-        });
-      }}
-      onClear={() => {
-        setClearTarget(
-          contextBot ? { kind: "bot", chat: contextBot } : { kind: "group", chat: contextGroup! },
-        );
-        setBotMenu(null);
-      }}
-      onArchive={() => {
-        setBotMenu(null);
-        const request = contextBot
-          ? rpc.bots.archive({ botId: contextBot.id })
-          : rpc.groups.archive({ groupId: contextGroup!.id });
-        void request.then(() => refreshBots(true));
-      }}
-      onDelete={() => {
-        if (contextBot) setDeleteTarget(contextBot);
-        else setDeleteGroupTarget(contextGroup!);
-        setBotMenu(null);
-      }}
+      navigate={navigate}
     />
-  ) : null;
+  );
+
+  async function confirmClear(target: ChatTarget) {
+    await rpc.threads.clear(
+      target.kind === "bot" ? { botId: target.chat.id } : { groupId: target.chat.id },
+    );
+    if (
+      (target.kind === "bot" && active?.id === target.chat.id) ||
+      (target.kind === "group" && activeGroup?.id === target.chat.id)
+    ) {
+      expandedHistoryThread.current = null;
+      pinnedAroundRef.current = null;
+      historyEpoch.current += 1;
+      updateSnapshot((current) =>
+        current ? { ...current, messages: [], olderCursor: null, run: null } : current,
+      );
+    }
+    setClearTarget(null);
+    await refreshBots();
+  }
+
   const shell = (
     <BotsSidebarLayout
       userId={userId}
@@ -2755,269 +1900,80 @@ export function ShellPage() {
       data-testid="shell-root"
       data-ready={shellReady}
       className="relative flex h-full min-h-0 min-w-0 overflow-hidden bg-background text-foreground/90 [&[data-resizing-sidebar]_*[data-slot=sidebar-gap]]:transition-none [&[data-resizing-sidebar]_*[data-slot=sidebar-container]]:transition-none"
-      onTouchStartCapture={(event) => {
-        if (
-          mobileSidebarOpen ||
-          event.touches.length !== 1 ||
-          window.matchMedia("(min-width: 768px)").matches
-        ) {
-          mobileSidebarSwipeRef.current = null;
-          return;
-        }
-        const touch = event.touches[0];
-        if (!touch) return;
-        const rtl = document.documentElement.getAttribute("dir") === "rtl";
-        const startsAtEdge = rtl
-          ? touch.clientX >= window.innerWidth - MOBILE_SIDEBAR_SWIPE_EDGE_PX
-          : touch.clientX <= MOBILE_SIDEBAR_SWIPE_EDGE_PX;
-        mobileSidebarSwipeRef.current = startsAtEdge
-          ? { startX: touch.clientX, startY: touch.clientY }
-          : null;
-      }}
-      onTouchEndCapture={(event) => {
-        const swipe = mobileSidebarSwipeRef.current;
-        mobileSidebarSwipeRef.current = null;
-        const touch = event.changedTouches[0];
-        if (
-          !swipe ||
-          !touch ||
-          mobileSidebarOpen ||
-          window.matchMedia("(min-width: 768px)").matches
-        ) {
-          return;
-        }
-        const rtl = document.documentElement.getAttribute("dir") === "rtl";
-        const horizontal = rtl ? swipe.startX - touch.clientX : touch.clientX - swipe.startX;
-        const vertical = Math.abs(touch.clientY - swipe.startY);
-        if (horizontal >= MOBILE_SIDEBAR_SWIPE_DISTANCE_PX && horizontal > vertical * 1.25) {
-          setMobileSidebarOpen(true);
-        }
-      }}
-      onTouchCancelCapture={() => {
-        mobileSidebarSwipeRef.current = null;
-      }}
+      {...swipeHandlers}
     >
       <ComputerUpdateProgress
         onCompleted={() => {
           if (active) void refreshThread(active.id);
         }}
       />
-      <button
-        type="button"
-        aria-label={t`Close navigation`}
-        aria-hidden={mobileSidebarOpen ? undefined : true}
-        inert={mobileSidebarOpen ? undefined : true}
-        tabIndex={mobileSidebarOpen ? undefined : -1}
-        onClick={() => setMobileSidebarOpen(false)}
-        className={`absolute inset-y-0 end-0 start-[min(calc(100%-48px),316px)] z-30 bg-overlay transition-opacity duration-150 ease-out motion-reduce:transition-none md:hidden ${
-          mobileSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
+      <ShellSidebar
+        rpc={rpc}
+        isMobileSidebar={isMobileSidebar}
+        mobileSidebarOpen={mobileSidebarOpen}
+        setMobileSidebarOpen={setMobileSidebarOpen}
+        botsSidebarDensity={botsSidebarDensity}
+        botsSidebarCollapsed={botsSidebarCollapsed}
+        miniSidebar={miniSidebar}
+        setBotsSidebarCollapsedPref={setBotsSidebarCollapsedPref}
+        activityMode={activityMode}
+        toggleActivityMode={toggleActivityMode}
+        activityFilters={activityFilters}
+        setActivityFilters={setActivityFilters}
+        activityFiltersExpanded={activityFiltersExpanded}
+        setActivityFiltersExpanded={setActivityFiltersExpanded}
+        activityFiltersId={activityFiltersId}
+        activityFilterCount={activityFilterCount}
+        query={query}
+        setQuery={setQuery}
+        bots={bots}
+        setPanel={setPanel}
+        navigate={navigate}
+        setPickerInfoTopic={setPickerInfoTopic}
+        showSpaceSearch={showSpaceSearch}
+        searchHits={searchHits}
+        searchLoading={searchLoading}
+        jumpToSearchHit={jumpToSearchHit}
+        archivedBots={archivedBots}
+        archivedGroups={archivedGroups}
+        refreshBots={refreshBots}
+        setDeleteTarget={setDeleteTarget}
+        setDeleteGroupTarget={setDeleteGroupTarget}
+        footerLogos={footerLogos}
+        userName={userName}
+        initials={initials}
+        userImage={session.data?.user.image}
+        userEmail={session.data?.user.email}
+        ticketBoardEnabled={bootstrapMe?.ticketBoardEnabled}
+        setPluginsOpen={setPluginsOpen}
+        openSettings={openSettings}
+        sidebarGroups={sidebarGroups}
+        collapsedSidebarSections={collapsedSidebarSections}
+        collapsedRosterParents={collapsedRosterParents}
+        bootstrapMe={bootstrapMe}
+        botSections={botSections}
+        rosterDropKey={rosterDropKey}
+        setRosterDropKey={setRosterDropKey}
+        rosterDropAction={rosterDropAction}
+        applyRosterDrop={applyRosterDrop}
+        openSpaceChat={openSpaceChat}
+        setRenameSectionTarget={setRenameSectionTarget}
+        setDeleteSectionTarget={setDeleteSectionTarget}
+        toggleSidebarSection={toggleSidebarSection}
+        inGroup={inGroup}
+        active={active}
+        activeGroup={activeGroup}
+        dismissedRunErrorIds={dismissedRunErrorIds}
+        displayedRunError={displayedRunError}
+        draggedBotId={draggedBotId}
+        setDraggedBotId={setDraggedBotId}
+        toggleRosterParent={toggleRosterParent}
+        botMenu={botMenu}
+        setBotMenu={setBotMenu}
+        reorderRosterBot={reorderRosterBot}
+        activeSnapshot={activeSnapshot}
+        botMenuContent={botMenuContent}
       />
-      <Sidebar
-        collapsible={isMobileSidebar ? "none" : "icon"}
-        side={document.documentElement.dir === "rtl" ? "right" : "left"}
-        data-testid="bots-sidebar"
-        inert={isMobileSidebar && !mobileSidebarOpen ? true : undefined}
-        aria-hidden={isMobileSidebar && !mobileSidebarOpen ? true : undefined}
-        data-bots-sidebar-density={botsSidebarDensity}
-        data-collapsed={botsSidebarCollapsed ? "true" : "false"}
-        className={
-          isMobileSidebar
-            ? `absolute inset-y-0 start-0 z-40 flex w-[calc(100%-48px)] max-w-[316px] shrink-0 flex-col border-e border-sidebar-border bg-sidebar transition-transform duration-200 ease-out motion-reduce:transition-none ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"}`
-            : "h-full overflow-hidden border-sidebar-border"
-        }
-      >
-        <SidebarHeader
-          mini={miniSidebar}
-          activityMode={activityMode}
-          toggleActivityMode={() => {
-            if (miniSidebar) setBotsSidebarCollapsedPref(false);
-            toggleActivityMode();
-          }}
-          setBotsSidebarCollapsedPref={setBotsSidebarCollapsedPref}
-          bots={bots}
-          setMobileSidebarOpen={setMobileSidebarOpen}
-          setPanel={setPanel}
-          navigate={navigate}
-          setPickerInfoTopic={setPickerInfoTopic}
-        />
-        {miniSidebar ? (
-          <IconTooltip label={t`Search`}>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={t`Search`}
-              className="mx-auto mb-3"
-              onClick={() => {
-                setBotsSidebarCollapsedPref(false);
-                requestAnimationFrame(() =>
-                  document.querySelector<HTMLInputElement>('input[name="sidebar-search"]')?.focus(),
-                );
-              }}
-            >
-              <Search size={16} aria-hidden="true" />
-            </Button>
-          </IconTooltip>
-        ) : (
-          <InputGroup
-            data-testid="sidebar-search"
-            className="mx-2.5 mb-3 w-auto rounded-xl bg-card dark:bg-input border border-border text-muted-foreground focus-within:border-ring"
-          >
-            <InputGroupAddon>
-              <Search size={16} strokeWidth={1.8} aria-hidden="true" />
-            </InputGroupAddon>
-            <InputGroupInput
-              value={activityMode ? activityFilters.query : query}
-              onChange={(e) => {
-                if (activityMode) setActivityFilters({ ...activityFilters, query: e.target.value });
-                else setQuery(e.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (activityMode && event.key === "Escape") {
-                  setActivityFilters({ ...activityFilters, query: "" });
-                }
-              }}
-              placeholder={activityMode ? t`Search runs` : t`Search`}
-              aria-label={activityMode ? t`Search runs` : t`Search`}
-              autoComplete="off"
-              name="sidebar-search"
-            />
-            {activityMode ? (
-              <InputGroupAddon align="inline-end">
-                <InputGroupButton
-                  size="icon-sm"
-                  aria-label={t`Filters`}
-                  aria-expanded={activityFiltersExpanded}
-                  aria-controls={activityFiltersId}
-                  onClick={() => setActivityFiltersExpanded((expanded) => !expanded)}
-                  className="relative rounded-lg"
-                >
-                  <SlidersHorizontal size={16} aria-hidden="true" />
-                  {activityFilterCount > 0 ? (
-                    <span
-                      data-testid="activity-filter-indicator"
-                      aria-hidden="true"
-                      className="absolute end-1 top-1 size-1.5 rounded-full bg-primary"
-                    />
-                  ) : null}
-                </InputGroupButton>
-              </InputGroupAddon>
-            ) : null}
-          </InputGroup>
-        )}
-        <div className="rk-scroll scroll-fade-y scroll-fade-12 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-          {showSpaceSearch && !miniSidebar ? (
-            <SpaceSearchResults
-              hits={searchHits}
-              loading={searchLoading}
-              onSelect={(hit) => void jumpToSearchHit(hit)}
-            />
-          ) : (
-            <>
-              {activityMode && !miniSidebar ? (
-                <ActivityList
-                  filters={activityFilters}
-                  onFiltersChange={setActivityFilters}
-                  filtersExpanded={activityFiltersExpanded}
-                  filtersId={activityFiltersId}
-                  onOpenRun={(run) => {
-                    setMobileSidebarOpen(false);
-                    if (run.groupId) navigate(`/app/g/${run.groupId}`);
-                    else navigate(`/app/${run.botId}`);
-                  }}
-                />
-              ) : null}
-              <SidebarRoster
-                mini={miniSidebar}
-                sidebarGroups={sidebarGroups}
-                collapsedSidebarSections={collapsedSidebarSections}
-                collapsedRosterParents={collapsedRosterParents}
-                bootstrapMe={bootstrapMe}
-                botSections={botSections}
-                rosterDropKey={rosterDropKey}
-                setRosterDropKey={setRosterDropKey}
-                rosterDropAction={rosterDropAction}
-                applyRosterDrop={applyRosterDrop}
-                openSpaceChat={openSpaceChat}
-                setRenameSectionTarget={setRenameSectionTarget}
-                setDeleteSectionTarget={setDeleteSectionTarget}
-                toggleSidebarSection={toggleSidebarSection}
-                inGroup={inGroup}
-                active={active}
-                activeGroup={activeGroup}
-                botsSidebarDensity={botsSidebarDensity}
-                dismissedRunErrorIds={dismissedRunErrorIds}
-                displayedRunError={displayedRunError}
-                draggedBotId={draggedBotId}
-                setDraggedBotId={setDraggedBotId}
-                toggleRosterParent={toggleRosterParent}
-                botMenu={botMenu}
-                setBotMenu={setBotMenu}
-                reorderRosterBot={reorderRosterBot}
-                activeSnapshot={activeSnapshot}
-                botMenuContent={botMenuContent}
-              />
-            </>
-          )}
-          <div className={miniSidebar ? "hidden" : "contents"}>
-            <ArchivedChats
-              archivedBots={archivedBots}
-              archivedGroups={archivedGroups}
-              showSpaceSearch={showSpaceSearch}
-              rpc={rpc}
-              refreshBots={refreshBots}
-              setDeleteTarget={setDeleteTarget}
-              setDeleteGroupTarget={setDeleteGroupTarget}
-            />
-          </div>
-        </div>
-        <div className={miniSidebar ? "hidden" : "contents"}></div>
-        <SidebarFooter
-          mini={miniSidebar}
-          logos={footerLogos}
-          name={userName}
-          initials={initials}
-          image={session.data?.user.image}
-          email={session.data?.user.email}
-          open={menuOpen}
-          onOpenChange={(open) => {
-            setMenuOpen(open);
-            if (!open) setLogOutError(null);
-          }}
-          onIntegrations={() => {
-            setMenuOpen(false);
-            setPluginsOpen(true);
-          }}
-          onBoard={
-            bootstrapMe?.ticketBoardEnabled
-              ? () => {
-                  setMenuOpen(false);
-                  setMobileSidebarOpen(false);
-                  navigate("/app/board");
-                }
-              : undefined
-          }
-          onArtifacts={() => {
-            setMenuOpen(false);
-            setMobileSidebarOpen(false);
-            navigate("/app/artifacts");
-          }}
-          onSettings={() => {
-            setMenuOpen(false);
-            openSettings("general");
-          }}
-          onUsage={() => {
-            setMenuOpen(false);
-            openSettings("usage");
-          }}
-          onLogOut={() => {
-            setLogOutError(null);
-            void logOut();
-          }}
-          signingOut={signingOut}
-          logOutError={logOutError}
-        />
-      </Sidebar>
 
       {/* Keep the composer's z-index inside the chat so phone overlays like the side panel cover it. */}
       <main
@@ -3033,68 +1989,16 @@ export function ShellPage() {
             className="absolute bottom-20 start-0 top-16 z-20 w-8 touch-none md:hidden"
           />
         ) : null}
-        <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-[17px] md:px-[22px]">
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              aria-label={t`Open navigation`}
-              onClick={() => setMobileSidebarOpen(true)}
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-foreground/75 hover:bg-accent md:hidden"
-            >
-              <Menu size={19} strokeWidth={1.7} />
-            </button>
-            <button
-              type="button"
-              data-testid="bot-settings-trigger"
-              onClick={() => setPanel(inGroup ? "group-settings" : "settings")}
-              className="flex min-w-0 items-center gap-3"
-            >
-              {inGroup ? (
-                <GroupAvatar
-                  members={activeSnapshot?.members ?? activeGroup?.members ?? []}
-                  size={26}
-                />
-              ) : active ? (
-                <BotAvatar
-                  color={active.color}
-                  identity={active.id}
-                  size={26}
-                  status={active.status}
-                />
-              ) : null}
-              <span className="min-w-0">
-                <span className="block truncate text-[16px] font-medium text-foreground" dir="auto">
-                  {inGroup
-                    ? (activeGroup?.name ?? activeSnapshot?.groupName ?? t`Group`)
-                    : (active?.name ?? t`Select a bot`)}
-                </span>
-              </span>
-            </button>
-          </div>
-          <div className="flex items-center gap-1">
-            {!inGroup && active ? (
-              <IconTooltip label={t`Agent computer`}>
-                <button
-                  type="button"
-                  aria-label={t`Agent computer`}
-                  aria-pressed={panel === "computer"}
-                  onClick={() => {
-                    const next = panel === "computer" ? null : "computer";
-                    setPanel(next);
-                    if (next === "computer" && active) {
-                      // Refresh run/computer so Take control isn't stuck on a stale busyBotName.
-                      void refreshThread(active.id).catch(() => undefined);
-                    }
-                  }}
-                  data-active={panel === "computer" ? "" : undefined}
-                  className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
-                >
-                  <Monitor size={18} strokeWidth={1.6} className="text-foreground/75" />
-                </button>
-              </IconTooltip>
-            ) : null}
-          </div>
-        </div>
+        <ShellMainHeader
+          inGroup={inGroup}
+          active={active}
+          activeGroup={activeGroup}
+          activeSnapshot={activeSnapshot}
+          panel={panel}
+          setPanel={setPanel}
+          setMobileSidebarOpen={setMobileSidebarOpen}
+          refreshThread={refreshThread}
+        />
         {!active && !activeGroup && initialBotsLoaded ? (
           <div className="grid flex-1 place-items-center">
             <Button onClick={() => setPanel("create")}>
@@ -3193,370 +2097,104 @@ export function ShellPage() {
         ) : null}
       </main>
 
-      <ResizableSidePanel
-        open={Boolean(panel && (active || activeGroup || panel === "create"))}
-        panel={panel ?? "closed"}
-      >
-        {panel && (active || activeGroup || panel === "create") ? (
-          <div className="rk-scroll h-full w-full overflow-y-auto px-5 py-[17px]">
-            {panel !== "routine" &&
-            panel !== "create" &&
-            panel !== "create-group" &&
-            panel !== "group-settings" ? (
-              <div className="mb-4 flex items-center justify-between">
-                <span className="text-[13.5px] text-muted-foreground">
-                  {panel === "settings" ? (
-                    <Trans>Settings</Trans>
-                  ) : active ? (
-                    (computer?.state ?? active.status)
-                  ) : (
-                    <Trans>Group</Trans>
-                  )}
-                </span>
-                <div className="flex gap-1">
-                  {active &&
-                  panel === "computer" &&
-                  !computerOpen &&
-                  computerPanelNeedsMaintenance(computer?.state, booting) ? (
-                    <ComputerMaintenanceActions
-                      botId={active.id}
-                      computer={computer}
-                      onChanged={async () => {
-                        await refreshThread(active.id);
-                      }}
-                    />
-                  ) : null}
-                  {active ? (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={panel === "settings" ? t`Show computer` : t`Show settings`}
-                      onClick={() => setPanel(panel === "settings" ? "computer" : "settings")}
-                      className={panel === "settings" ? "text-foreground" : "text-muted-foreground"}
-                    >
-                      <Settings size={16} strokeWidth={1.7} />
-                    </Button>
-                  ) : null}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t`Close panel`}
-                    onClick={() => setPanel(null)}
-                  >
-                    <X size={16} strokeWidth={1.8} />
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            {panel === "computer" && active ? (
-              <ComputerPanel
-                bot={active}
-                computer={computer}
-                computerOpen={computerOpen}
-                embeddedScreenUrl={embeddedScreenUrl}
-                screenFrameRef={setScreenFrame}
-                computerScreenError={computerScreenError}
-                computerBooting={computerBooting}
-                booting={booting}
-                showingRecoveryHint={showingRecoveryHint}
-                showComputerRecoveryHint={showComputerRecoveryHint}
-                sandboxProvider={bootstrapMe?.sandboxProvider}
-                onRecovered={(sandboxProvider) => {
-                  setBootstrapMe((prev) => (prev ? { ...prev, sandboxProvider } : prev));
-                  holdComputerRecovery();
-                }}
-                onRecoveryDismissed={releaseComputerRecovery}
-                onOpenComputerSettings={
-                  bootstrapMe?.isDeploymentOwner === true
-                    ? () => openSettings("computer")
-                    : undefined
-                }
-                onOpen={() => void openComputer()}
-                routines={activeRoutines}
-                runningRoutineId={
-                  snapshot?.run && isActive(snapshot.run.status)
-                    ? (snapshot.run.routineId ?? undefined)
-                    : undefined
-                }
-                onCreateRoutine={() => startRoutine()}
-                onEditRoutine={startRoutine}
-                onStopRun={() => void stopRun()}
-              />
-            ) : null}
-            {panel === "create-group" ? (
-              <CreateGroupForm
-                bots={bots}
-                onCancel={() => setPanel(null)}
-                onCreate={(input) => createGroup(input)}
-                onOpenBot={(botId) => {
-                  setPanel(null);
-                  openBot(botId);
-                }}
-              />
-            ) : null}
-            {panel === "group-settings" && activeGroup ? (
-              <GroupSettings
-                key={activeGroup.id}
-                group={activeGroup}
-                bots={bots}
-                onSave={async (input) => {
-                  const updated = await rpc.groups.update({ groupId: activeGroup.id, ...input });
-                  setGroups((current) =>
-                    current.map((group) => (group.id === updated.id ? updated : group)),
-                  );
-                  void Promise.all([refreshBots(), refreshGroupThread(activeGroup.id)]).catch(
-                    () => undefined,
-                  );
-                }}
-                onRemove={async () => {
-                  await rpc.groups.remove({ groupId: activeGroup.id });
-                  const remainingGroups = groups.filter((group) => group.id !== activeGroup.id);
-                  setGroups(remainingGroups);
-                  setPanel(null);
-                  navigate(firstThreadRoute(bots, remainingGroups), { replace: true });
-                  await refreshBots().catch(() => undefined);
-                }}
-                onClose={() => setPanel(null)}
-                onOpenBot={openBot}
-                covered={computerOpen}
-              />
-            ) : null}
-            {panel === "create" ? (
-              <CreateBotForm
-                onCancel={() => setPanel(null)}
-                onCreate={(input) => createBot(input)}
-              />
-            ) : null}
-            {panel === "settings" && active ? (
-              <BotSettings
-                key={active.id}
-                bot={active}
-                onSkillsChange={setAgentSkills}
-                onSave={async ({ computerMode, ...patch }) => {
-                  if (computerMode !== undefined && computerMode !== active.computerMode) {
-                    await rpc.bots.setComputer({
-                      botId: active.id,
-                      mode: computerMode,
-                    });
-                  }
-                  const updated = await rpc.bots.update({ botId: active.id, ...patch });
-                  setBots((current) =>
-                    current.map((bot) => (bot.id === updated.id ? updated : bot)),
-                  );
-                  // Persistence succeeded; a failed navigation refresh must not undo the tool edit.
-                  await refreshBots().catch(() => undefined);
-                }}
-                onExport={async () => {
-                  const manifest = await rpc.export.bot({ botId: active.id });
-                  const blob = new Blob([JSON.stringify(manifest, null, 2)], {
-                    type: "application/json",
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${active.name.toLowerCase().replace(/\s+/g, "-")}-export.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                onClear={() => setClearTarget({ kind: "bot", chat: active })}
-              />
-            ) : null}
-            {panel === "routine" && routineEditorProps ? (
-              <RoutineEditor {...routineEditorProps} />
-            ) : null}
-          </div>
-        ) : null}
-      </ResizableSidePanel>
+      <ShellSidePanel
+        rpc={rpc}
+        panel={panel}
+        setPanel={setPanel}
+        active={active}
+        activeGroup={activeGroup}
+        bots={bots}
+        setBots={setBots}
+        groups={groups}
+        setGroups={setGroups}
+        snapshot={snapshot}
+        computer={computer}
+        computerOpen={computerOpen}
+        booting={booting}
+        embeddedScreenUrl={embeddedScreenUrl}
+        setScreenFrame={setScreenFrame}
+        computerScreenError={computerScreenError}
+        computerBooting={computerBooting}
+        showingRecoveryHint={showingRecoveryHint}
+        showComputerRecoveryHint={showComputerRecoveryHint}
+        bootstrapMe={bootstrapMe}
+        setBootstrapMe={setBootstrapMe}
+        holdComputerRecovery={holdComputerRecovery}
+        releaseComputerRecovery={releaseComputerRecovery}
+        openSettings={openSettings}
+        openComputer={openComputer}
+        activeRoutines={activeRoutines}
+        startRoutine={startRoutine}
+        stopRun={stopRun}
+        routineEditorProps={routineEditorProps}
+        refreshThread={refreshThread}
+        refreshGroupThread={refreshGroupThread}
+        refreshBots={refreshBots}
+        createGroup={createGroup}
+        createBot={createBot}
+        openBot={openBot}
+        navigate={navigate}
+        setAgentSkills={setAgentSkills}
+        setClearTarget={setClearTarget}
+      />
 
-      <Suspense fallback={null}>
-        {deleteTarget ? (
-          <DeleteBotDialog
-            bot={deleteTarget}
-            onCancel={() => setDeleteTarget(null)}
-            onConfirm={async (deleteMemories) => {
-              await rpc.bots.remove({ botId: deleteTarget.id, deleteMemories });
-              setDeleteTarget(null);
-              setPanel(null);
-              await refreshBots(true);
-            }}
-          />
-        ) : null}
+      <ShellDialogs
+        rpc={rpc}
+        setPanel={setPanel}
+        refreshBots={refreshBots}
+        deleteTarget={deleteTarget}
+        setDeleteTarget={setDeleteTarget}
+        deleteGroupTarget={deleteGroupTarget}
+        setDeleteGroupTarget={setDeleteGroupTarget}
+        newSectionTarget={newSectionTarget}
+        setNewSectionTarget={setNewSectionTarget}
+        renameSectionTarget={renameSectionTarget}
+        setRenameSectionTarget={setRenameSectionTarget}
+        deleteSectionTarget={deleteSectionTarget}
+        setDeleteSectionTarget={setDeleteSectionTarget}
+        commandPaletteOpen={commandPaletteOpen}
+        setCommandPaletteOpen={setCommandPaletteOpen}
+        bots={bots}
+        onSelectBot={(id) => {
+          setMobileSidebarOpen(false);
+          navigate(`/app/${id}`);
+        }}
+        pickerInfoTopic={pickerInfoTopic}
+        setPickerInfoTopic={setPickerInfoTopic}
+        clearTarget={clearTarget}
+        setClearTarget={setClearTarget}
+        confirmClear={confirmClear}
+        deleteRoutineDialogProps={deleteRoutineDialogProps}
+        pluginsOpen={pluginsOpen}
+        setPluginsOpen={setPluginsOpen}
+        setFooterLogos={setFooterLogos}
+        activeBotId={activeBotId.current}
+        mcpOpen={mcpOpen}
+        setMcpOpen={setMcpOpen}
+        messagingSettingsOpen={messagingSettingsOpen}
+        setMessagingSettingsOpen={setMessagingSettingsOpen}
+      />
 
-        {deleteGroupTarget ? (
-          <DeleteItemDialog
-            item={deleteGroupTarget}
-            noun="group"
-            onCancel={() => setDeleteGroupTarget(null)}
-            onConfirm={async () => {
-              await rpc.groups.remove({ groupId: deleteGroupTarget.id });
-              setDeleteGroupTarget(null);
-              setPanel(null);
-              await refreshBots(true);
-            }}
-          />
-        ) : null}
-
-        {newSectionTarget ? (
-          <NewBotSectionDialog
-            bot={newSectionTarget.chat}
-            onCancel={() => setNewSectionTarget(null)}
-            onConfirm={async (name) => {
-              await rpc.botSections.create(
-                newSectionTarget.kind === "bot"
-                  ? { botId: newSectionTarget.chat.id, name }
-                  : { groupId: newSectionTarget.chat.id, name },
-              );
-              setNewSectionTarget(null);
-              await refreshBots();
-            }}
-          />
-        ) : null}
-
-        {renameSectionTarget ? (
-          <RenameBotSectionDialog
-            section={renameSectionTarget.section}
-            onCancel={() => setRenameSectionTarget(null)}
-            onConfirm={async (name) => {
-              await rpc.botSections.update(
-                {
-                  sectionId: renameSectionTarget.section.id,
-                  name,
-                },
-                { context: { spaceId: renameSectionTarget.spaceId } },
-              );
-              setRenameSectionTarget(null);
-              await refreshBots();
-            }}
-          />
-        ) : null}
-
-        {deleteSectionTarget ? (
-          <DeleteItemDialog
-            item={deleteSectionTarget.section}
-            noun="section"
-            description={<Trans>Its bots and groups are kept and leave the section.</Trans>}
-            onCancel={() => setDeleteSectionTarget(null)}
-            onConfirm={async () => {
-              await rpc.botSections.remove(
-                { sectionId: deleteSectionTarget.section.id },
-                { context: { spaceId: deleteSectionTarget.spaceId } },
-              );
-              setDeleteSectionTarget(null);
-              await refreshBots();
-            }}
-          />
-        ) : null}
-
-        <CommandPalette
-          open={commandPaletteOpen}
-          onOpenChange={setCommandPaletteOpen}
-          bots={bots}
-          onSelectBot={(id) => {
-            setMobileSidebarOpen(false);
-            navigate(`/app/${id}`);
-          }}
-        />
-
-        {pickerInfoTopic ? <PickerInfoDialog onClose={() => setPickerInfoTopic(null)} /> : null}
-
-        {clearTarget ? (
-          <ClearConversationDialog
-            bot={clearTarget.chat}
-            onCancel={() => setClearTarget(null)}
-            onConfirm={async () => {
-              await rpc.threads.clear(
-                clearTarget.kind === "bot"
-                  ? { botId: clearTarget.chat.id }
-                  : { groupId: clearTarget.chat.id },
-              );
-              if (
-                (clearTarget.kind === "bot" && active?.id === clearTarget.chat.id) ||
-                (clearTarget.kind === "group" && activeGroup?.id === clearTarget.chat.id)
-              ) {
-                expandedHistoryThread.current = null;
-                pinnedAroundRef.current = null;
-                historyEpoch.current += 1;
-                updateSnapshot((current) =>
-                  current ? { ...current, messages: [], olderCursor: null, run: null } : current,
-                );
-              }
-              setClearTarget(null);
-              await refreshBots();
-            }}
-          />
-        ) : null}
-
-        {deleteRoutineDialogProps ? <DeleteItemDialog {...deleteRoutineDialogProps} /> : null}
-
-        {pluginsOpen ? (
-          <PluginsOverlay
-            onConnectedAppsChange={setFooterLogos}
-            activeBotId={activeBotId.current}
-            onClose={() => setPluginsOpen(false)}
-            onOpenMcp={() => {
-              setPluginsOpen(false);
-              setMcpOpen(true);
-            }}
-          />
-        ) : null}
-        {mcpOpen ? <McpServersOverlay onClose={() => setMcpOpen(false)} /> : null}
-        {messagingSettingsOpen ? (
-          <MessagingSettingsOverlay onClose={() => setMessagingSettingsOpen(false)} />
-        ) : null}
-      </Suspense>
-
-      <Suspense fallback={null}>
-        {settingsOpen ? (
-          <SettingsOverlay
-            space={settingsSpace}
-            name={userName}
-            email={session.data?.user.email}
-            usage={usage}
-            onUsageOpen={refreshUsage}
-            initialSection={settingsSection}
-            avatarStyle={bootstrapMe?.avatarStyle ?? "organic"}
-            isDeploymentOwner={bootstrapMe?.isDeploymentOwner === true}
-            sandboxProvider={bootstrapMe?.sandboxProvider}
-            onSandboxProviderChange={(sandboxProvider) =>
-              setBootstrapMe((prev) => (prev ? { ...prev, sandboxProvider } : prev))
-            }
-            messagingEnabled={messagingSurfaceEnabled}
-            onOpenMessaging={() => {
-              setSettingsOpen(false);
-              setMessagingSettingsOpen(true);
-            }}
-            onAvatarStyleChange={async (avatarStyle) => {
-              const nextMe = await rpc.preferences.update({ avatarStyle });
-              // Merge only the saved field: a concurrent save's response must not be undone.
-              setBootstrapMe((prev) =>
-                prev ? { ...prev, avatarStyle: nextMe.avatarStyle } : nextMe,
-              );
-            }}
-            timezone={bootstrapMe?.timezone ?? null}
-            onTimezoneChange={async (timezone) => {
-              const nextMe = await rpc.preferences.update({ timezone });
-              setBootstrapMe((prev) => (prev ? { ...prev, timezone: nextMe.timezone } : nextMe));
-            }}
-            onClose={() => {
-              setSettingsOpen(false);
-              setSettingsSection("general");
-            }}
-          />
-        ) : null}
-        {peerConversation && active ? (
-          <PeerMessagesOverlay
-            botId={active.id}
-            botName={active.name}
-            botColor={active.color}
-            peerBotId={peerConversation.peerBotId}
-            peerBotName={peerConversation.peerBotName}
-            peerBotColor={
-              resolveTranscriptBot(peerConversation.peerBotId)?.color ?? FALLBACK_BOT_COLOR
-            }
-            onClose={() => setPeerConversation(null)}
-          />
-        ) : null}
-      </Suspense>
+      <ShellSettingsOverlays
+        rpc={rpc}
+        settingsOpen={settingsOpen}
+        setSettingsOpen={setSettingsOpen}
+        settingsSection={settingsSection}
+        setSettingsSection={setSettingsSection}
+        setMessagingSettingsOpen={setMessagingSettingsOpen}
+        space={settingsSpace}
+        userName={userName}
+        userEmail={session.data?.user.email}
+        usage={usage}
+        refreshUsage={refreshUsage}
+        bootstrapMe={bootstrapMe}
+        setBootstrapMe={setBootstrapMe}
+        messagingSurfaceEnabled={messagingSurfaceEnabled}
+        peerConversation={peerConversation}
+        setPeerConversation={setPeerConversation}
+        active={active}
+        resolveTranscriptBot={resolveTranscriptBot}
+      />
 
       {computerOpen && computerBot ? (
         <ComputerOverlay
@@ -3592,30 +2230,4 @@ export function ShellPage() {
   return (
     <AvatarStyleProvider value={bootstrapMe?.avatarStyle ?? "organic"}>{shell}</AvatarStyleProvider>
   );
-}
-
-function firstThreadRoute(
-  bots: readonly Pick<Bot, "id">[],
-  groups: readonly Pick<Group, "id">[],
-): string {
-  if (bots[0]) return `/app/${bots[0].id}`;
-  if (groups[0]) return `/app/g/${groups[0].id}`;
-  return "/app";
-}
-
-function applyThreadEvent(
-  event: ProductEvent,
-  commitSnapshot: (next: ThreadSnapshot | null) => void,
-  commitComputer: (next: ComputerStatus | null) => void,
-  snapshotRef: MutableRefObject<ThreadSnapshot | null>,
-  computerRef: MutableRefObject<ComputerStatus | null>,
-) {
-  if (isThreadSnapshotEvent(event)) {
-    const next = reduceThreadSnapshot(snapshotRef.current, event);
-    commitSnapshot(next);
-  }
-  if (isComputerStatusEvent(event)) {
-    const next = reduceComputerStatus(computerRef.current, event);
-    commitComputer(next);
-  }
 }

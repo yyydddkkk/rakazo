@@ -35,13 +35,13 @@ msgid "{0, plural, one {Waiting for sign-in — the link expires in about # minu
 msgstr "{0, plural, one {等待登录，链接约 # 分钟后过期。} other {等待登录，链接约 # 分钟后过期。}}"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx
+#: src/pages/shell/use-composer-actions.ts
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0}（最多 {ATTACHMENT_MAX_COUNT} 个附件）"
 
 #. placeholder {0}: file.name
 #. placeholder {1}: attachmentSizeLabel(attachmentMaxBytes(bootstrapMe))
-#: src/pages/Shell.tsx
+#: src/pages/shell/use-composer-actions.ts
 msgid "{0} (over {1})"
 msgstr "{0}（超过 {1}）"
 
@@ -456,7 +456,7 @@ msgstr "高级"
 msgid "Advanced..."
 msgstr "高级..."
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-main-header.tsx
 msgid "Agent computer"
 msgstr "Agent 电脑"
 
@@ -755,7 +755,7 @@ msgstr "受阻"
 msgid "Board"
 msgstr "看板"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/computer-screen-status.tsx
 #: src/pages/shell/computer-view.tsx
 msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
@@ -1012,12 +1012,12 @@ msgstr "关闭消息设置"
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-sidebar.tsx
 msgid "Close navigation"
 msgstr "关闭导航"
 
 #: src/pages/GroupPanel.tsx
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-side-panel.tsx
 msgid "Close panel"
 msgstr "关闭面板"
 
@@ -1288,6 +1288,7 @@ msgid "Could not connect this provider"
 msgstr "无法连接此提供方"
 
 #: src/pages/Shell.tsx
+#: src/pages/shell/use-computer-screen-frame.ts
 msgid "Could not connect to the computer screen"
 msgstr "无法连接电脑屏幕"
 
@@ -1494,8 +1495,8 @@ msgstr "无法运行例行任务"
 
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/KnowledgeSection.tsx
-#: src/pages/Shell.tsx
 #: src/pages/shell/bot-panel.tsx
+#: src/pages/shell/use-roster-reorder.ts
 msgid "Could not save"
 msgstr "无法保存"
 
@@ -1575,7 +1576,7 @@ msgstr "无法更新 Agent 权限"
 msgid "Could not update computer"
 msgstr "无法更新电脑"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/use-composer-actions.ts
 msgid "Could not update reaction"
 msgstr "无法更新反应"
 
@@ -2054,11 +2055,11 @@ msgstr "失败"
 msgid "Failed"
 msgstr "失败"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/use-composer-actions.ts
 msgid "Failed to send message"
 msgstr "发送消息失败"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/use-composer-actions.ts
 msgid "Failed to stop"
 msgstr "停止失败"
 
@@ -2100,7 +2101,7 @@ msgid "Filter by date"
 msgstr "按日期筛选"
 
 #: src/pages/Artifacts.tsx
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-sidebar.tsx
 msgid "Filters"
 msgstr "筛选器"
 
@@ -2176,7 +2177,8 @@ msgstr "Git 事件"
 
 #: src/lib/identity-display.ts
 #: src/pages/MessagingSettingsOverlay.tsx
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-main-header.tsx
+#: src/pages/shell/shell-side-panel.tsx
 msgid "Group"
 msgstr "群组"
 
@@ -2320,7 +2322,7 @@ msgstr "间隔单位"
 msgid "Isolated preview — no access to your account"
 msgstr "隔离预览，无法访问你的账号"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-dialogs.tsx
 msgid "Its bots and groups are kept and leave the section."
 msgstr "其中的 Bot 和群组会保留，并移出该分组。"
 
@@ -2989,7 +2991,7 @@ msgstr "打开外部链接？"
 msgid "Open in full window"
 msgstr "在完整窗口中打开"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-main-header.tsx
 msgid "Open navigation"
 msgstr "打开导航"
 
@@ -3473,7 +3475,7 @@ msgstr "重试"
 msgid "Retry now"
 msgstr "立即重试"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/computer-screen-status.tsx
 msgid "Retry screen"
 msgstr "重试屏幕连接"
 
@@ -3616,10 +3618,10 @@ msgstr "范围（可选）"
 
 #: src/pages/model-settings/model-picker.tsx
 #: src/pages/PluginsOverlay.tsx
-#: src/pages/Shell.tsx
 #: src/pages/shell/bot-picker.tsx
 #: src/pages/shell/chat-model-picker.tsx
 #: src/pages/shell/command-palette.tsx
+#: src/pages/shell/shell-sidebar.tsx
 msgid "Search"
 msgstr "搜索"
 
@@ -3653,7 +3655,7 @@ msgstr "搜索模型"
 msgid "Search providers"
 msgstr "搜索提供方"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-sidebar.tsx
 msgid "Search runs"
 msgstr "搜索运行记录"
 
@@ -3667,7 +3669,7 @@ msgstr "搜索：{0}"
 msgid "Searching…"
 msgstr "正在搜索…"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-main-header.tsx
 msgid "Select a bot"
 msgstr "选择 Bot"
 
@@ -3713,7 +3715,7 @@ msgstr "服务器 URL"
 #: src/components/SidebarFooter.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/SettingsOverlay.tsx
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-side-panel.tsx
 msgid "Settings"
 msgstr "设置"
 
@@ -3753,7 +3755,7 @@ msgstr "显示全部"
 msgid "Show bots"
 msgstr "显示 Bot"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-side-panel.tsx
 msgid "Show computer"
 msgstr "显示电脑"
 
@@ -3773,7 +3775,7 @@ msgstr "显示密码"
 msgid "Show selected"
 msgstr "显示所选项"
 
-#: src/pages/Shell.tsx
+#: src/pages/shell/shell-side-panel.tsx
 msgid "Show settings"
 msgstr "显示设置"
 
@@ -3825,7 +3827,7 @@ msgid "Skip or deploy key"
 msgstr "跳过或使用部署密钥"
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx
+#: src/pages/shell/use-composer-actions.ts
 msgid "Skipped {0}"
 msgstr "已跳过 {0}"
 
@@ -4188,7 +4190,7 @@ msgid "Unpin"
 msgstr "取消置顶"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx
+#: src/pages/shell/use-composer-actions.ts
 msgid "Unsupported file type: {0}"
 msgstr "不支持的文件类型：{0}"
 
