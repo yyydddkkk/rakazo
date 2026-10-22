@@ -1,9 +1,9 @@
+import type { ConnectedAccountStatus } from "@composio/core";
 import type { AdapterContext, ConnectorEvent } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
+import { ComposioConnector } from "./composio-connector.js";
+import { FakeComposioClient } from "./composio-fake.js";
 import { createConnectorStack } from "./connector-registry.js";
-import { FakeComposioClient } from "./test-support/composio-fake.js";
-import type { ConnectedAccountStatus } from "./test-support/composio-types.js";
-import { FakeConnectorProvider } from "./test-support/fake-connector-provider.js";
 
 const USER = "user-1";
 
@@ -33,11 +33,11 @@ function connection(provider: string, providerRef?: string) {
 
 function setup() {
   const fake = new FakeComposioClient();
-  return { fake, connector: new FakeConnectorProvider({ client: fake }) };
+  return { fake, connector: new ComposioConnector({ client: fake }) };
 }
 
 async function run(
-  connector: FakeConnectorProvider,
+  connector: ComposioConnector,
   tool: string,
   args: Record<string, unknown>,
   ctx: AdapterContext,
@@ -49,7 +49,7 @@ async function run(
   return events;
 }
 
-async function connect(connector: FakeConnectorProvider, provider: string, userId = USER) {
+async function connect(connector: ComposioConnector, provider: string, userId = USER) {
   const { state } = await connector.begin(
     { provider, redirectUrl: "http://example.test/callback" },
     context(undefined, userId),
@@ -57,7 +57,7 @@ async function connect(connector: FakeConnectorProvider, provider: string, userI
   return state;
 }
 
-describe("FakeConnectorProvider over the fake Composio client", () => {
+describe("ComposioConnector over the fake Composio client", () => {
   it("stays registered when supplied without a live Composio key", () => {
     const { connector } = setup();
     expect(createConnectorStack([connector]).connector.managed("composio")).toBe(connector);
@@ -355,7 +355,7 @@ describe("Composio connected-account lifecycle", () => {
       { slug: "GITHUB", name: "GitHub", logo: null, noAuth: false },
       { slug: "HACKERNEWS", name: "Hacker News", logo: null, noAuth: true },
     ]);
-    const connector = new FakeConnectorProvider({ client: fake });
+    const connector = new ComposioConnector({ client: fake });
     fake.connect(USER, "gmail", "EXPIRED");
     fake.connect(USER, "github");
 

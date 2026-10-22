@@ -7,6 +7,7 @@ loadRootEnv();
 import {
   ChatSdkMessagingSurface,
   CodexCatalogCache,
+  ComposioConnector,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
   createConnectorStack,
@@ -24,6 +25,7 @@ import {
   GraphileJobWorkerHost,
   InMemoryJobQueue,
   InstalledConnectorProvider,
+  isComposioEnabled,
   isMessagingEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
@@ -131,7 +133,11 @@ async function main() {
   const messaging = isMessagingEnabled(messagingPlatforms)
     ? new ChatSdkMessagingSurface(messagingPlatforms)
     : undefined;
+  const composio = isComposioEnabled(process.env.COMPOSIO_API_KEY)
+    ? new ComposioConnector({ apiKey: process.env.COMPOSIO_API_KEY })
+    : undefined;
   const stack = createConnectorStack([
+    ...(composio ? [composio] : []),
     new InstalledConnectorProvider(prisma, secrets, {}, allowPrivateEndpoint),
     mcp,
   ]);
@@ -159,8 +165,19 @@ async function main() {
     artifacts,
     connector: stack.connector,
     connectors: stack.connector,
+    listConnectedPluginSlugs: async (userId) => {
+      if (!composio) return [];
+      return composio.listConnectedExternalIds({
+        userId,
+        spaceId: "",
+        operationId: "connections.sync",
+        traceId: "connections.sync",
+        signal: AbortSignal.timeout(15_000),
+      });
+    },
     secrets: [
       deploymentModelKey ?? "",
+      process.env.COMPOSIO_API_KEY ?? "",
       process.env.CURSOR_API_KEY ?? "",
       process.env.TYPESAFE_API_KEY ?? "",
     ].filter(Boolean),

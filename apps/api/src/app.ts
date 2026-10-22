@@ -18,6 +18,7 @@ import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
   CodexCatalogCache,
+  ComposioConnector,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
   createConnectorStack,
@@ -37,6 +38,7 @@ import {
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
   InstalledConnectorProvider,
+  isComposioEnabled,
   isMessagingEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
@@ -310,7 +312,15 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     remoteConnectors,
     env.mcpAllowPrivateEndpoint,
   );
-  const stack = createConnectorStack([installed, mcp, ...connectorOverrides]);
+  const composio = isComposioEnabled(env.composioApiKey)
+    ? new ComposioConnector({ apiKey: env.composioApiKey })
+    : undefined;
+  const stack = createConnectorStack([
+    ...(composio ? [composio] : []),
+    installed,
+    mcp,
+    ...connectorOverrides,
+  ]);
   const runtime =
     runtimeOverride ??
     (env.agentRuntime === "scripted"
@@ -380,8 +390,20 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     artifacts,
     connector: stack.connector,
     connectors: stack.connector,
+    listConnectedPluginSlugs: async (userId) => {
+      const provider = stack.connector.managed("composio");
+      if (!provider) return [];
+      return provider.listConnectedExternalIds({
+        userId,
+        spaceId: "",
+        operationId: "connections.sync",
+        traceId: "connections.sync",
+        signal: AbortSignal.timeout(15_000),
+      });
+    },
     secrets: [
       env.deploymentModelKey ?? "",
+      env.composioApiKey ?? "",
       env.cursorApiKey ?? "",
       process.env.TYPESAFE_API_KEY ?? "",
     ].filter(Boolean),

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
+import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { fixtureAccountResponse } from "./fixture-account.js";
@@ -31,7 +31,7 @@ describeWithDatabase("structured @ mention targets", () => {
       dataDir,
       sandboxProvider: "fake",
       agentRuntime: "scripted",
-      connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
+      connectors: [new ComposioConnector({ client: new FakeComposioClient() })],
     });
     app = handles.app;
     prisma = handles.prisma;

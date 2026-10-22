@@ -704,7 +704,7 @@ export const appContract = {
           /** The card's own message, so it is found however far back it is. */
           messageId: Id.optional(),
           provider: z.string(),
-          connectorId: z.string(),
+          connectorId: z.string().default("composio"),
         }),
       )
       .output(z.object({ ok: z.literal(true) })),
@@ -717,7 +717,7 @@ export const appContract = {
     begin: oc
       .input(
         z.object({
-          connectorId: z.string(),
+          connectorId: z.string().default("composio"),
           provider: z.string(),
           displayName: z.string(),
         }),

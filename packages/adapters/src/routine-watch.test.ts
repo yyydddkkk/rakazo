@@ -882,7 +882,7 @@ it("loads authorized connection context for discovery, creation validation and c
           providerRef: "fake-account",
         },
       ],
-      connectedProviders: ["google_drive"],
+      connectedProviders: [],
     });
   }
   rules.push({ effect: "require_approval", matchKind: "connector", matchValue: "google_drive" });

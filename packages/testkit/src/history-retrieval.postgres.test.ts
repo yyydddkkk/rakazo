@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
+import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { discardBotIntroRun } from "./discard-bot-intro.js";
 import { fixtureAccountResponse } from "./fixture-account.js";
@@ -180,7 +180,7 @@ describe.skipIf(!enabled)("history retrieval through executor", () => {
           agentRuntime: "pi",
           wakeupDriver: "memory",
 
-          connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
+          connectors: [new ComposioConnector({ client: new FakeComposioClient() })],
           encryptionKey: "history-fixture-encryption-key",
           deploymentModelKey: fakeSecrets[0],
           cursorApiKey: fakeSecrets[2],

@@ -82,6 +82,7 @@ From `.env.images.example` (images installer). Leave blank if unused:
 | --- | --- |
 | `OPENROUTER_API_KEY` | Deployment-wide OpenRouter models |
 | `TYPESAFE_API_KEY` | Optional TypeSafe Jev Auto Review verifier (`RAKAZO_AUTO_REVIEW_PROVIDER=jev`) |
+| `COMPOSIO_API_KEY` | Optional one-click app connections (Composio) |
 | `SMTP_URL` / `EMAIL_FROM` | Password-recovery email |
 
 Blank optional keys are normal for a minimal boot. Lark credentials are needed only when its messaging transport is enabled.

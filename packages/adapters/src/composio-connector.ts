@@ -1,3 +1,5 @@
+import type { ConnectedAccountStatus, ToolRouterCreateSessionConfig } from "@composio/core";
+import { Composio } from "@composio/core";
 import type {
   AdapterContext,
   ConnectedConnector,
@@ -8,13 +10,36 @@ import type {
   ManagedConnectorProvider,
 } from "@rakazo/adapter-kit";
 import { getLogger } from "@rakazo/logging";
-import { FakeComposioClient } from "./composio-fake.js";
-import type { ComposioClient, ComposioSession, ConnectedAccountStatus } from "./composio-types.js";
-import type { ToolkitDirectoryEntry } from "./connector-catalog.js";
-import { createToolkitDirectoryCache, mergeCatalogWithConnected } from "./connector-catalog.js";
+import type { ToolkitDirectoryEntry } from "./composio-catalog-cache.js";
+import {
+  composioToolkitDirectory,
+  createToolkitDirectoryCache,
+  mergeCatalogWithConnected,
+} from "./composio-catalog-cache.js";
+import { collectLogIds } from "./connector-safety.js";
+import { isVitestRuntime } from "./test-runtime.js";
+
+type SdkSession = Awaited<ReturnType<Composio["create"]>>;
+
+/** The tool-router session surface the connector uses. */
+export type ComposioSession = Pick<
+  SdkSession,
+  "sessionId" | "toolkits" | "tools" | "execute" | "authorize"
+>;
+
+/** The Composio SDK surface the connector uses; offline tests inject a stateful fake. */
+export type ComposioClient = {
+  create(userId: string, config: ToolRouterCreateSessionConfig): Promise<ComposioSession>;
+  sessions: { use(sessionId: string): Promise<ComposioSession> };
+  connectedAccounts: Pick<Composio["connectedAccounts"], "list" | "waitForConnection" | "delete">;
+};
 
 /** Account states the user can only leave by reconnecting. */
 const RECONNECT_STATUSES: ConnectedAccountStatus[] = ["EXPIRED", "INACTIVE", "FAILED", "REVOKED"];
+
+export function isComposioEnabled(apiKey: string | undefined): boolean {
+  return Boolean(apiKey) && !isVitestRuntime();
+}
 
 export function asConnectorTools(input: unknown): ConnectorTool[] {
   const items = Array.isArray(input)
@@ -219,14 +244,105 @@ function nonEmptyPath(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export class FakeConnectorProvider implements ComposioProvider {
-  private client: ComposioClient | undefined;
-  /** An injected client has its own catalog, so it must not share the process-wide cache. */
-  private readonly directoryCache: ReturnType<typeof createToolkitDirectoryCache>;
+export type PluginConnectionRow = {
+  id: string;
+  provider: string;
+  status: string;
+  displayName: string;
+};
 
-  constructor(options: { client?: ComposioClient } = {}) {
-    this.client = options.client ?? new FakeComposioClient();
-    this.directoryCache = createToolkitDirectoryCache();
+export function needsLivePluginSync(rows: { status: string }[]): boolean {
+  return rows.some((row) => row.status === "pending" || row.status === "error");
+}
+
+export function mergeConnectedPlugins(
+  rows: { provider: string; displayName: string; status?: string }[],
+  liveSlugs: string[],
+): { provider: string; displayName: string }[] {
+  const live = new Set(liveSlugs.map((slug) => composioSlugKey(slug)).filter(Boolean));
+  const byProvider = new Map<string, { provider: string; displayName: string }>();
+  for (const row of rows) {
+    if (!row.provider) continue;
+    const include =
+      row.status === "connected" ||
+      row.status === undefined ||
+      ((row.status === "pending" || row.status === "error") &&
+        live.has(composioSlugKey(row.provider)));
+    if (!include) continue;
+    const current = byProvider.get(composioSlugKey(row.provider));
+    if (!current || composioSlugKey(current.displayName) === composioSlugKey(current.provider)) {
+      byProvider.set(composioSlugKey(row.provider), {
+        provider: row.provider,
+        displayName: row.displayName,
+      });
+    }
+  }
+  return [...byProvider.values()];
+}
+
+/** Reuse a revoked/error row only when this provider has no live sibling. */
+export function pickReusableConnection<T extends { id: string; status: string }>(
+  rows: T[],
+): T | undefined {
+  if (rows.some((row) => row.status === "connected" || row.status === "pending")) {
+    return undefined;
+  }
+  return rows.find((row) => row.status === "revoked" || row.status === "error");
+}
+
+export function planLiveConnectionSync(
+  rows: PluginConnectionRow[],
+  liveSlugs: string[],
+): { connectIds: string[]; revokeIds: string[] } {
+  const live = new Set(liveSlugs.map(composioSlugKey).filter(Boolean));
+  const connectIds: string[] = [];
+  const connectedProviders = new Set(
+    rows.filter((row) => row.status === "connected").map((row) => composioSlugKey(row.provider)),
+  );
+  for (const slug of live) {
+    if (connectedProviders.has(slug)) continue;
+    const matches = rows.filter((row) => composioSlugKey(row.provider) === slug);
+    // Recover in-flight pending/error rows only. A revoked sibling stays
+    // revoked even when another row (or the upstream listing) is live for
+    // the same slug — reviving it would reattach a dead providerRef.
+    const reusable = matches.find((row) => row.status === "pending" || row.status === "error");
+    if (!reusable) continue;
+    connectIds.push(reusable.id);
+    connectedProviders.add(slug);
+  }
+  const connectIdSet = new Set(connectIds);
+  // Providers that already have a connected row before this sync. Extra pending
+  // rows for those providers are additional-account attempts, not abandoned
+  // first connects — keep them. Concurrent pendings with no connected row yet
+  // still collapse to one connect + revoke the rest.
+  const previouslyConnected = new Set(
+    rows.filter((row) => row.status === "connected").map((row) => composioSlugKey(row.provider)),
+  );
+  const revokeIds = rows
+    .filter((row) => {
+      if (row.status !== "pending" && row.status !== "error") return false;
+      if (connectIdSet.has(row.id)) return false;
+      // Keep only in-flight additional-account pendings; clear abandoned errors
+      // so live sync does not keep re-listing forever after a failed attempt.
+      if (row.status === "pending" && previouslyConnected.has(composioSlugKey(row.provider))) {
+        return false;
+      }
+      return true;
+    })
+    .map((row) => row.id);
+  return { connectIds, revokeIds };
+}
+
+export class ComposioConnector implements ComposioProvider {
+  private client: ComposioClient | undefined;
+  private readonly apiKey: string | undefined;
+  /** An injected client has its own catalog, so it must not share the process-wide cache. */
+  private readonly directoryCache: typeof composioToolkitDirectory;
+
+  constructor(options: { apiKey?: string; client?: ComposioClient } = {}) {
+    this.apiKey = options.apiKey;
+    this.client = options.client;
+    this.directoryCache = options.client ? createToolkitDirectoryCache() : composioToolkitDirectory;
   }
   private readonly catalogSessions = new Map<string, string>();
   private readonly executeSessions = new Map<string, { sessionId: string; key: string }>();
@@ -666,7 +782,8 @@ export class FakeConnectorProvider implements ComposioProvider {
   }
 
   private sdk(): ComposioClient {
-    return this.client!;
+    this.client ??= new Composio(this.apiKey ? { apiKey: this.apiKey } : undefined);
+    return this.client;
   }
 }
 
@@ -686,34 +803,6 @@ function connectedComposioConnections(context: AdapterContext): ConnectedConnect
       displayName: externalId,
     }))
   );
-}
-
-export function collectLogIds(value: unknown): string[] {
-  const ids: string[] = [];
-  const seen = new Set<string>();
-  const walk = (node: unknown) => {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    const record = node as Record<string, unknown>;
-    for (const [key, nested] of Object.entries(record)) {
-      if (
-        (key === "logId" || key === "log_id") &&
-        typeof nested === "string" &&
-        nested &&
-        !seen.has(nested)
-      ) {
-        seen.add(nested);
-        ids.push(nested);
-      } else {
-        walk(nested);
-      }
-    }
-  };
-  walk(value);
-  return ids;
 }
 
 export function isNoAuthToolkitError(error: unknown): boolean {

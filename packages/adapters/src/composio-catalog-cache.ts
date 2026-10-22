@@ -60,3 +60,5 @@ export function createToolkitDirectoryCache(opts?: { ttlMs?: number; now?: () =>
     },
   };
 }
+
+export const composioToolkitDirectory = createToolkitDirectoryCache();

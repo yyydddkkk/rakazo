@@ -1,20 +1,19 @@
 import type {
-  ComposioClient,
-  ComposioSession,
   ConnectedAccountListParams,
   ConnectedAccountListResponse,
   ConnectedAccountRetrieveResponse,
   ConnectedAccountStatus,
   ConnectionRequest,
-  ToolkitDirectoryEntry,
   ToolRouterCreateSessionConfig,
   ToolRouterToolkitsOptions,
-} from "./composio-types.js";
-import type { EmulatedGithubRelease } from "./github-releases.js";
+} from "@composio/core";
+import type { ToolkitDirectoryEntry } from "./composio-catalog-cache.js";
+import type { ComposioClient, ComposioSession } from "./composio-connector.js";
+import type { EmulatedGithubRelease } from "./test-support/github-releases.js";
 import {
   DEFAULT_RAKAZO_EMULATED_RELEASES,
   RELEASE_WATCH_GITHUB_TOOL_NAMES,
-} from "./github-releases.js";
+} from "./test-support/github-releases.js";
 
 type SessionTools = Awaited<ReturnType<ComposioSession["tools"]>>;
 type ToolkitPage = Awaited<ReturnType<ComposioSession["toolkits"]>>;

@@ -83,7 +83,7 @@ describe("ConnectorRegistry", () => {
     )) {
       events.push(event);
     }
-    expect(events).toEqual([{ type: "error", message: "unknown connector " }]);
+    expect(events).toEqual([{ type: "error", message: "unknown connector composio" }]);
   });
 });
 

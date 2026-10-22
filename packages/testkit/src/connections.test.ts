@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  ComposioConnector,
   EncryptedSecretStore,
   FakeComposioClient,
-  FakeConnectorProvider,
   InstalledConnectorProvider,
   ThirdPartyConnectorEmulator,
 } from "@rakazo/adapters";
@@ -32,7 +32,7 @@ describeWithDatabase("Composio catalog reconciliation", () => {
   let handles: AppHandles;
   let app: App;
   let fake: FakeComposioClient;
-  let composio: FakeConnectorProvider;
+  let composio: ComposioConnector;
   let thirdParties: ThirdPartyConnectorEmulator;
   let connectionOrdinal = 0;
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -41,7 +41,7 @@ describeWithDatabase("Composio catalog reconciliation", () => {
   beforeAll(async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
     fake = new FakeComposioClient();
-    composio = new FakeConnectorProvider({ client: fake });
+    composio = new ComposioConnector({ client: fake });
     thirdParties = new ThirdPartyConnectorEmulator();
     handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
@@ -541,7 +541,7 @@ describeWithDatabase("Composio catalog reconciliation", () => {
   }
 });
 
-async function connectRemote(composio: FakeConnectorProvider, actor: Actor, provider: string) {
+async function connectRemote(composio: ComposioConnector, actor: Actor, provider: string) {
   await composio.begin(
     { provider, redirectUrl: "http://127.0.0.1.invalid/callback" },
     {

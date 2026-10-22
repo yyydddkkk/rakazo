@@ -4,7 +4,7 @@ import type {
   ConnectorEvent,
   ConnectorTool,
 } from "@rakazo/adapter-kit";
-import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
+import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
 import { CUSTOMER_SUPPORT_PROVIDERS, CUSTOMER_SUPPORT_TOOLS } from "./service-contract.js";
 
 export const INBOX = [
@@ -41,7 +41,7 @@ const DIRECTORY = [
  * State belongs to one trial. Reads observe state; invalid actions never advance it.
  * Catalog, connections and GitHub run through the real connector over a fake Composio client.
  */
-export class EvalServices extends FakeConnectorProvider {
+export class EvalServices extends ComposioConnector {
   private readonly composio: FakeComposioClient;
   private diagnosticChain: Array<{ cursor: string; nextCursor: string | null }> = [];
   enableDiagnosticChain(length = 12) {

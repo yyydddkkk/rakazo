@@ -74,7 +74,7 @@ export class ConnectorRegistry implements ConnectorProvider {
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
-    const connectorId = call.route?.connectorId ?? "";
+    const connectorId = call.route?.connectorId ?? "composio";
     const provider = this.providers.get(connectorId);
     if (!provider) {
       yield { type: "error", message: `unknown connector ${connectorId}` };

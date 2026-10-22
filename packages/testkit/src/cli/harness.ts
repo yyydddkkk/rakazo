@@ -61,6 +61,7 @@ async function main() {
       process.env.RAKAZO_E2E_DATABASE_RESET = "1";
       process.env.TICKET_BOARD_ENABLED = "true";
     }
+    process.env.COMPOSIO_API_KEY = "";
     process.env.BETTER_AUTH_SECRET = "test-secret-test-secret-32chars!";
     process.env.ENCRYPTION_KEY = "test-encryption-key-test-encryption-key";
     process.env.SANDBOX_SUPERVISOR_TOKEN = "test-supervisor-token-test-32chars";
@@ -156,7 +157,7 @@ async function main() {
 
     const [
       {
-        FakeConnectorProvider,
+        ComposioConnector,
         FakeComposioClient,
         DestinationEmulator,
         EmailEmulator,
@@ -176,7 +177,7 @@ async function main() {
       databaseUrl,
       prisma: undefined,
       connectors: [
-        new FakeConnectorProvider({ client: new FakeComposioClient() }),
+        new ComposioConnector({ client: new FakeComposioClient() }),
         new DestinationEmulator(),
       ],
       email,

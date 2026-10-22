@@ -1,76 +1,16 @@
 import { ORPCError } from "@orpc/server";
 import type { AdapterContext, ConnectorCatalogItem } from "@rakazo/adapter-kit";
-import { sanitizeConnectorError } from "@rakazo/adapters";
+import {
+  pickReusableConnection,
+  planLiveConnectionSync,
+  sanitizeConnectorError,
+} from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { IsolationError, type Prisma } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { RouterContext } from "./shared.js";
 import { authed } from "./shared.js";
-
-function connectionProviderKey(provider: string): string {
-  return provider.trim().toLowerCase();
-}
-
-/** Reuse a revoked/error row only when this provider has no live sibling. */
-function pickReusableConnection<T extends { id: string; status: string }>(
-  rows: T[],
-): T | undefined {
-  if (rows.some((row) => row.status === "connected" || row.status === "pending")) {
-    return undefined;
-  }
-  return rows.find((row) => row.status === "revoked" || row.status === "error");
-}
-
-function planLiveConnectionSync(
-  rows: Array<{ id: string; provider: string; status: string }>,
-  liveSlugs: string[],
-): { connectIds: string[]; revokeIds: string[] } {
-  const live = new Set(liveSlugs.map(connectionProviderKey).filter(Boolean));
-  const connectIds: string[] = [];
-  const connectedProviders = new Set(
-    rows
-      .filter((row) => row.status === "connected")
-      .map((row) => connectionProviderKey(row.provider)),
-  );
-  for (const slug of live) {
-    if (connectedProviders.has(slug)) continue;
-    const matches = rows.filter((row) => connectionProviderKey(row.provider) === slug);
-    // Recover in-flight pending/error rows only. A revoked sibling stays
-    // revoked even when another row (or the upstream listing) is live for
-    // the same slug — reviving it would reattach a dead providerRef.
-    const reusable = matches.find((row) => row.status === "pending" || row.status === "error");
-    if (!reusable) continue;
-    connectIds.push(reusable.id);
-    connectedProviders.add(slug);
-  }
-  const connectIdSet = new Set(connectIds);
-  // Providers that already have a connected row before this sync. Extra pending
-  // rows for those providers are additional-account attempts, not abandoned
-  // first connects — keep them. Concurrent pendings with no connected row yet
-  // still collapse to one connect + revoke the rest.
-  const previouslyConnected = new Set(
-    rows
-      .filter((row) => row.status === "connected")
-      .map((row) => connectionProviderKey(row.provider)),
-  );
-  const revokeIds = rows
-    .filter((row) => {
-      if (row.status !== "pending" && row.status !== "error") return false;
-      if (connectIdSet.has(row.id)) return false;
-      // Keep only in-flight additional-account pendings; clear abandoned errors
-      // so live sync does not keep re-listing forever after a failed attempt.
-      if (
-        row.status === "pending" &&
-        previouslyConnected.has(connectionProviderKey(row.provider))
-      ) {
-        return false;
-      }
-      return true;
-    })
-    .map((row) => row.id);
-  return { connectIds, revokeIds };
-}
 
 async function reconcileConnections(
   prisma: PrismaClient,

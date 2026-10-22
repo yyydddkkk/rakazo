@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
+import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
 import type { appContract, SpaceNavigation } from "@rakazo/contracts";
 import { runAsSystem } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -46,7 +46,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       sandboxProvider: "fake",
       agentRuntime: "scripted",
       wakeupDriver: "memory",
-      connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
+      connectors: [new ComposioConnector({ client: new FakeComposioClient() })],
     });
     app = handles.app;
     db = asSystem(handles.prisma);

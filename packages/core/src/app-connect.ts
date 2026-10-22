@@ -45,7 +45,7 @@ export function matchesAppConnection(
 ): block is AppConnectBlock {
   return (
     block.kind === "app_connect" &&
-    block.connectorId === connectorId &&
+    (block.connectorId ?? "composio") === connectorId &&
     (block.provider.toLowerCase() === provider.toLowerCase() ||
       featuredConnectorProvidersMatch(block.provider, provider))
   );
@@ -68,7 +68,6 @@ export function appConnectedInput(
   block: AppConnectBlock,
   messageId?: string,
 ) {
-  if (!block.connectorId) throw new Error("Connector is unavailable");
   return {
     botId,
     threadId,

@@ -168,6 +168,7 @@ import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import { cloudAgentsEnabled } from "./cloud-agent-factory.js";
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
+import { mergeConnectedPlugins, needsLivePluginSync } from "./composio-connector.js";
 import { BACKGROUND_WORK_LAUNCH, scheduleComputerSleep } from "./computer-idle.js";
 import type { ComputerExecutionLease } from "./computer-lifecycle.js";
 import {
@@ -229,6 +230,7 @@ import {
   runScopedToolExecutionId,
   uncertainEffectError,
 } from "./executor/effects.js";
+import { loadLivePluginSlugs, persistLivePluginConnections } from "./executor/live-connections.js";
 import {
   isUniqueViolation,
   persistMessageInTransaction,
@@ -500,6 +502,7 @@ export {
   RECENT_TURN_IMAGE_TURNS,
   withRecentTurnImages,
 } from "./executor/turn-images.js";
+export { persistLivePluginConnections };
 
 /**
  * The connection a connector call reaches, for read trust. Installed APIs are told apart by their
@@ -1318,7 +1321,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const onShutdown = () => runAbortController?.abort(deps.shutdownSignal?.reason);
         deps.shutdownSignal?.addEventListener("abort", onShutdown);
         detachShutdown = () => deps.shutdownSignal?.removeEventListener("abort", onShutdown);
-        const connectedPlugins = selectRunConnections(storedConnections);
+        const composioRows = storedConnections.filter(
+          (connection) => connection.connectorId === "composio",
+        );
+        let liveSlugs: string[] = [];
+        if (needsLivePluginSync(composioRows)) {
+          const listing = await loadLivePluginSlugs(deps.listConnectedPluginSlugs, run.userId);
+          if (listing.ok) {
+            liveSlugs = listing.slugs;
+            await persistLivePluginConnections(deps.prisma, run, composioRows, listing.slugs).catch(
+              () => undefined,
+            );
+          }
+        }
+        const connectedComposio = mergeConnectedPlugins(composioRows, liveSlugs);
+        const connectedPlugins = selectRunConnections(
+          storedConnections,
+          connectedComposio.map((connection) => connection.provider),
+        );
         const context = {
           operationId: runId,
           traceId: runId,
@@ -1329,6 +1349,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           screenLeaseId: screenLeaseIdForRun(computerLease, runId, fence),
           signal: runAbortController.signal,
           ...connectedContext(connectedPlugins),
+          connectedProviders: connectedComposio.map((row) => row.provider),
         };
         await deps.events.append({
           spaceId: run.spaceId,

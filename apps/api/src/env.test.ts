@@ -21,6 +21,12 @@ describe("loadEnv", () => {
       expect(() => loadEnv({ ...base, MAX_UPLOAD_SIZE_MB: value })).toThrow("MAX_UPLOAD_SIZE_MB");
     },
   );
+  it("leaves one-click app connections off unless a Composio key is set", () => {
+    expect(loadEnv(base).composioApiKey).toBeUndefined();
+    expect(loadEnv({ ...base, COMPOSIO_API_KEY: "fake-composio-key" }).composioApiKey).toBe(
+      "fake-composio-key",
+    );
+  });
   it("keeps the ticket board off unless explicitly enabled", () => {
     expect(loadEnv(base).ticketBoardEnabled).toBe(false);
     for (const value of ["false", "1", ""])

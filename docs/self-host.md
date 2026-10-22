@@ -53,6 +53,8 @@ Memory is stored by the built-in Markdown memory store. Stored credentials use l
 
 Connect a model through shared connection settings in the web UI. A deployment model can also use the generic `PI_DEFAULT_PROVIDER`, `PI_DEFAULT_MODEL`, and credential settings in `.env.example`. A host-authenticated model uses `PI_DEFAULT_CREDENTIALS=host` and its standard SDK credentials. Compatible endpoints use the shared OpenAI-compatible connection settings.
 
+One-click app connections are optional. Set `COMPOSIO_API_KEY` on the API and worker (a project key from the Composio dashboard) and users can connect apps such as GitHub, Gmail, Slack, and Notion from Integrations or from the chat connect card. Authorization returns to `WEB_ORIGIN/app`; no callback URL needs to be registered in Composio. Leave the key blank and nothing about the product changes.
+
 Remote tool sources use MCP or OpenAPI. Stdio MCP is opt-in with a command allowlist; remote endpoints are checked before credentials are sent. `MCP_ALLOW_PRIVATE_ENDPOINT=true` permits private endpoints when intentionally configured on your server.
 
 Cursor is an optional coding agent; see [cloud agents](./self-host/cloud-agents.md). Lark is the optional direct-message transport. Configure its app ID, app secret, and verification token together. Email through SMTP is optional for password recovery. Auto Review uses the configured model by default, with an optional verifier adapter.

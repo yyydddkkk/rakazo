@@ -311,7 +311,7 @@ async function toolContext(
       status: true,
     },
   });
-  return { ...context(routine), ...connectedContext(selectRunConnections(rows)) };
+  return { ...context(routine), ...connectedContext(selectRunConnections(rows, [])) };
 }
 
 // Lists every file under each path as "path<TAB>size<TAB>mtime". A path that
