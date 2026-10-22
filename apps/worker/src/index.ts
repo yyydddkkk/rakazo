@@ -1,6 +1,4 @@
 import type { JobPublisher, JobWorkerHost } from "@rakazo/adapter-kit";
-import { ComposioConnector, IntegrationProviderSettings } from "@rakazo/adapters";
-import { phoneCallSettings } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { createWorkerSecretStore } from "./secret-store.js";
 
@@ -28,9 +26,7 @@ import {
   GraphileJobWorkerHost,
   InMemoryJobQueue,
   InstalledConnectorProvider,
-  isComposioEnabled,
   isMessagingEnabled,
-  isPipedreamEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
   McpConnector,
@@ -39,21 +35,18 @@ import {
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
   PiAgentRuntime,
-  PipedreamConnector,
   PostgresRealtimeFanout,
-  pipedreamConfigFromEnv,
   reconcileCloudAgents,
   reconcileComputerUpdates,
   resolveDeploymentModel,
   resolvePiSessionRoot,
   resolveSandboxProvider,
   ScriptedAgentRuntime,
-  SpaceMemoryProviderResolver,
   sandboxProviderOptionsFromEnv,
   shutdownPiTelemetry,
   withSecretPersistence,
 } from "@rakazo/adapters";
-import { resolveEncryptionKey, resolveSupervisorToken, uploadSizeFromEnv } from "@rakazo/core";
+import { resolveSupervisorToken, uploadSizeFromEnv } from "@rakazo/core";
 import {
   contentEncryptionOf,
   createBoardEvents,
@@ -144,42 +137,14 @@ async function main() {
     },
     mcpOAuth,
   );
-  const pipedreamConfig = pipedreamConfigFromEnv({
-    pipedreamClientId: process.env.PIPEDREAM_CLIENT_ID,
-    pipedreamClientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
-    pipedreamProjectId: process.env.PIPEDREAM_PROJECT_ID,
-    pipedreamEnvironment: process.env.PIPEDREAM_ENVIRONMENT,
-    encryptionKey: resolveEncryptionKey(process.env),
-  });
-  const pipedream = isPipedreamEnabled(pipedreamConfig)
-    ? new PipedreamConnector(pipedreamConfig)
-    : undefined;
-  // pollInboundMessages stays false (the default) here: this process
-  // only ever sends outbound (messaging.deliver jobs). It must never poll
-  // Telegram — that would steal the single getUpdates slot away from the
-  // API process, which is the one with the inbound sink actually wired up.
   const messagingPlatforms = messagingPlatformsFromEnv(messagingEnvFromProcess(process.env));
   const messaging = isMessagingEnabled(messagingPlatforms)
     ? new ChatSdkMessagingSurface(messagingPlatforms)
     : undefined;
-  const integrationSettings = new IntegrationProviderSettings(
-    prisma,
-    secrets,
-    resolveEncryptionKey(process.env),
-    {
-      composio: isComposioEnabled(process.env.COMPOSIO_API_KEY)
-        ? new ComposioConnector({ apiKey: process.env.COMPOSIO_API_KEY })
-        : undefined,
-      pipedream,
-    },
-  );
-  const stack = createConnectorStack(undefined, [
+  const stack = createConnectorStack([
     new InstalledConnectorProvider(prisma, secrets, {}, allowPrivateEndpoint),
-    ...integrationSettings.providers(),
     mcp,
   ]);
-  integrationSettings.warmDirectories();
-  const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir, contentEncryptionOf(prisma)?.ring);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
@@ -206,25 +171,12 @@ async function main() {
     codexCatalog: new CodexCatalogCache(),
     sandbox,
     memory: new MarkdownMemoryStore(prisma),
-    memoryProviders,
     home,
     artifacts,
     connector: stack.connector,
     connectors: stack.connector,
-    listConnectedPluginSlugs: async (userId) => {
-      const provider = await integrationSettings.resolve("composio");
-      if (!provider) return [];
-      return provider.listConnectedExternalIds({
-        userId,
-        spaceId: "",
-        operationId: "connections.sync",
-        traceId: "connections.sync",
-        signal: AbortSignal.timeout(15_000),
-      });
-    },
     secrets: [
       deploymentModelKey ?? "",
-      process.env.COMPOSIO_API_KEY ?? "",
       process.env.CURSOR_API_KEY ?? "",
       process.env.TYPESAFE_API_KEY ?? "",
     ].filter(Boolean),
@@ -238,7 +190,6 @@ async function main() {
     events,
     onTicketChange: ticketChanges,
     ticketBoardEnabled,
-    ...phoneCallSettings(process.env),
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
     web: createWebProvider(),
     cloudAgent,
@@ -260,7 +211,6 @@ async function main() {
     workerId: process.pid.toString(),
     runtime,
     secretStore: secrets,
-    memoryProviders,
     deploymentModelKey,
     deploymentModelConfigured,
     messaging,

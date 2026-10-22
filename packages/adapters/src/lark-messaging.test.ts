@@ -171,6 +171,10 @@ describe("Lark messaging conformance", () => {
           content: "hello",
         }),
       ]);
+      expect(events[0]).not.toHaveProperty("workspaceId");
+      expect(surface.platforms()).toEqual([
+        { provider: "lark", capabilities: { direct: true, groups: false, receipt: null } },
+      ]);
       const threadId = await surface.openDirectThread("lark", "ou-test", context);
       expect(await surface.sendToThread({ threadId, body: "reply" }, context)).toEqual({
         handle: "om-reply",

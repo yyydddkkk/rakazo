@@ -4,7 +4,6 @@ import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
 import type { FoldedTranscript } from "@rakazo/core";
 import {
   expandPeerReplies,
-  groupVoiceChats,
   isPeerReceiptBlocks,
   isToolActivityBlock,
   projectMessageReactions,
@@ -25,7 +24,6 @@ import {
   useState,
 } from "react";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
-import { VoiceChatCard } from "../../components/call/VoiceChatCard";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { quoteDraftForSelection } from "../../lib/quote-selection";
 import { messageHasVisibleBlocks } from "../../lib/tool-activity-view";
@@ -47,7 +45,6 @@ export const Transcript = memo(function Transcript({
   dismissableAskIds,
   running,
   workingBots,
-  onCallBack,
   onLoadOlder,
   onOpenBot,
   onAnswer,
@@ -61,9 +58,6 @@ export const Transcript = memo(function Transcript({
   onRefresh,
   onBotChanged,
   onAddRoutine,
-  voiceReady,
-  speakingMessageId,
-  onSpeak,
   onOpenComputer,
 }: {
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -78,8 +72,6 @@ export const Transcript = memo(function Transcript({
   dismissableAskIds: Set<string>;
   running: boolean;
   workingBots: GroupAvatarMember[];
-  /** Calls the bot back from a missed call in the transcript. */
-  onCallBack?: () => void;
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string) => void;
   onAnswer: (
@@ -98,9 +90,6 @@ export const Transcript = memo(function Transcript({
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
-  voiceReady: boolean;
-  speakingMessageId: string | null;
-  onSpeak: (message: ThreadMessage) => void;
   onOpenComputer: (botId?: string) => void;
 }) {
   const { t } = useLingui();
@@ -401,25 +390,7 @@ export const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {groupVoiceChats(reactionView.visibleMessages).map((item) => {
-          if (item.kind === "voiceChat") {
-            return (
-              <div key={item.key}>
-                {item.messages[0] && separatorIds.has(item.messages[0].id) ? (
-                  <TimeSeparator
-                    createdAt={item.messages[0].createdAt}
-                    locale={i18n.locale || "en"}
-                  />
-                ) : null}
-                <VoiceChatCard
-                  group={item}
-                  revealMessageId={scrollRequest?.messageId}
-                  onCallBack={onCallBack}
-                />
-              </div>
-            );
-          }
-          const message = item.message;
+        {reactionView.visibleMessages.map((message) => {
           if (!messageHasVisibleBlocks(message.blocks, showToolActivity)) return null;
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
           const messageReactions = reactionView.reactions.get(message.id);
@@ -489,9 +460,6 @@ export const Transcript = memo(function Transcript({
                       onRefresh={onRefresh}
                       onBotChanged={onBotChanged}
                       onAddRoutine={onAddRoutine}
-                      voiceReady={voiceReady}
-                      speaking={speakingMessageId === message.id}
-                      onSpeak={() => onSpeak(message)}
                       onOpenComputer={onOpenComputer}
                       showToolActivity={showToolActivity}
                       onReply={onReply}

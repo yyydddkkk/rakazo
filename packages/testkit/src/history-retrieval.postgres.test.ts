@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
-import { describe, expect, it } from "vitest";
+import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { discardBotIntroRun } from "./discard-bot-intro.js";
 import { fixtureAccountResponse } from "./fixture-account.js";
 import { sessionCookieHeader } from "./index.js";
@@ -15,10 +15,12 @@ const enabled = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATAB
 const origin = "http://127.0.0.1:5173";
 
 describe.skipIf(!enabled)("history retrieval through executor", () => {
+  afterEach(() => vi.unstubAllEnvs());
   it.each(["first", "second"])(
     "preserves saved constraints, redacts history and pages group outcomes in app %s",
     async () => {
       const fakeSecrets = ['synthetic"quoted-secret', "synthetic\nnewline-secret", "987654321"];
+      vi.stubEnv("TYPESAFE_API_KEY", fakeSecrets[1]);
       const proposalCallId = "constraint-proposal";
       const messageId = `synthetic-history-${randomUUID()}`;
       const seenArtifacts = new Set<string>();
@@ -178,10 +180,9 @@ describe.skipIf(!enabled)("history retrieval through executor", () => {
           agentRuntime: "pi",
           wakeupDriver: "memory",
 
-          composio: new ComposioConnector({ client: new FakeComposioClient() }),
+          connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
           encryptionKey: "history-fixture-encryption-key",
           deploymentModelKey: fakeSecrets[0],
-          composioApiKey: fakeSecrets[1],
           cursorApiKey: fakeSecrets[2],
         });
         stop = handles.stop;

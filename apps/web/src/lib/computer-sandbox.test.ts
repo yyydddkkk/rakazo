@@ -16,16 +16,15 @@ describe("computersAreUnavailable", () => {
 
   it("treats configured providers as available", () => {
     expect(computersAreUnavailable("docker")).toBe(false);
-    expect(computersAreUnavailable("e2b")).toBe(false);
+    expect(computersAreUnavailable("fake")).toBe(false);
   });
 });
 
 describe("classifySandboxProvider", () => {
-  it("classifies none, docker, and hosted providers", () => {
+  it("classifies Docker and unavailable states", () => {
     expect(classifySandboxProvider("none")).toBe("none");
     expect(classifySandboxProvider(null)).toBe("none");
     expect(classifySandboxProvider("docker")).toBe("docker");
-    expect(classifySandboxProvider("e2b")).toBe("hosted");
   });
 });
 
@@ -37,9 +36,6 @@ describe("sandboxEnvGuidanceText", () => {
     expect(sandboxEnvGuidanceLines().filter((line) => /^SANDBOX_PROVIDER=/.test(line))).toEqual([
       "SANDBOX_PROVIDER=docker",
     ]);
-    expect(text).toContain("# SANDBOX_PROVIDER=e2b");
-    expect(text).toContain("# SANDBOX_PROVIDER=daytona");
-    expect(text).toContain("# SANDBOX_PROVIDER=boat");
   });
 });
 

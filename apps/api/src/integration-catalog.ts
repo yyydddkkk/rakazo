@@ -92,7 +92,7 @@ function normalizeResult(value: unknown): IntegrationCatalogResult[] {
 function normalizeSurface(value: unknown): IntegrationCatalogSurface[] {
   if (!isRecord(value)) return [];
   const kind = value.kind;
-  if (kind !== "mcp" && kind !== "openapi" && kind !== "graphql" && kind !== "cli") return [];
+  if (kind !== "mcp" && kind !== "openapi" && kind !== "cli") return [];
   const slug = shortString(value.slug, 120);
   if (!slug) return [];
   return [

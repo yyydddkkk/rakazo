@@ -7,7 +7,6 @@ import type {
   ModelCatalogEntry,
   ModelCredential,
   ThinkingLevel,
-  VoiceInfo,
 } from "@rakazo/contracts";
 import {
   BOT_COMPUTER_MODES,
@@ -208,7 +207,6 @@ export function CreateBotForm({
 
 export function BotSettings({
   bot,
-  memoryProviderConfigured,
   onSkillsChange,
   onSave,
   onExport,
@@ -216,7 +214,6 @@ export function BotSettings({
 }: {
   bot: Bot;
   onSkillsChange: (skills: AgentSkillCatalogEntry[]) => void;
-  memoryProviderConfigured: boolean;
   onSave: (patch: {
     name?: string;
     title?: string;
@@ -225,10 +222,7 @@ export function BotSettings({
     color?: string;
     notifyOnFinish?: boolean;
     computerMode?: ComputerMode;
-    memoryScope?: "isolated" | "shared" | null;
-    autoSpeak?: boolean;
     fleetManagement?: boolean;
-    voiceId?: string | null;
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: ThinkingLevel | null;
@@ -247,18 +241,14 @@ export function BotSettings({
   const [description, setDescription] = useState(bot.description);
   // A roster refresh can skip replacing bots while a reorder is in flight, so
   // this prop keeps the description from when the panel opened. Later saves
-  // compare against the description last saved here; otherwise a model or
-  // voice change treats that stale text as an edit and overwrites instructions.
+  // compare against the description last saved here; otherwise a model
+  // change treats that stale text as an edit and overwrites instructions.
   const savedDescriptionRef = useRef(bot.description ?? "");
   const [color, setColor] = useState(bot.color);
   const [notifyOnFinish, setNotifyOnFinish] = useState(bot.notifyOnFinish ?? true);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
-  const [memoryScope, setMemoryScope] = useState(bot.memoryScope);
-  const [autoSpeak, setAutoSpeak] = useState(bot.autoSpeak);
   const [fleetManagement, setFleetManagement] = useState(bot.fleetManagement);
   useEffect(() => setFleetManagement(bot.fleetManagement), [bot.fleetManagement]);
-  const [voiceId, setVoiceId] = useState(bot.voiceId ?? "");
-  const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [modelKey, setModelKey] = useState(
     bot.modelProvider && bot.modelId ? modelOptionKey(bot.modelProvider, bot.modelId) : "",
   );
@@ -299,10 +289,6 @@ export function BotSettings({
     }) => Promise<void>
   >(async () => undefined);
   useEffect(() => {
-    void rpc.voice
-      .voices({})
-      .then(setVoices)
-      .catch(() => setVoices([]));
     void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me()])
       .then(([nextCredentials, nextCatalog, nextMe]) => {
         setCredentials(nextCredentials);
@@ -394,9 +380,6 @@ export function BotSettings({
         ...(nextColor !== bot.color ? { color: nextColor } : {}),
         notifyOnFinish: nextNotify,
         computerMode,
-        memoryScope,
-        autoSpeak,
-        voiceId: voiceId || null,
         modelProvider: selected?.provider ?? null,
         modelId: selected?.modelId ?? null,
         ...(modelMetaReady &&
@@ -606,64 +589,6 @@ export function BotSettings({
               {thinkingOptions.map((level) => (
                 <NativeSelectOption key={level} value={level}>
                   {thinkingLevelLabel(level)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </label>
-        ) : null}
-        {memoryProviderConfigured ? (
-          <div className="mt-4 text-[14px] text-muted-foreground">
-            <Trans>Memory scope</Trans>
-            <div className="mt-2 flex gap-2">
-              {(
-                [
-                  { value: null, label: t`Inherit default` },
-                  { value: "isolated" as const, label: t`Isolated` },
-                  { value: "shared" as const, label: t`Shared` },
-                ] satisfies Array<{ value: "isolated" | "shared" | null; label: string }>
-              ).map((option) => (
-                <Toggle
-                  key={option.label}
-                  variant="outline"
-                  size="sm"
-                  pressed={memoryScope === option.value}
-                  onPressedChange={(pressed) => {
-                    if (pressed) setMemoryScope(option.value);
-                  }}
-                  className="flex-1 aria-pressed:border-foreground/40 aria-pressed:text-foreground"
-                >
-                  {option.label}
-                </Toggle>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        <label
-          htmlFor={`${ids}-auto-speak`}
-          className="mt-5 flex cursor-pointer items-center justify-between gap-3 text-[14px] text-muted-foreground"
-        >
-          <span className={rowLabelClass}>
-            <Trans>Read replies aloud</Trans>
-          </span>
-          <Switch
-            id={`${ids}-auto-speak`}
-            checked={autoSpeak}
-            onCheckedChange={(checked) => setAutoSpeak(checked)}
-          />
-        </label>
-        {voices.length ? (
-          <label htmlFor={`${ids}-voice`} className={fieldLabelClass}>
-            <Trans>Voice</Trans>
-            <NativeSelect
-              id={`${ids}-voice`}
-              className="mt-2 w-full"
-              value={voiceId}
-              onChange={(event) => setVoiceId(event.target.value)}
-            >
-              <NativeSelectOption value="">{t`Account default`}</NativeSelectOption>
-              {voices.map((voice) => (
-                <NativeSelectOption key={voice.id} value={voice.id}>
-                  {voice.label}
                 </NativeSelectOption>
               ))}
             </NativeSelect>

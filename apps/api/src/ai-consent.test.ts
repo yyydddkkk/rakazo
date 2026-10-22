@@ -20,11 +20,6 @@ function setup() {
       secret: { findMany: vi.fn(async () => []) },
       bot: { findMany: vi.fn(async () => []) },
       routine: { findMany: vi.fn(async () => []) },
-      spaceVoicePreference: {
-        findFirst: vi.fn(async () => ({ credential: { provider: "openai" }, voiceId: "alloy" })),
-        findMany: vi.fn(async () => [{ credential: { provider: "openai" } }]),
-      },
-      spaceMemoryConfig: { findUnique: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
       aiDataConsent: { findMany: vi.fn(async () => []), upsert },
       $transaction: vi.fn(async (write: (tx: unknown) => Promise<unknown>) =>
@@ -54,7 +49,6 @@ describe("consent grants", () => {
     expect(status.recipients.map((recipient) => recipient.name)).toEqual(
       expect.arrayContaining(["Anthropic", "Cursor"]),
     );
-    expect(deps.prisma.spaceVoicePreference.findMany).not.toHaveBeenCalled();
     expect(deps.prisma.bot.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ id: { in: ["bot"] } }) }),
     );
@@ -114,17 +108,6 @@ describe("consent grants", () => {
       orderBy: { position: "asc" },
     });
   });
-  it("discloses only the selected voice provider before a voice action", async () => {
-    const { deps, actor } = setup();
-    vi.mocked(deps.prisma.spaceVoicePreference.findMany).mockResolvedValue([
-      { credential: { provider: "openai" } },
-      { credential: { provider: "elevenlabs" } },
-    ] as never);
-    const status = await aiConsentStatus(deps, actor, { uses: ["voice"] });
-    expect(status.recipients).toHaveLength(1);
-    expect(status.recipients[0]?.name).toBe("OpenAI");
-    expect(deps.prisma.spaceVoicePreference.findMany).not.toHaveBeenCalled();
-  });
   it("returns an operator policy without requiring a hosted provider", async () => {
     const { deps, actor } = setup();
     deps.env.privacyPolicyUrl = "https://example.com/privacy";
@@ -132,6 +115,10 @@ describe("consent grants", () => {
   });
   it("rejects stale disclosures, unknown recipients, and a changed account or Space", async () => {
     const { deps, actor, upsert } = setup();
+    deps.env.agentRuntime = "pi";
+    deps.env.deploymentModelConfigured = true;
+    deps.env.defaultProvider = "anthropic";
+    deps.env.defaultModel = "fixture-model";
     const current = await aiConsentStatus(deps, actor);
     const input = {
       scope: current.scope,
@@ -158,32 +145,4 @@ describe("consent grants", () => {
       }),
     );
   });
-});
-
-it("discloses the self-hosted voice origin without its encrypted key", async () => {
-  const { deps, actor } = setup();
-  vi.mocked(deps.prisma.spaceVoicePreference.findFirst).mockResolvedValue({
-    credential: { provider: "openai-compatible", secretId: "voice-secret" },
-    voiceId: "af_heart",
-  } as never);
-  deps.prisma.secret.findFirst = vi
-    .fn()
-    .mockResolvedValue({ id: "voice-secret", ciphertext: "encrypted-fixture" });
-  deps.secrets = {
-    load: vi.fn().mockResolvedValue(
-      JSON.stringify({
-        kind: "openai_compatible",
-        baseUrl: "http://100.64.0.10:8810/v1",
-        apiKey: "local-test-key",
-        ttsModel: "kokoro",
-        sttModel: "whisper-1",
-      }),
-    ),
-    put: vi.fn(),
-  };
-  const status = await aiConsentStatus(deps, actor, { uses: ["voice"] });
-  expect(status.recipients).toHaveLength(1);
-  expect(JSON.stringify(status)).toContain("http://100.64.0.10:8810");
-  expect(JSON.stringify(status)).not.toContain("local-test-key");
-  expect(JSON.stringify(status)).not.toContain("apiKey");
 });

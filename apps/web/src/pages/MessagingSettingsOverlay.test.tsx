@@ -62,14 +62,14 @@ import { MessagingSettingsOverlay } from "./MessagingSettingsOverlay";
 
 const identity = {
   id: "mi-1",
-  provider: "telegram",
+  provider: "lark",
   address: "424242",
   botId: "bot-1",
   botName: "Chief",
 };
 
 function statusWith(identities: (typeof identity)[]) {
-  return { enabled: true, providers: ["telegram"], openSignup: false, identities };
+  return { enabled: true, providers: ["lark"], openSignup: false, identities };
 }
 
 function pendingStatus() {

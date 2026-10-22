@@ -1,11 +1,10 @@
 import { execSync } from "node:child_process";
 import { globSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { asSystem } from "@rakazo/db";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import type { createApp } from "../../../../apps/api/src/app.ts";
 import { runProcess } from "./process.js";
 
 loadRootEnv();
@@ -26,25 +25,12 @@ const agentRuntime = runtimeArg?.slice("--runtime=".length) ?? "scripted";
 if (Number(integration) + Number(e2e) !== 1) {
   throw new Error("Pass exactly one of --integration or --e2e");
 }
-if (!["fake", "e2b", "daytona", "boat"].includes(sandboxProvider)) {
-  throw new Error('Sandbox must be "fake", "e2b", "daytona", or "boat"');
-}
-if (integration && sandboxProvider !== "fake") {
-  throw new Error("Integration tests only support the fake sandbox");
+if (sandboxProvider !== "fake") {
+  throw new Error('Sandbox must be "fake"');
 }
 if (agentRuntime !== "pi" && agentRuntime !== "scripted") {
   throw new Error('Runtime must be "pi" or "scripted"');
 }
-if (sandboxProvider === "e2b" && !process.env.E2B_API_KEY) {
-  throw new Error("E2B_API_KEY is required when --sandbox=e2b");
-}
-if (sandboxProvider === "daytona" && !process.env.DAYTONA_API_KEY) {
-  throw new Error("DAYTONA_API_KEY is required when --sandbox=daytona");
-}
-if (sandboxProvider === "boat" && !process.env.BOAT_API_KEY) {
-  throw new Error("BOAT_API_KEY is required when --sandbox=boat");
-}
-
 async function main() {
   const mode = integration ? "integration" : "e2e";
   const reportDir = path.resolve("test-report", mode);
@@ -73,15 +59,8 @@ async function main() {
     process.env.RAKAZO_LIVE_MODEL_CATALOG = "off";
     if (!integration) {
       process.env.RAKAZO_E2E_DATABASE_RESET = "1";
-      process.env.RAKAZO_E2E_COMPUTER_MANIFEST = path.join(reportDir, "computer-cleanup.jsonl");
-      await writeFile(process.env.RAKAZO_E2E_COMPUTER_MANIFEST, "");
       process.env.TICKET_BOARD_ENABLED = "true";
-      process.env.PHONE_CALLS_ENABLED = "true";
     }
-    // Playwright/E2E force the offline cloud-agent emulator; clear Cursor keys so cards never hit a live VM.
-    process.env.CLOUD_AGENT_PROVIDER = "emulator";
-    delete process.env.CURSOR_API_KEY;
-    process.env.COMPOSIO_API_KEY = "";
     process.env.BETTER_AUTH_SECRET = "test-secret-test-secret-32chars!";
     process.env.ENCRYPTION_KEY = "test-encryption-key-test-encryption-key";
     process.env.SANDBOX_SUPERVISOR_TOKEN = "test-supervisor-token-test-32chars";
@@ -96,7 +75,7 @@ async function main() {
     process.env.DATA_DIR = path.join(reportDir, "data");
     process.env.RAKAZO_ADMIN_EMAIL = "admin@example.test";
     process.env.RAKAZO_ADMIN_PASSWORD = "test-admin-password-12";
-    // Model and speech fixtures listen on loopback.
+    // Model fixtures listen on loopback.
     process.env.MCP_ALLOW_PRIVATE_ENDPOINT = "true";
     process.env.CI = "1";
 
@@ -111,7 +90,6 @@ async function main() {
         "packages/testkit/src/journeys.test.ts",
         "packages/testkit/src/authorization.test.ts",
         "packages/testkit/src/attachments.test.ts",
-        "packages/testkit/src/voice.test.ts",
         "packages/testkit/src/search.test.ts",
         "packages/testkit/src/executor-lifecycle.test.ts",
         "packages/testkit/src/connections.test.ts",
@@ -178,11 +156,10 @@ async function main() {
 
     const [
       {
-        ComposioConnector,
+        FakeConnectorProvider,
         FakeComposioClient,
         DestinationEmulator,
         EmailEmulator,
-        PipedreamConnector,
         ThirdPartyConnectorEmulator,
       },
       { createApp },
@@ -194,23 +171,14 @@ async function main() {
     ]);
     const { serve } = await import("@hono/node-server");
     const thirdParties = new ThirdPartyConnectorEmulator();
-    const pipedream = new PipedreamConnector(
-      {
-        clientId: "fake-client-id",
-        clientSecret: "fake-client-secret",
-        projectId: "fake-project-id",
-        environment: "development",
-        identitySecret: process.env.ENCRYPTION_KEY,
-      },
-      { fetch: thirdParties.fetch, resolveHostname: thirdParties.resolveHostname },
-    );
     const email = new EmailEmulator();
     const handles = await createApp({
       databaseUrl,
       prisma: undefined,
-      composio: new ComposioConnector({ client: new FakeComposioClient() }),
-      connectors: [new DestinationEmulator()],
-      pipedream,
+      connectors: [
+        new FakeConnectorProvider({ client: new FakeComposioClient() }),
+        new DestinationEmulator(),
+      ],
       email,
       remoteConnectors: {
         fetch: thirdParties.fetch,
@@ -287,78 +255,15 @@ async function main() {
         webPort,
       });
     } finally {
-      const cleanupErrors: unknown[] = [];
-      const computers = await managedComputers(handles).catch((error) => {
-        cleanupErrors.push(error);
-        return [];
-      });
       await new Promise<void>((resolve) => server.close(() => resolve()));
       if (activeRequests > 0) {
         await new Promise<void>((resolve) => requestWaiters.add(resolve));
       }
       await handles.stop().catch(() => undefined);
-      for (let index = 0; index < computers.length; index += 4) {
-        const results = await Promise.allSettled(
-          computers.slice(index, index + 4).map((computer) =>
-            handles.sandbox.destroy(
-              {
-                id: computer.providerRef!,
-                botId: computer.homeKey,
-                kind: computer.kind as "e2b" | "daytona" | "boat",
-                providerRef: computer.providerRef!,
-              },
-              {
-                operationId: "e2e-cleanup",
-                traceId: "e2e-cleanup",
-                spaceId: computer.spaceId,
-                userId: computer.userId,
-                signal: new AbortController().signal,
-              },
-            ),
-          ),
-        );
-        for (const result of results) {
-          if (result.status === "rejected") cleanupErrors.push(result.reason);
-        }
-      }
-      if (cleanupErrors.length) {
-        console.error(
-          new AggregateError(cleanupErrors, "Could not destroy every managed test sandbox"),
-        );
-        process.exitCode = 1;
-      }
     }
   } finally {
     await container.stop().catch(() => undefined);
   }
-}
-
-type AppHandles = Awaited<ReturnType<typeof createApp>>;
-
-async function managedComputers(handles: AppHandles) {
-  if (!["e2b", "daytona", "boat"].includes(sandboxProvider)) return [];
-  const previous = (await readFile(process.env.RAKAZO_E2E_COMPUTER_MANIFEST!, "utf8"))
-    .split("\n")
-    .filter(Boolean)
-    .map(
-      (line) =>
-        JSON.parse(line) as {
-          homeKey: string;
-          kind: string;
-          providerRef: string | null;
-          userId: string;
-          spaceId: string;
-        },
-    );
-  const current = await asSystem(handles.prisma).computer.findMany({
-    where: { providerRef: { not: null } },
-    select: { homeKey: true, kind: true, providerRef: true, userId: true, spaceId: true },
-  });
-  return [
-    ...new Map(
-      [...previous, ...current].map((computer) => [computer.providerRef, computer]),
-    ).values(),
-  ];
 }
 
 async function writeSummary(reportDir: string, summary: Record<string, unknown>) {

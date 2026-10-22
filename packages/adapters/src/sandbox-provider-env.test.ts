@@ -11,58 +11,6 @@ describe("resolveSandboxProvider", () => {
     expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "" })).toBe("none");
   });
 
-  it("falls back to none when a remote provider key is missing", () => {
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "e2b" })).toBe("none");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "daytona" })).toBe("none");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "createos" })).toBe("none");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "boat" })).toBe("none");
-  });
-
-  it("keeps deployments configured with the old Box name on Boat", () => {
-    const env = {
-      SANDBOX_PROVIDER: "box",
-      BOX_API_KEY: "test-box-key",
-      BOX_API_URL: "https://box.test/api/v1",
-    };
-    expect(resolveSandboxProvider(env)).toBe("boat");
-    expect(sandboxProviderOptionsFromEnv(env)).toMatchObject({
-      boatApiKey: "test-box-key",
-      boatApiUrl: "https://box.test/api/v1",
-    });
-    expect(
-      sandboxProviderOptionsFromEnv({ BOX_BASE_URL: "https://box.test/api/v1" }).boatApiUrl,
-    ).toBe("https://box.test/api/v1");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "box" })).toBe("none");
-  });
-
-  it("requires both Railway credentials and an environment", () => {
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "railway" })).toBe("none");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "railway", RAILWAY_API_TOKEN: "test" })).toBe(
-      "none",
-    );
-    const env = {
-      SANDBOX_PROVIDER: "railway",
-      RAILWAY_API_TOKEN: "test",
-      RAILWAY_ENVIRONMENT_ID: "environment",
-      RAILWAY_MAX_WORKSPACE_FILE_BYTES: "1024",
-    };
-    expect(resolveSandboxProvider(env)).toBe("railway");
-    expect(sandboxProviderOptionsFromEnv(env)).toMatchObject({
-      railwayApiToken: "test",
-      railwayEnvironmentId: "environment",
-      railwayMaxWorkspaceFileBytes: "1024",
-    });
-  });
-
-  it("keeps CreateOS when its API key is set", () => {
-    expect(
-      resolveSandboxProvider({
-        SANDBOX_PROVIDER: "createos",
-        CREATEOS_SANDBOX_API_KEY: "test-createos-key",
-      }),
-    ).toBe("createos");
-  });
-
   it("falls back to none in production when Docker has no supervisor token", () => {
     expect(
       resolveSandboxProvider({
@@ -84,31 +32,12 @@ describe("resolveSandboxProvider", () => {
 });
 
 describe("sandboxProviderOptionsFromEnv", () => {
-  it("loads CreateOS settings from the shared env contract", () => {
+  it("loads Docker supervisor settings", () => {
     expect(
       sandboxProviderOptionsFromEnv({
-        CREATEOS_SANDBOX_API_KEY: "test-createos-key",
-        CREATEOS_SANDBOX_BASE_URL: "https://api.example.test",
-        CREATEOS_SANDBOX_SHAPE: "s-4vcpu-8gb",
-        CREATEOS_SANDBOX_ROOTFS: "desktop:2",
+        SANDBOX_SUPERVISOR_URL: "http://supervisor:7091",
+        SANDBOX_SUPERVISOR_TOKEN: "fake-token",
       }),
-    ).toMatchObject({
-      createosApiKey: "test-createos-key",
-      createosBaseUrl: "https://api.example.test",
-      createosShape: "s-4vcpu-8gb",
-      createosRootfs: "desktop:2",
-    });
-  });
-
-  it("loads the Railway sandbox region", () => {
-    expect(
-      sandboxProviderOptionsFromEnv({ RAILWAY_SANDBOX_REGION: "asia-southeast1-eqsg3a" }),
-    ).toMatchObject({ railwaySandboxRegion: "asia-southeast1-eqsg3a" });
-  });
-
-  it.each(["", "  "])("leaves a blank Railway sandbox region unset: %j", (region) => {
-    expect(
-      sandboxProviderOptionsFromEnv({ RAILWAY_SANDBOX_REGION: region }).railwaySandboxRegion,
-    ).toBeUndefined();
+    ).toEqual({ supervisorUrl: "http://supervisor:7091", supervisorToken: "fake-token" });
   });
 });

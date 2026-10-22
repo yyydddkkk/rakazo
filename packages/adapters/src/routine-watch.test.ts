@@ -836,7 +836,7 @@ describe("tracked result regressions", () => {
 it("loads authorized connection context for discovery, creation validation and connector rules", async () => {
   const connection = {
     id: "connection-1",
-    connectorId: "pipedream",
+    connectorId: "test-connector",
     provider: "google_drive",
     providerRef: "fake-account",
     displayName: "Drive",
@@ -877,12 +877,12 @@ it("loads authorized connection context for discovery, creation validation and c
       connectedConnections: [
         {
           id: "connection-1",
-          connectorId: "pipedream",
+          connectorId: "test-connector",
           externalId: "google_drive",
           providerRef: "fake-account",
         },
       ],
-      connectedProviders: [],
+      connectedProviders: ["google_drive"],
     });
   }
   rules.push({ effect: "require_approval", matchKind: "connector", matchValue: "google_drive" });

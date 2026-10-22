@@ -6,7 +6,7 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { ConnectorRegistry, createConnectorStack } from "./composio-connector.js";
+import { ConnectorRegistry, createConnectorStack } from "./connector-registry.js";
 
 class StubConnector implements ConnectorProvider {
   calls: ConnectorCall[] = [];
@@ -71,7 +71,7 @@ describe("ConnectorRegistry", () => {
   });
 
   it("registers only the providers it is given", async () => {
-    const stack = createConnectorStack(undefined, [new StubConnector("first", [tool("a")])]);
+    const stack = createConnectorStack([new StubConnector("first", [tool("a")])]);
 
     await expect(stack.connector.discoverTools(context)).resolves.toEqual([
       expect.objectContaining({ name: "a", route: { connectorId: "first", toolName: "a" } }),
@@ -83,7 +83,7 @@ describe("ConnectorRegistry", () => {
     )) {
       events.push(event);
     }
-    expect(events).toEqual([{ type: "error", message: "unknown connector composio" }]);
+    expect(events).toEqual([{ type: "error", message: "unknown connector " }]);
   });
 });
 

@@ -289,7 +289,7 @@ export async function markAppConnected(
   actor: Actor,
   botId: string,
   provider: string,
-  connectorId = "composio",
+  connectorId: string,
   threadId?: string,
   messageId?: string,
 ): Promise<void> {

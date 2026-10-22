@@ -5,25 +5,19 @@ import {
   cloudAgentsEnabled,
   parseModelSecret,
   selectConfiguredModel,
-  toStringRecord,
 } from "@rakazo/adapters";
 import type { Actor, AiConsentQuery, AiConsentStatus, AiRecipient } from "@rakazo/contracts";
 import { AI_DISCLOSURE_VERSION, AI_PRIVACY_URL } from "@rakazo/contracts";
-import {
-  findDefaultModelCredential,
-  findDefaultVoiceCredential,
-  findModelCredential,
-} from "@rakazo/db";
+import { findDefaultModelCredential, findModelCredential } from "@rakazo/db";
 import type { RouterDeps } from "./router.js";
 import { resolveThreadTarget } from "./thread-target.js";
-import { voiceCredentialServer } from "./voice.js";
 
 export async function aiConsentStatus(
   deps: RouterDeps,
   actor: Actor,
   query: AiConsentQuery = {},
 ): Promise<AiConsentStatus> {
-  const uses = query.uses ?? ["model", "memory", "voice"];
+  const uses = query.uses ?? ["model"];
   const modelsEnabled = uses.includes("model") && deps.env.agentRuntime !== "scripted";
   const target =
     query.botId || query.groupId ? await resolveThreadTarget(deps.prisma, actor, query) : null;
@@ -32,76 +26,58 @@ export async function aiConsentStatus(
       ? [target.botId]
       : target.memberBotIds
     : undefined;
-  const [
-    preferences,
-    backups,
-    defaultCredential,
-    bots,
-    routines,
-    voices,
-    memory,
-    settings,
-    consents,
-  ] = await Promise.all([
-    modelsEnabled
-      ? deps.prisma.spaceModelPreference.findMany({
-          where: { userId: actor.userId, spaceId: actor.spaceId },
-          include: { credential: true },
-        })
-      : [],
-    modelsEnabled
-      ? deps.prisma.spaceBackupModel.findMany({
-          where: { userId: actor.userId, spaceId: actor.spaceId },
-          orderBy: { position: "asc" },
-        })
-      : [],
-    modelsEnabled ? findDefaultModelCredential(deps.prisma, actor) : null,
-    modelsEnabled
-      ? deps.prisma.bot.findMany({
-          where: {
-            userId: actor.userId,
-            spaceId: actor.spaceId,
-            archivedAt: null,
-            ...(botIds ? { id: { in: botIds } } : {}),
-          },
-          select: { modelProvider: true, modelId: true, thinkingLevel: true },
-        })
-      : [],
-    // An active routine with its own model is another recipient for this bot.
-    // A paused routine is included only when this check is for that routine,
-    // so it does not block an ordinary chat message.
-    modelsEnabled
-      ? deps.prisma.routine.findMany({
-          where: {
-            userId: actor.userId,
-            spaceId: actor.spaceId,
-            modelProvider: { not: null },
-            modelId: { not: null },
-            bot: { archivedAt: null },
-            ...(botIds ? { botId: { in: botIds } } : {}),
-            OR: query.routineId ? [{ active: true }, { id: query.routineId }] : [{ active: true }],
-          },
-          select: { modelProvider: true, modelId: true, thinkingLevel: true },
-        })
-      : [],
-    uses.includes("voice")
-      ? query.uses
-        ? findDefaultVoiceCredential(deps.prisma, actor).then((credential) =>
-            credential ? [{ credential }] : [],
-          )
-        : deps.prisma.spaceVoicePreference.findMany({
+  const [preferences, backups, defaultCredential, bots, routines, settings, consents] =
+    await Promise.all([
+      modelsEnabled
+        ? deps.prisma.spaceModelPreference.findMany({
             where: { userId: actor.userId, spaceId: actor.spaceId },
             include: { credential: true },
           })
-      : [],
-    uses.includes("memory")
-      ? deps.prisma.spaceMemoryConfig.findUnique({ where: { spaceId: actor.spaceId } })
-      : null,
-    modelsEnabled ? deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }) : null,
-    deps.prisma.aiDataConsent.findMany({
-      where: { userId: actor.userId, spaceId: actor.spaceId, version: AI_DISCLOSURE_VERSION },
-    }),
-  ]);
+        : [],
+      modelsEnabled
+        ? deps.prisma.spaceBackupModel.findMany({
+            where: { userId: actor.userId, spaceId: actor.spaceId },
+            orderBy: { position: "asc" },
+          })
+        : [],
+      modelsEnabled ? findDefaultModelCredential(deps.prisma, actor) : null,
+      modelsEnabled
+        ? deps.prisma.bot.findMany({
+            where: {
+              userId: actor.userId,
+              spaceId: actor.spaceId,
+              archivedAt: null,
+              ...(botIds ? { id: { in: botIds } } : {}),
+            },
+            select: { modelProvider: true, modelId: true, thinkingLevel: true },
+          })
+        : [],
+      // An active routine with its own model is another recipient for this bot.
+      // A paused routine is included only when this check is for that routine,
+      // so it does not block an ordinary chat message.
+      modelsEnabled
+        ? deps.prisma.routine.findMany({
+            where: {
+              userId: actor.userId,
+              spaceId: actor.spaceId,
+              modelProvider: { not: null },
+              modelId: { not: null },
+              bot: { archivedAt: null },
+              ...(botIds ? { botId: { in: botIds } } : {}),
+              OR: query.routineId
+                ? [{ active: true }, { id: query.routineId }]
+                : [{ active: true }],
+            },
+            select: { modelProvider: true, modelId: true, thinkingLevel: true },
+          })
+        : [],
+      modelsEnabled
+        ? deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } })
+        : null,
+      deps.prisma.aiDataConsent.findMany({
+        where: { userId: actor.userId, spaceId: actor.spaceId, version: AI_DISCLOSURE_VERSION },
+      }),
+    ]);
   const allowed = new Set(consents.map((row) => row.recipientKey));
   const recipients = new Map<string, AiRecipient>();
   const add = (recipient: ReturnType<typeof aiRecipient>) => {
@@ -159,15 +135,15 @@ export async function aiConsentStatus(
       }),
     );
     selected.push(...backupModels.filter((model) => model !== null));
-    if (deps.env.teamChatJudgeProvider && deps.env.teamChatJudgeModel) {
+    if (deps.env.externalConversationJudgeProvider && deps.env.externalConversationJudgeModel) {
       selected.push({
-        provider: deps.env.teamChatJudgeProvider,
-        id: deps.env.teamChatJudgeModel,
+        provider: deps.env.externalConversationJudgeProvider,
+        id: deps.env.externalConversationJudgeModel,
         credential: await findModelCredential(
           deps.prisma,
           actor,
-          deps.env.teamChatJudgeProvider,
-          deps.env.teamChatJudgeModel,
+          deps.env.externalConversationJudgeProvider,
+          deps.env.externalConversationJudgeModel,
         ),
         thinkingLevel: null,
       });
@@ -217,25 +193,6 @@ export async function aiConsentStatus(
       );
     }
   }
-  for (const voice of voices) {
-    // A self-hosted server is disclosed by its own origin, like a custom model endpoint.
-    const endpoint = (await voiceCredentialServer(deps, actor, voice.credential))?.endpoint;
-    add(
-      aiRecipient({
-        provider: voice.credential.provider,
-        use: "voice",
-        ...(endpoint ? { baseUrl: endpoint } : {}),
-      }),
-    );
-  }
-  if (memory)
-    add(
-      aiRecipient({
-        provider: memory.provider,
-        use: "memory",
-        baseUrl: toStringRecord(memory.settings).baseUrl,
-      }),
-    );
   if (
     uses.includes("model") &&
     deps.cloudAgent &&

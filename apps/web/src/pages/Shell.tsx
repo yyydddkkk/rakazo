@@ -13,11 +13,9 @@ import type {
   Routine,
   SearchHit,
   Space,
-  SpaceMemoryConfig,
   TaughtSkill,
   ThreadMessage,
   ThreadSnapshot,
-  VoiceStatus,
 } from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_COUNT,
@@ -43,7 +41,6 @@ import {
   resolveComposerSendPlan,
   runThreadSubscription,
   searchHitThreadTarget,
-  speechFromBlocks,
   withLiveStreamingProgress,
 } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
@@ -58,10 +55,9 @@ import {
   InputGroupInput,
   Sidebar,
   Spinner,
-  toast,
 } from "@rakazo/ui-web";
 import { useIsMobile } from "@rakazo/ui-web/hooks/use-mobile";
-import { Menu, Monitor, Phone, Plus, Search, Settings, SlidersHorizontal, X } from "lucide-react";
+import { Menu, Monitor, Plus, Search, Settings, SlidersHorizontal, X } from "lucide-react";
 import type { MutableRefObject } from "react";
 import {
   Suspense,
@@ -78,8 +74,6 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ComputerMaintenanceActions } from "../components/ComputerMaintenanceActions";
 import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
-import { CallCard, CallReturnBar } from "../components/call/CallCard";
-import { IncomingCall } from "../components/call/IncomingCall";
 import { lazyOverlay } from "../components/ErrorBoundary";
 import { IconTooltip } from "../components/IconTooltip";
 import { SidebarFooter } from "../components/SidebarFooter";
@@ -100,7 +94,6 @@ import {
   requestBrowserNotificationPermission,
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
-import { setCallMinimized, startCall, useCallSession } from "../lib/call-session";
 import { newClientId } from "../lib/client-id";
 import { setComposerUnsavedWork } from "../lib/composer-draft";
 import {
@@ -157,7 +150,6 @@ import {
 } from "../lib/thread-events";
 import { getToolActivityEnabled, subscribeToolActivity } from "../lib/tool-activity-preference";
 import { transcriptCanSnapAfterFrame, transcriptIsNearEnd } from "../lib/transcript-scroll";
-import { speaker } from "../lib/tts";
 import { errorText } from "../lib/user-error";
 import { ActivityList } from "./ActivityList";
 import { CreateGroupForm, GroupSettings, memberName } from "./GroupPanel";
@@ -191,15 +183,6 @@ import { Transcript } from "./shell/transcript";
 import { useRoutineEditor } from "./shell/use-routine-editor";
 import { useSidebarExpansion } from "./shell/use-sidebar-expansion";
 
-const READ_ALOUD_TOAST = "read-aloud-error";
-
-/** Chat read-aloud has no caption to carry a failure, so it surfaces as a toast. */
-function readAloud(text: string, opts: { botId: string; messageId: string }) {
-  void speaker.speak(text, opts).then((error) => {
-    if (error) toast.error(error, { id: READ_ALOUD_TOAST });
-  });
-}
-
 const BotContextMenu = lazyOverlay(() =>
   import("./BotContextMenu").then((module) => module.BotContextMenu),
 );
@@ -227,20 +210,10 @@ type PendingBrowserNotification = {
 };
 
 const THREAD_SNAPSHOT_TIMEOUT_MS = 2_000;
-/** Bound Settings leave so a hung voice status refresh cannot block dismissal. */
-const VOICE_STATUS_REFRESH_TIMEOUT_MS = 10_000;
 const MOBILE_SIDEBAR_SWIPE_EDGE_PX = 32;
 const MOBILE_SIDEBAR_SWIPE_DISTANCE_PX = 56;
 function threadSnapshotSignal(parent: AbortSignal): AbortSignal {
   return anySignal([parent, AbortSignal.timeout(THREAD_SNAPSHOT_TIMEOUT_MS)]);
-}
-
-function voiceStatusRefreshTimeout(): Promise<never> {
-  return new Promise((_, reject) => {
-    AbortSignal.timeout(VOICE_STATUS_REFRESH_TIMEOUT_MS).addEventListener("abort", () => {
-      reject(new DOMException("Voice status refresh timed out", "TimeoutError"));
-    });
-  });
 }
 
 export function ShellPage() {
@@ -447,27 +420,6 @@ export function ShellPage() {
   );
   const [messagingSurfaceEnabled, setMessagingSurfaceEnabled] = useState(false);
   const [messagingProviders, setMessagingProviders] = useState<string[]>([]);
-  const [memoryProviderConfig, setMemoryProviderConfig] = useState<
-    SpaceMemoryConfig | null | undefined
-  >(undefined);
-  const memoryProviderConfigRevision = useRef(0);
-  const call = useCallSession();
-  /** Calls a bot, or opens voice settings first when no voice is connected. */
-  const callBot = (bot: Bot) => {
-    if (!bootstrapMe?.phoneCallsEnabled) return;
-    if (!voiceStatus?.ready) {
-      openSettings("voice");
-      return;
-    }
-    startCall({
-      botId: bot.id,
-      botName: bot.name,
-      botColor: bot.color,
-      transcribe: voiceStatus ? Boolean(voiceStatus.transcribe) : undefined,
-    });
-  };
-  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus | null>(null);
-  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [dismissedRunErrorIds, setDismissedRunErrorIds] =
     useState<ReadonlySet<string>>(readSeenRunErrorIds);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -534,10 +486,6 @@ export function ShellPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [initialBotsLoaded, setInitialBotsLoaded] = useState(false);
   const [bootstrapMe, setBootstrapMe] = useState<Me | null>();
-  const callsEnabledRef = useRef(false);
-  useEffect(() => {
-    callsEnabledRef.current = bootstrapMe?.phoneCallsEnabled === true;
-  }, [bootstrapMe?.phoneCallsEnabled]);
   const settingsSpace = spaces.find((space) => space.id === bootstrapMe?.spaceId) ?? null;
   const [keepComputerRecovery, setKeepComputerRecovery] = useState(false);
   const recoveryHoldTimer = useRef<number | undefined>(undefined);
@@ -687,8 +635,6 @@ export function ShellPage() {
   const pendingBrowserNotifications = useRef(new Map<string, PendingBrowserNotification>());
   const computerVisible = useRef(false);
   computerVisible.current = panel === "computer" || computerOpen;
-  const autoSpoken = useRef<string | null>(null);
-  const autoSpokenBotId = useRef<string | null>(null);
 
   const inGroup = Boolean(groupId);
   const active = inGroup ? undefined : (bots.find((b) => b.id === botId) ?? bots[0]);
@@ -1087,19 +1033,6 @@ export function ShellPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const providerConfigRevision = memoryProviderConfigRevision.current;
-    void rpc.memory
-      .providerConfig()
-      .then((providerConfig) => {
-        if (!cancelled && memoryProviderConfigRevision.current === providerConfigRevision) {
-          setMemoryProviderConfig(providerConfig);
-        }
-      })
-      .catch(() => {
-        if (!cancelled && memoryProviderConfigRevision.current === providerConfigRevision) {
-          setMemoryProviderConfig(null);
-        }
-      });
     const appliedAtStart = botsRefreshApplied.current;
     void takeInitialBootstrap(botId)
       .then((bootstrap) => {
@@ -1172,7 +1105,7 @@ export function ShellPage() {
       });
     let refreshTimer: number | undefined;
     const refreshVisibleBots = () => {
-      if (document.visibilityState !== "visible" && !callsEnabledRef.current) return;
+      if (document.visibilityState !== "visible") return;
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(
         () =>
@@ -1220,46 +1153,6 @@ export function ShellPage() {
       .then(setAgentSkills)
       .catch(() => undefined);
   }, []);
-
-  useEffect(() => {
-    void rpc.voice
-      .status()
-      .then(setVoiceStatus)
-      .catch(() => undefined);
-    const unsubSpeech = speaker.subscribe((state) => {
-      setSpeakingMessageId(state.status === "idle" ? null : (state.messageId ?? null));
-    });
-    return () => {
-      unsubSpeech();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!active || !snapshot || snapshot.botId !== active.id) return;
-    const lastBot = [...snapshot.messages].reverse().find((message) => message.role === "bot");
-    if (autoSpokenBotId.current !== active.id) {
-      autoSpokenBotId.current = active.id;
-      autoSpoken.current = lastBot?.id ?? null;
-      return;
-    }
-    if (call?.botId === active.id || !active.autoSpeak) {
-      autoSpoken.current = lastBot?.id ?? null;
-      return;
-    }
-    if (snapshot.run && ["running", "queued", "leased"].includes(snapshot.run.status)) return;
-    if (!lastBot || lastBot.id === autoSpoken.current) return;
-    const text = speechFromBlocks(lastBot.blocks);
-    if (!text) return;
-    autoSpoken.current = lastBot.id;
-    readAloud(text, { botId: active.id, messageId: lastBot.id });
-  }, [
-    snapshot?.messages,
-    snapshot?.run?.status,
-    snapshot?.botId,
-    active?.autoSpeak,
-    active?.id,
-    call?.botId,
-  ]);
 
   useEffect(() => {
     if (!active) return;
@@ -2327,18 +2220,6 @@ export function ShellPage() {
     setTaughtSkills(skills);
     setTaughtSkillsBotId(id);
   }, []);
-  const speakingMessageIdRef = useRef(speakingMessageId);
-  speakingMessageIdRef.current = speakingMessageId;
-  const speakMessage = useCallback((message: ThreadMessage) => {
-    if (speakingMessageIdRef.current === message.id) {
-      speaker.stop();
-      return;
-    }
-    const text = speechFromBlocks(message.blocks);
-    const id = message.botId ?? activeBotId.current;
-    if (text && id) readAloud(text, { botId: id, messageId: message.id });
-  }, []);
-
   async function createGroup(input: { name: string; botIds: string[] }) {
     const group = await rpc.groups.create(input);
     setGroups((current) =>
@@ -3194,26 +3075,6 @@ export function ShellPage() {
             </button>
           </div>
           <div className="flex items-center gap-1">
-            {bootstrapMe?.phoneCallsEnabled && !inGroup && active ? (
-              <IconTooltip label={call?.botId === active.id ? t`Open call` : t`Call`}>
-                <button
-                  type="button"
-                  data-testid="call-button"
-                  aria-label={call?.botId === active.id ? t`Open call` : t`Call`}
-                  onClick={() => {
-                    if (call?.botId === active.id) {
-                      setCallMinimized(false);
-                      return;
-                    }
-                    callBot(active);
-                  }}
-                  data-active={call?.botId === active.id ? "" : undefined}
-                  className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
-                >
-                  <Phone size={17} strokeWidth={1.6} className="text-foreground/75" />
-                </button>
-              </IconTooltip>
-            ) : null}
             {!inGroup && active ? (
               <IconTooltip label={t`Agent computer`}>
                 <button
@@ -3237,7 +3098,6 @@ export function ShellPage() {
             ) : null}
           </div>
         </div>
-        <CallReturnBar />
         {!active && !activeGroup && initialBotsLoaded ? (
           <div className="grid flex-1 place-items-center">
             <Button onClick={() => setPanel("create")}>
@@ -3260,11 +3120,6 @@ export function ShellPage() {
             dismissableAskIds={dismissableAskIds}
             running={transcriptRunning}
             workingBots={workingBots}
-            onCallBack={
-              bootstrapMe?.phoneCallsEnabled && !inGroup && active
-                ? () => callBot(active)
-                : undefined
-            }
             onLoadOlder={loadOlder}
             onOpenBot={openBot}
             onAnswer={answerMessage}
@@ -3286,9 +3141,6 @@ export function ShellPage() {
             onRefresh={refreshActiveThread}
             onBotChanged={refreshBots}
             onAddRoutine={addSkillRoutine}
-            voiceReady={Boolean(voiceStatus?.ready)}
-            speakingMessageId={speakingMessageId}
-            onSpeak={speakMessage}
             onOpenComputer={onOpenComputer}
           />
         )}
@@ -3319,8 +3171,6 @@ export function ShellPage() {
             onRemoveAttachment={removeAttachment}
             onSend={sendMessage}
             onStop={stopRun}
-            phoneCallsEnabled={bootstrapMe?.phoneCallsEnabled === true}
-            dictationTranscribe={voiceStatus ? Boolean(voiceStatus.transcribe) : undefined}
             artifactTarget={transcriptArtifactTarget}
             replyTarget={activeReplyTarget}
             replyQuote={activeReplyQuote}
@@ -3345,13 +3195,6 @@ export function ShellPage() {
           />
         ) : null}
       </main>
-
-      <CallCard onSettings={() => openSettings("voice")} />
-      <IncomingCall
-        bots={bootstrapMe?.phoneCallsEnabled ? bots : []}
-        transcribe={voiceStatus ? Boolean(voiceStatus.transcribe) : undefined}
-        onAnswered={(botId) => navigate(`/app/${botId}`)}
-      />
 
       <ResizableSidePanel
         open={Boolean(panel && (active || activeGroup || panel === "create"))}
@@ -3491,7 +3334,6 @@ export function ShellPage() {
               <BotSettings
                 key={active.id}
                 bot={active}
-                memoryProviderConfigured={memoryProviderConfig != null}
                 onSkillsChange={setAgentSkills}
                 onSave={async ({ computerMode, ...patch }) => {
                   if (computerMode !== undefined && computerMode !== active.computerMode) {
@@ -3697,21 +3539,6 @@ export function ShellPage() {
             onTimezoneChange={async (timezone) => {
               const nextMe = await rpc.preferences.update({ timezone });
               setBootstrapMe((prev) => (prev ? { ...prev, timezone: nextMe.timezone } : nextMe));
-            }}
-            memoryConfig={memoryProviderConfig}
-            onMemoryConfigChange={(config) => {
-              memoryProviderConfigRevision.current += 1;
-              setMemoryProviderConfig(config);
-            }}
-            onVoiceStatusMaybeChanged={async () => {
-              try {
-                setVoiceStatus(
-                  await Promise.race([rpc.voice.status(), voiceStatusRefreshTimeout()]),
-                );
-              } catch {
-                // Prefer reopening Voice settings over starting a call with stale readiness.
-                setVoiceStatus(null);
-              }
             }}
             onClose={() => {
               setSettingsOpen(false);

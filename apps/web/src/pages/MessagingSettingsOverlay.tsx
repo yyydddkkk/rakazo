@@ -233,22 +233,18 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
           {linkCode ? (
             <p className="mt-3 text-[14px] text-foreground/75" data-testid="messaging-link-code">
               <Trans>
-                Send <span className="font-mono text-foreground">{linkCode}</span> to the line from
-                your chat app within 10 minutes. You'll get a confirmation reply once linked.
+                Send <span className="font-mono text-foreground">{linkCode}</span> in Lark within 10
+                minutes.
               </Trans>
             </p>
           ) : null}
         </section>
 
-        <section className="mt-5 rounded-xl border border-border px-4 py-4">
-          <h3 className="text-[15px] font-medium text-foreground">
-            <Trans>Channels</Trans>
-          </h3>
-          {channels.length === 0 ? (
-            <p className="mt-3 text-[13px] text-muted-foreground/70">
-              <Trans>No group chats yet.</Trans>
-            </p>
-          ) : (
+        {channels.length ? (
+          <section className="mt-5 rounded-xl border border-border px-4 py-4">
+            <h3 className="text-[15px] font-medium text-foreground">
+              <Trans>Channels</Trans>
+            </h3>
             <ul className="mt-3 space-y-3">
               {channels.map((channel) => (
                 <li
@@ -308,8 +304,8 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="mt-5 rounded-xl border border-border px-4 py-4">
           <h3 className="text-[15px] font-medium text-foreground">
@@ -386,15 +382,11 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
           )}
         </section>
 
-        <section className="mt-5 rounded-xl border border-border px-4 py-4">
-          <h3 className="text-[15px] font-medium text-foreground">
-            <Trans>Team conversations</Trans>
-          </h3>
-          {externalConversations.length === 0 ? (
-            <p className="mt-3 text-[13px] text-muted-foreground/70">
-              <Trans>No team conversations yet.</Trans>
-            </p>
-          ) : (
+        {externalConversations.length ? (
+          <section className="mt-5 rounded-xl border border-border px-4 py-4">
+            <h3 className="text-[15px] font-medium text-foreground">
+              <Trans>External conversations</Trans>
+            </h3>
             <ul className="mt-3 space-y-3">
               {externalConversations.map((conversation) => {
                 const bot = bots.find((candidate) => candidate.id === conversation.botId);
@@ -435,8 +427,8 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
                 );
               })}
             </ul>
-          )}
-        </section>
+          </section>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

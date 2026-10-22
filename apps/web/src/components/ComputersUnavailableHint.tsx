@@ -181,9 +181,8 @@ function UnavailableCopy({
   return (
     <p className="text-[13px] leading-relaxed text-muted-foreground">
       <Trans>
-        Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set
-        SANDBOX_PROVIDER to e2b, daytona, or boat with its API key. Recreate the stack after
-        changing .env.
+        Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, then recreate
+        the stack after changing .env.
       </Trans>
     </p>
   );

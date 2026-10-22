@@ -65,12 +65,6 @@ describe("searchIntegrationCatalog", () => {
             source: "https://example.test/openapi.json",
             auth: { type: "header", headerName: "x-api-key", note: null },
           },
-          {
-            kind: "graphql",
-            slug: "github-graphql",
-            source: null,
-            auth: null,
-          },
           { kind: "cli", slug: "github-cli", source: null, auth: null },
         ],
       },

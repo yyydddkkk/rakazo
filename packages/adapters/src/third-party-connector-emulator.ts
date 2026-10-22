@@ -2,7 +2,6 @@ import { isIP } from "node:net";
 import type { ResolveHostname } from "./remote-mcp.js";
 
 type EmulatorRecord =
-  | { provider: "pipedream"; operation: string; app?: string }
   | { provider: "catalog"; operation: "search"; query: string }
   | {
       provider: "mcp";
@@ -17,26 +16,14 @@ type EmulatorRecord =
 /** Expected Executor test bearer. Compared at the boundary; never written into records. */
 const EXPECTED_EXECUTOR_BEARER = "Bearer fake-executor-credential-value";
 
-const PIPEDREAM_APPS = [
-  { id: "app-linear", name_slug: "linear", name: "Linear" },
-  { id: "app-airtable", name_slug: "airtable", name: "Airtable" },
-];
-
 /** Deterministic HTTP/MCP boundary emulator used by integration and browser journeys. */
 export class ThirdPartyConnectorEmulator {
   readonly records: EmulatorRecord[] = [];
   readonly resolveHostname: ResolveHostname = async () => [{ address: "203.0.113.10", family: 4 }];
 
-  private readonly connectedApps = new Map<string, Set<string>>();
-  private readonly accountOwners = new Map<string, { externalUserId: string; app: string }>();
-  private readonly pendingUsers = new Set<string>();
-
   readonly fetch: typeof globalThis.fetch = async (input, init) => {
     const url = urlFromPinnedFetch(input, init);
-    if (url.hostname === "api.pipedream.com") return this.pipedream(url, init);
-    if (url.hostname === "remote.mcp.pipedream.net" || url.hostname === "treg.to") {
-      return this.mcp(url, init);
-    }
+    if (url.hostname === "treg.to") return this.mcp(url, init);
     if (url.hostname === "mcp.example.test" || url.hostname === "executor.example.test") {
       return this.mcp(url, init);
     }
@@ -79,67 +66,11 @@ export class ThirdPartyConnectorEmulator {
     });
   }
 
-  private async pipedream(url: URL, init?: RequestInit): Promise<Response> {
-    const method = init?.method ?? "GET";
-    if (url.pathname === "/v1/oauth/token") {
-      this.records.push({ provider: "pipedream", operation: "token" });
-      return Response.json({ access_token: "fake-pipedream-access-token", expires_in: 3_600 });
-    }
-    if (url.pathname === "/v1/connect/apps") {
-      this.records.push({ provider: "pipedream", operation: "catalog" });
-      return Response.json({ data: PIPEDREAM_APPS, page_info: {} });
-    }
-    if (url.pathname.endsWith("/tokens") && method === "POST") {
-      const body = parseBody(init?.body);
-      const externalUserId = String(body.external_user_id ?? "");
-      this.pendingUsers.add(externalUserId);
-      this.records.push({ provider: "pipedream", operation: "begin" });
-      return Response.json({ connect_link_url: "https://pipedream.example.test/connect" });
-    }
-    if (url.pathname.endsWith("/accounts") && method === "GET") {
-      const externalUserId = url.searchParams.get("external_user_id") ?? "";
-      const requestedApp = url.searchParams.get("app") ?? undefined;
-      if (requestedApp && this.pendingUsers.delete(externalUserId)) {
-        const connected = this.connectedApps.get(externalUserId) ?? new Set<string>();
-        connected.add(requestedApp);
-        this.connectedApps.set(externalUserId, connected);
-      }
-      const apps = [...(this.connectedApps.get(externalUserId) ?? [])].filter(
-        (app) => !requestedApp || app === requestedApp,
-      );
-      const data = apps.map((app) => {
-        const id = `account-${app}`;
-        this.accountOwners.set(id, { externalUserId, app });
-        return {
-          id,
-          healthy: true,
-          app: PIPEDREAM_APPS.find((candidate) => candidate.name_slug === app),
-        };
-      });
-      this.records.push({ provider: "pipedream", operation: "accounts", app: requestedApp });
-      return Response.json({ data, page_info: {} });
-    }
-    const accountId = url.pathname.match(/\/accounts\/([^/]+)$/)?.[1];
-    if (accountId && method === "DELETE") {
-      const owner = this.accountOwners.get(decodeURIComponent(accountId));
-      if (owner) this.connectedApps.get(owner.externalUserId)?.delete(owner.app);
-      this.records.push({ provider: "pipedream", operation: "revoke", app: owner?.app });
-      return new Response(null, { status: 204 });
-    }
-    return Response.json(
-      { error: `Unhandled Pipedream request ${method} ${url.pathname}` },
-      {
-        status: 404,
-      },
-    );
-  }
-
   private async mcp(url: URL, init?: RequestInit): Promise<Response> {
     const request = parseBody(init?.body);
     const method = String(request.method ?? "");
     const id = request.id;
     const headers = new Headers(init?.headers);
-    const app = headers.get("x-pd-app-slug") ?? undefined;
     const authorization = headers.get("authorization");
     // Validate bearer at the boundary; persist only the boolean, never the secret.
     const authenticated =
@@ -187,7 +118,7 @@ export class ThirdPartyConnectorEmulator {
         authenticated,
         args,
       });
-      const result = { ok: true, app, text: args.text ?? null };
+      const result = { ok: true, text: args.text ?? null };
       return jsonRpc(id, {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,

@@ -14,7 +14,6 @@ import { GROUP_MEMBER_MIN, MessageBlock as MessageBlockSchema } from "@rakazo/co
 import {
   ACTIVE_RUN_STATUSES,
   BACKGROUND_RUN_TRIGGERS,
-  callIdFromClientNonce,
   isConversationalRun,
   messageReaction,
   projectMessages,
@@ -637,7 +636,6 @@ export async function sendThreadMessage(
   if (existing) return existing;
   // Live events carry the call id so a spoken turn joins the call card on first
   // paint; without it the bubble shows loose until a refetch reads the nonce.
-  const callId = callIdFromClientNonce(input.clientNonce);
   const requestedReplyQuote = input.replyQuote?.trim() || undefined;
   if (requestedReplyQuote && !input.replyToMessageId) {
     throw new ORPCError("BAD_REQUEST", { message: "replyQuote requires replyToMessageId." });
@@ -758,7 +756,6 @@ export async function sendThreadMessage(
               seq: message.seq,
               role: "user",
               blocks,
-              callId,
               runIds: answered.map((run) => run.id),
               replyToMessageId,
               replyQuote,
@@ -792,7 +789,6 @@ export async function sendThreadMessage(
               seq: message.seq,
               role: "user",
               blocks,
-              callId,
               replyToMessageId,
               replyQuote,
               replyPreview,
@@ -840,7 +836,6 @@ export async function sendThreadMessage(
             seq: message.seq,
             role: "user",
             blocks,
-            callId,
             runIds: [run.id],
             replyToMessageId,
             replyQuote,
@@ -993,7 +988,6 @@ export async function sendThreadMessage(
           seq: message.seq,
           role: "user",
           blocks,
-          callId,
           runIds: runs.map((run) => run.id),
           replyToMessageId,
           replyQuote,

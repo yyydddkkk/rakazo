@@ -64,7 +64,6 @@ it.each([false, true])("includes the board capability in me (%s)", async (ticket
     prisma,
     env: {
       ticketBoardEnabled,
-      phoneCallsEnabled: ticketBoardEnabled,
       defaultProvider: "fake",
       defaultModel: "fake-model",
       sandboxProvider: "fake",
@@ -72,5 +71,4 @@ it.each([false, true])("includes the board capability in me (%s)", async (ticket
   } as unknown as RouterDeps;
   const client = createRouterClient(createRouter(deps), { context: { actor } });
   await expect(client.me()).resolves.toHaveProperty("ticketBoardEnabled", ticketBoardEnabled);
-  await expect(client.me()).resolves.toHaveProperty("phoneCallsEnabled", ticketBoardEnabled);
 });

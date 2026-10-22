@@ -433,25 +433,6 @@ describe("OpenAPI connector import", () => {
           ],
         },
       },
-      {
-        id: "graphql-effects",
-        kind: "graphql",
-        source: "https://api.example.test/graphql",
-        secretId: null,
-        createdAt: new Date(1),
-        config: {
-          auth: { type: "none" },
-          operations: [
-            {
-              id: "mutation_readNote",
-              name: "read_note",
-              operationType: "mutation",
-              fieldName: "readNote",
-              readOnly: true,
-            },
-          ],
-        },
-      },
     ];
     const provider = new InstalledConnectorProvider(
       { capabilityInstall: { findMany: vi.fn().mockResolvedValue(installs) } } as never,
@@ -469,16 +450,14 @@ describe("OpenAPI connector import", () => {
       ["find_validator_record", false],
       ["get_status", false],
       ["list_items", true],
-      ["read_note", false],
     ]);
-    const [card, record, , list, note] = tools;
+    const [card, record, , list] = tools;
     expect(card!.description.startsWith("POST /read_profile_card. Provider description: ")).toBe(
       true,
     );
     expect(card!.description.length).toBeLessThan(600);
     expect(record!.description).toBe("DELETE /find_validator_record");
     expect(list!.description).toBe("GET /list_items");
-    expect(note!.description).toBe("mutation readNote");
   });
 
   it("returns no tools for an empty installed catalog", async () => {

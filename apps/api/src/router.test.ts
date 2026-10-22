@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createRouterClient } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
-import type { ManagedConnectorProvider } from "@rakazo/adapter-kit";
 import { SecretStoreUnavailableError } from "@rakazo/adapter-kit";
 import type { McpOAuthSummary } from "@rakazo/adapters";
 import * as adapters from "@rakazo/adapters";
@@ -12,9 +11,7 @@ import {
   CodexCatalogCache,
   ComputerBusyError,
   ComputerScreenUnavailableError,
-  EncryptedSecretStore,
   findConnectedModelCredential,
-  IntegrationProviderSettings,
   LocalAgentHomeStore,
   listPiCatalog,
   modelCredentialDto,
@@ -514,7 +511,7 @@ describe("thread answer delivery", () => {
             runId: "run-1",
             messageId: "message-1",
             answer: "Paris",
-            clientNonce: "call:call-1:spoken-answer",
+            clientNonce: "answer-1",
           },
         }),
       }),
@@ -529,7 +526,7 @@ describe("thread answer delivery", () => {
         spaceId: "workspace-1",
         threadId: "thread-1",
         runId: "run-1",
-        clientNonce: "call:call-1:spoken-answer",
+        clientNonce: "answer-1",
       }),
     );
     expect(enqueue).toHaveBeenCalledOnce();
@@ -615,7 +612,7 @@ describe("secret request dismissal", () => {
   it.each([
     ["a dismissal with a value", { answer: "example-password", dismiss: true }],
     ["a dismissal with a username", { answer: "", username: "ada", dismiss: true }],
-    ["a dismissal during a call", { answer: "", clientNonce: "call:call-1:x", dismiss: true }],
+    ["a dismissal with a client nonce", { answer: "", clientNonce: "answer-x", dismiss: true }],
     ["an empty answer", { answer: "" }],
   ])("rejects %s before it reaches the run", async (_name, json) => {
     const h = setup(true);
@@ -2056,132 +2053,6 @@ describe("connections.begin", () => {
 });
 
 describe("connections.complete", () => {
-  it.each([
-    ["complete", false],
-    ["complete", true],
-    ["revoke", false],
-    ["revoke", true],
-  ] as const)(
-    "prepares slow configured credentials for %s (changed: %s)",
-    async (operation, changed) => {
-      const secrets = new EncryptedSecretStore("test-encryption-key");
-      const stored = await secrets.put(
-        JSON.stringify({ provider: "composio", apiKey: "fake-key" }),
-        {
-          operationId: "test",
-          traceId: "test",
-          spaceId: "workspace-1",
-          userId: "user-1",
-          signal: new AbortController().signal,
-        },
-        { recordId: "integration-provider:composio" },
-      );
-      let ref = stored.ref;
-      let inTransaction = false;
-      let elapsed = 0;
-      const originalLoad = EncryptedSecretStore.prototype.load.bind(secrets);
-      const load = vi.spyOn(secrets, "load").mockImplementation(async (...args) => {
-        expect(inTransaction).toBe(false);
-        elapsed += 15_000;
-        return originalLoad(...args);
-      });
-      const row = {
-        id: "conn-1",
-        connectorId: "composio",
-        provider: "gmail",
-        providerRef: "gmail",
-        displayName: "Gmail",
-        status: "pending",
-        createdAt: new Date(0),
-      };
-      const client = {
-        integrationProviderConfig: {
-          findUnique: vi.fn(async () => ({ id: "composio", ciphertext: ref })),
-        },
-        connection: {
-          findFirst: vi.fn(async () => row),
-          findMany: vi.fn(async () => []),
-          count: vi.fn(async () => 0),
-          updateMany: vi.fn(async () => ({ count: 1 })),
-        },
-        $executeRaw: vi.fn(),
-        $queryRaw: vi.fn(async () => []),
-      };
-      const prisma = {
-        ...client,
-        $transaction: vi.fn(async (fn: (tx: typeof client) => Promise<unknown>) => {
-          const started = elapsed;
-          if (changed) ref = "replacement-ref";
-          inTransaction = true;
-          try {
-            const result = await fn(client);
-            expect(elapsed - started).toBeLessThan(5_000);
-            return result;
-          } finally {
-            inTransaction = false;
-          }
-        }),
-      };
-      const complete = vi.fn(async () => ({ connectionRef: "gmail" }));
-      const revoke = vi.fn(async () => undefined);
-      const adapter = {
-        complete,
-        revoke,
-        connectionReady: vi.fn(async () => false),
-      } as unknown as ManagedConnectorProvider;
-      const settings = new IntegrationProviderSettings(
-        prisma as unknown as PrismaClient,
-        secrets,
-        "fake-identity",
-        {},
-        () => adapter,
-      );
-      const connector = settings
-        .providers()
-        .find((provider) => provider.describe().id === "composio");
-      const handler = new RPCHandler(
-        createRouter({
-          prisma,
-          connectors: { managed: () => connector },
-          env: {
-            defaultProvider: "fake",
-            defaultModel: "fake-model",
-            webOrigin: "http://127.0.0.1:5173",
-            screenProxySecret: "fake-test-secret",
-            sandboxProvider: "fake",
-          },
-        } as unknown as RouterDeps),
-      );
-      const { response } = await handler.handle(
-        new Request(`http://127.0.0.1/rpc/connections/${operation}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            json: {
-              connectionId: row.id,
-              ...(operation === "complete" ? { code: "fake-code" } : {}),
-            },
-          }),
-        }),
-        {
-          prefix: "/rpc",
-          context: {
-            actor: {
-              spaceId: "workspace-1",
-              userId: "user-1",
-              email: "user@rakazo.test",
-              isDeploymentOwner: true,
-            },
-          },
-        },
-      );
-      expect(response.status).toBe(changed ? 409 : 200);
-      expect(elapsed).toBe(15_000);
-      expect(load).toHaveBeenCalledTimes(1);
-      expect(operation === "complete" ? complete : revoke).toHaveBeenCalledTimes(changed ? 0 : 1);
-    },
-  );
-
   it("forwards an optional code to the managed connector", async () => {
     const complete = vi.fn().mockResolvedValue({ connectionRef: "gmail" });
     const connectionReady = vi.fn().mockResolvedValue(true);
@@ -2977,79 +2848,6 @@ describe("computer terminal and file transfer", () => {
   });
 });
 
-describe("integration setup authorization", () => {
-  it.each([
-    { owner: false, configured: false, needsSetup: false },
-    { owner: true, configured: false, needsSetup: true },
-    { owner: true, configured: true, needsSetup: false },
-  ])(
-    "offers server setup only to an owner without configured providers: %j",
-    async ({ owner, configured, needsSetup }) => {
-      const lookup = vi.fn(async () => configured);
-      const deps = {
-        prisma: {},
-        env: { webOrigin: "https://example.test" },
-        integrationSettings: { configured: lookup },
-      } as unknown as RouterDeps;
-      const handler = new RPCHandler(createRouter(deps));
-      const { response } = await handler.handle(
-        new Request("https://example.test/rpc/integrationSetup/get", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ json: null }),
-        }),
-        {
-          prefix: "/rpc",
-          context: {
-            actor: {
-              userId: "user",
-              spaceId: "space",
-              email: "user@rakazo.test",
-              isDeploymentOwner: owner,
-            },
-          },
-        },
-      );
-      const result = (await response.json()).json;
-      expect(result).toMatchObject({ canConfigure: owner, needsSetup });
-      if (!owner) {
-        expect(result.providers).toEqual([]);
-        expect(lookup).not.toHaveBeenCalled();
-      }
-    },
-  );
-
-  it("rejects provider credentials from a non-owner before verification or persistence", async () => {
-    const save = vi.fn();
-    const deps = {
-      prisma: {},
-      env: { webOrigin: "https://example.test" },
-      integrationSettings: { save },
-    } as unknown as RouterDeps;
-    const handler = new RPCHandler(createRouter(deps));
-    const { response } = await handler.handle(
-      new Request("https://example.test/rpc/integrationSetup/save", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ json: { provider: "composio", apiKey: "fake-key" } }),
-      }),
-      {
-        prefix: "/rpc",
-        context: {
-          actor: {
-            userId: "member",
-            spaceId: "space",
-            email: "member@rakazo.test",
-            isDeploymentOwner: false,
-          },
-        },
-      },
-    );
-    expect(response.status).toBe(403);
-    expect(save).not.toHaveBeenCalled();
-  });
-});
-
 describe("interrupted computer reservation release", () => {
   function fixture() {
     const order: string[] = [];
@@ -3555,7 +3353,6 @@ describe("model credential persistence", () => {
     transaction.mockImplementation(async (fn) =>
       fn({
         userModelCredential: deps.prisma.userModelCredential,
-        userVoiceCredential: { count: vi.fn().mockResolvedValue(0) },
         spaceModelPreference: deps.prisma.spaceModelPreference,
         secret: {
           create: vi.fn().mockResolvedValue({ id: "new-secret" }),
@@ -4734,11 +4531,8 @@ describe("bot model auth on save", () => {
       sectionId: null,
       archivedAt: null,
       parentBotId: null,
-      memoryScope: null,
       createdAt: now,
       updatedAt: now,
-      voiceId: null,
-      autoSpeak: false,
       modelProvider: "openai-codex",
       modelId,
       thinkingLevel: null,
@@ -5498,11 +5292,8 @@ describe("openai-compatible enabled models", () => {
       sectionId: null,
       archivedAt: null,
       parentBotId: null,
-      memoryScope: null,
       createdAt: now,
       updatedAt: now,
-      voiceId: null,
-      autoSpeak: false,
       modelProvider: compatible,
       modelId,
       thinkingLevel: null,
@@ -5640,7 +5431,6 @@ describe("openai-compatible enabled models", () => {
         ),
         count: vi.fn(async () => 0),
       },
-      userVoiceCredential: { count: vi.fn(async () => 0) },
       secret: {
         findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
           const ciphertext = ciphertexts.get(where.id);
@@ -6222,287 +6012,6 @@ describe("openai-compatible enabled models", () => {
     expect(
       await call("bots/update", { botId: "bot-1", modelProvider: compatible, modelId: "m-z" }),
     ).toEqual({ status: 400, message: "Unknown model for that provider" });
-  });
-});
-
-describe("threads.answerCall and threads.declineCall", () => {
-  function fixture(
-    status = "ringing",
-    updated = 1,
-    expiresAt = new Date(Date.now() + 45_000).toISOString(),
-  ) {
-    const appended: { type: string; payload: Record<string, unknown> }[] = [];
-    const tx = {
-      $queryRaw: vi.fn(async () => []),
-      bot: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue({ id: "bot-1", thread: { id: "thread-1" }, computer: null }),
-      },
-      message: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "message-1",
-          botId: "bot-1",
-          thread: { spaceId: "space-1" },
-          blocks: [
-            {
-              kind: "call_request",
-              callId: "call-1",
-              reason: "Send the report",
-              opening: "Hi, it's about the report.",
-              status,
-              expiresAt,
-            },
-          ],
-        }),
-        updateMany: vi.fn().mockResolvedValue({ count: updated }),
-      },
-      thread: { update: vi.fn(async () => ({ nextEventSeq: 2 })) },
-      event: {
-        create: vi.fn(
-          async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => {
-            appended.push(data);
-            return { seq: 1 };
-          },
-        ),
-      },
-      routine: {
-        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
-          id: "routine-1",
-          ...data,
-        })),
-      },
-    };
-    const prisma = {
-      ...tx,
-      $transaction: vi.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)),
-    } as unknown as PrismaClient;
-    const enqueue = vi.fn().mockResolvedValue(undefined);
-    const deps = {
-      prisma,
-      events: {
-        notify: vi.fn().mockResolvedValue(undefined),
-        append: vi.fn(async (event: { type: string; payload: Record<string, unknown> }) => {
-          appended.push(event);
-          return { seq: 1 };
-        }),
-      },
-      jobs: { enqueue },
-      env: { sandboxProvider: "fake", phoneCallsEnabled: true },
-    } as unknown as RouterDeps;
-    const actor = {
-      spaceId: "space-1",
-      userId: "user-1",
-      email: "user@rakazo.test",
-      isDeploymentOwner: true,
-    } satisfies Actor;
-    const handler = new RPCHandler(createRouter(deps));
-    const call = (path: string, json: Record<string, unknown>) =>
-      handler.handle(
-        new Request(`http://127.0.0.1/rpc/threads/${path}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ json: { botId: "bot-1", callId: "call-1", ...json } }),
-        }),
-        { prefix: "/rpc", context: { actor } },
-      );
-    return { prisma, appended, enqueue, call };
-  }
-
-  it("answers a ringing call with the bot's opening", async () => {
-    const { call, appended } = fixture();
-    const { response } = await call("answerCall", {});
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      json: { opening: "Hi, it's about the report.", reason: "Send the report" },
-    });
-    expect(appended[0]?.payload).toMatchObject({
-      messageId: "message-1",
-      blocks: [expect.objectContaining({ status: "answered" })],
-    });
-  });
-
-  it("refuses to answer a call that is no longer ringing", async () => {
-    const { call } = fixture("missed");
-    const { response } = await call("answerCall", {});
-    expect(response.status).toBe(409);
-  });
-
-  it("marks a declined call without scheduling another", async () => {
-    const { call, appended, prisma } = fixture();
-    const { response } = await call("declineCall", { outcome: "declined" });
-    expect(response.status).toBe(200);
-    expect(appended[0]?.payload).toMatchObject({
-      blocks: [expect.objectContaining({ status: "declined" })],
-    });
-    expect(prisma.routine.create).not.toHaveBeenCalled();
-  });
-
-  it("rejects expired answers and records a missed call", async () => {
-    const { call, appended } = fixture("ringing", 1, new Date(0).toISOString());
-    expect((await call("answerCall", {})).response.status).toBe(409);
-    expect(appended[0]?.payload).toMatchObject({
-      blocks: [expect.objectContaining({ status: "missed" })],
-    });
-  });
-
-  it("checks ownership within the active space", async () => {
-    const { call, prisma } = fixture();
-    vi.mocked(prisma.bot.findFirst).mockResolvedValue(null);
-    expect((await call("answerCall", {})).response.status).not.toBe(200);
-    expect(prisma.bot.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: "bot-1", userId: "user-1", spaceId: "space-1" }),
-      }),
-    );
-    expect(prisma.message.updateMany).not.toHaveBeenCalled();
-  });
-});
-
-describe("threads.endCall", () => {
-  function fixture(duplicateMarker?: boolean, userSpoke = true) {
-    const created: { blocks?: unknown; clientNonce?: string }[] = [];
-    const events: { type: string; payload: Record<string, unknown> }[] = [];
-    const tx = {
-      $queryRaw: vi.fn(async () => []),
-      thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 3, nextEventSeq: 5 }) },
-      message: {
-        findUnique: vi.fn().mockResolvedValue(null),
-        findFirst: vi.fn().mockResolvedValue(userSpoke ? { id: "utterance-1" } : null),
-        create: vi.fn(async ({ data }: { data: { blocks: unknown; clientNonce?: string } }) => {
-          if (duplicateMarker) throw Object.assign(new Error("unique"), { code: "P2002" });
-          created.push({ blocks: data.blocks, clientNonce: data.clientNonce });
-          return { id: "message-1" };
-        }),
-      },
-      event: vi.fn(),
-      task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      run: {
-        create: vi.fn().mockResolvedValue({ id: "run-1" }),
-        findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: null }),
-      },
-    };
-    tx.event = {
-      create: vi.fn(async ({ data }: { data: { type: string; payload: never } }) => {
-        events.push({ type: data.type, payload: data.payload });
-        return { seq: 4, threadId: "thread-1" };
-      }),
-    } as never;
-    const prisma = {
-      bot: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue({ id: "bot-1", thread: { id: "thread-1" }, computer: null }),
-      },
-      // No bot-placed call behind this one: only the caller's own hang-up runs.
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
-      taughtSkill: { findFirst: vi.fn().mockResolvedValue(null) },
-      $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)),
-    } as unknown as PrismaClient;
-    const enqueue = vi.fn().mockResolvedValue(undefined);
-    const deps = {
-      prisma,
-      events: { notify: vi.fn().mockResolvedValue(undefined) },
-      jobs: { enqueue },
-      env: { sandboxProvider: "fake", phoneCallsEnabled: true },
-    } as unknown as RouterDeps;
-    const actor = {
-      spaceId: "space-1",
-      userId: "user-1",
-      email: "user@rakazo.test",
-      isDeploymentOwner: true,
-    } satisfies Actor;
-    const handler = new RPCHandler(createRouter(deps));
-    return {
-      tx,
-      created,
-      events,
-      enqueue,
-      call: (extra: Record<string, unknown> = {}) =>
-        handler.handle(
-          new Request("http://127.0.0.1/rpc/threads/endCall", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ json: { botId: "bot-1", callId: "call-1", ...extra } }),
-          }),
-          { prefix: "/rpc", context: { actor } },
-        ),
-    };
-  }
-
-  it("closes the card and queues a call_end run", async () => {
-    const { call, created, events, tx, enqueue } = fixture();
-    const { response } = await call();
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ json: { ok: true } });
-    expect(created[0]?.blocks).toEqual([
-      { kind: "voice_call", callId: "call-1", title: "", farewell: "" },
-    ]);
-    expect(created[0]?.clientNonce).toBe("call:call-1:marker");
-    expect(events.map((event) => event.type)).toEqual([
-      "thread.message.created",
-      "thread.call.ended",
-    ]);
-    expect(events[1]?.payload).toMatchObject({
-      callId: "call-1",
-      title: "",
-      messageId: "message-1",
-    });
-    expect(events[0]?.payload).toMatchObject({ callId: "call-1", messageId: "message-1" });
-    expect(tx.run.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ trigger: "call_end", taskId: "task-1" }),
-      }),
-    );
-    expect(String(tx.run.create.mock.calls[0]?.[0]?.data?.clientNonce)).toMatch(/^call:call-1:/);
-    expect(enqueue).toHaveBeenCalledOnce();
-  });
-
-  it("keeps the connected time the caller reported on the card", async () => {
-    const { call, created } = fixture();
-    const { response } = await call({ durationSeconds: 83 });
-    expect(response.status).toBe(200);
-    expect(created[0]?.blocks).toEqual([
-      { kind: "voice_call", callId: "call-1", title: "", farewell: "", durationSeconds: 83 },
-    ]);
-  });
-
-  it("rejects a negative connected time", async () => {
-    const { call, created } = fixture();
-    const { response } = await call({ durationSeconds: -1 });
-    expect(response.status).toBe(400);
-    expect(created).toEqual([]);
-  });
-
-  it("is a no-op for a late hang-up with no user call utterance", async () => {
-    const { call, created, events, tx, enqueue } = fixture(false, false);
-    const { response } = await call();
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ json: { ok: true } });
-    expect(tx.message.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          threadId: "thread-1",
-          role: "user",
-          clientNonce: { startsWith: "call:call-1:" },
-        }),
-      }),
-    );
-    expect(created).toEqual([]);
-    expect(events).toEqual([]);
-    expect(tx.run.create).not.toHaveBeenCalled();
-    expect(enqueue).not.toHaveBeenCalled();
-  });
-
-  it("is a no-op when a concurrent hang-up already wrote the marker", async () => {
-    const { call, created, events, tx, enqueue } = fixture(true);
-    const { response } = await call();
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ json: { ok: true } });
-    expect(created).toEqual([]);
-    expect(events).toEqual([]);
-    expect(tx.run.create).not.toHaveBeenCalled();
-    expect(enqueue).not.toHaveBeenCalled();
   });
 });
 

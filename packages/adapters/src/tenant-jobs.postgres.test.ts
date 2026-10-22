@@ -131,7 +131,6 @@ describePostgres("tenant-scoped background jobs (PostgreSQL)", () => {
       workerId: "tenant-jobs",
       runtime: {} as AgentRuntime,
       secretStore: {} as SecretStore,
-      memoryProviders: { resolve: vi.fn(async () => null) },
     });
     return { handlers, seen, continueRun };
   }

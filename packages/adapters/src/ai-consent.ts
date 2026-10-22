@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import type { AiDataUse, AiRecipient } from "@rakazo/contracts";
 import { localBaseUrl } from "./pi-local-provider.js";
 import { listPiCatalog } from "./pi-models.js";
-import { voiceCatalogEntry } from "./voice-factory.js";
 
 const PRIVACY_URLS: Record<string, string> = {
   cursor: "https://cursor.com/privacy",
@@ -12,11 +11,6 @@ const PRIVACY_URLS: Record<string, string> = {
   anthropic: "https://www.anthropic.com/legal/privacy",
   google: "https://policies.google.com/privacy",
   "vercel-ai-gateway": "https://vercel.com/legal/privacy-policy",
-  elevenlabs: "https://elevenlabs.io/privacy-policy",
-  cartesia: "https://cartesia.ai/legal/privacy",
-  "fish-audio": "https://fish.audio/privacy/",
-  supermemory: "https://supermemory.ai/privacy",
-  honcho: "https://app.honcho.dev/privacy",
 };
 
 /** Never expose endpoint paths, query parameters, user info, or credentials in a disclosure. */
@@ -29,7 +23,7 @@ export function aiRecipient(input: {
   if (input.provider === "scripted") return null;
   const endpoint = input.baseUrl ?? (input.provider === "local" ? localBaseUrl() : undefined);
   const origin = endpoint ? new URL(endpoint).origin : undefined;
-  const name = recipientName(input.provider, input.use);
+  const name = recipientName(input.provider);
   // Bind custom connections to the full endpoint without exposing private URL components.
   const key = createHash("sha256")
     .update(JSON.stringify([input.use, input.provider, endpoint ?? "", input.modelId ?? ""]))
@@ -47,13 +41,7 @@ export function aiRecipient(input: {
   };
 }
 
-function recipientName(provider: string, use: AiDataUse) {
-  if (use === "voice") return voiceCatalogEntry(provider)?.name ?? provider;
-  if (use === "memory") {
-    if (provider === "supermemory") return "Supermemory";
-    if (provider === "honcho") return "Honcho";
-    return provider;
-  }
+function recipientName(provider: string) {
   if (provider === "cursor") return "Cursor";
   return listPiCatalog().find((entry) => entry.provider === provider)?.providerName ?? provider;
 }

@@ -5,7 +5,6 @@ import { MessagingSendError } from "./chat-sdk-surface.js";
 import {
   applyMessagingOutboundStatus,
   deliverMessagingOutbound,
-  MESSAGING_DM_OUTBOUND_CAP,
   MESSAGING_OUTBOUND_MAX_ATTEMPTS,
   type MessagingDeliveryDeps,
 } from "./messaging-delivery.js";
@@ -20,9 +19,9 @@ const context: AdapterContext = {
 
 const identity = {
   id: "mi-1",
-  provider: "sendblue",
+  provider: "fixture",
   address: "+15551234567",
-  dmThreadId: "sendblue:dm-1",
+  dmThreadId: "fixture:dm-1",
   userId: "user-1",
   spaceId: "ws-1",
   botId: "bot-1",
@@ -40,17 +39,17 @@ function createFakeSurface(sendError?: Error) {
   const sendToThread = vi.fn(async () => ({ handle: "handle-out-1" }));
   if (sendError) sendToThread.mockRejectedValue(sendError);
   const openDirectThread = vi.fn(
-    async (_provider: string, address: string) => `sendblue:opened:${address}`,
+    async (_provider: string, address: string) => `fixture:opened:${address}`,
   );
   const messaging: MessagingSurface = {
     describe: () => ({
       id: "chat-sdk",
       contractVersion: "1",
       adapterVersion: "0.1.0",
-      capabilities: { providers: ["sendblue"] },
+      capabilities: { providers: ["fixture"] },
     }),
     platforms: () => [
-      { provider: "sendblue", capabilities: { direct: true, groups: true, receipt: "typing" } },
+      { provider: "fixture", capabilities: { direct: true, groups: true, receipt: "typing" } },
     ],
     handleWebhook: () => null,
     onInbound: () => undefined,
@@ -214,7 +213,7 @@ describe("deliverMessagingOutbound", () => {
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
 
     expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:dm-1", body: "Hello from your bot" },
+      { threadId: "fixture:dm-1", body: "Hello from your bot" },
       context,
     );
     expect(deps.rows).toEqual([
@@ -247,19 +246,19 @@ describe("deliverMessagingOutbound", () => {
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
 
     expect(deps.openDirectThread).toHaveBeenCalledTimes(1);
-    expect(deps.openDirectThread).toHaveBeenCalledWith("sendblue", "+15551234567", context);
+    expect(deps.openDirectThread).toHaveBeenCalledWith("fixture", "+15551234567", context);
     expect(deps.prisma.messagingIdentity.update).toHaveBeenCalledWith({
       where: { id: "mi-1" },
-      data: { dmThreadId: "sendblue:opened:+15551234567" },
+      data: { dmThreadId: "fixture:opened:+15551234567" },
     });
     expect(deps.sendToThread).toHaveBeenNthCalledWith(
       1,
-      { threadId: "sendblue:opened:+15551234567", body: "first" },
+      { threadId: "fixture:opened:+15551234567", body: "first" },
       context,
     );
     expect(deps.sendToThread).toHaveBeenNthCalledWith(
       2,
-      { threadId: "sendblue:opened:+15551234567", body: "second" },
+      { threadId: "fixture:opened:+15551234567", body: "second" },
       context,
     );
   });
@@ -288,38 +287,9 @@ describe("deliverMessagingOutbound", () => {
     const deps = createDeps({ run: { ...messagingRun, trigger: "bot_message" } });
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
     expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:dm-1", body: "Hello from your bot" },
+      { threadId: "fixture:dm-1", body: "Hello from your bot" },
       context,
     );
-  });
-
-  it("holds sendblue DM sends at the consecutive-outbound cap", async () => {
-    const deps = createDeps({
-      identity: {
-        provider: "sendblue",
-        outboundSinceInbound: MESSAGING_DM_OUTBOUND_CAP,
-      },
-    });
-    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-
-    expect(deps.sendToThread).not.toHaveBeenCalled();
-    expect(deps.rows).toEqual([expect.objectContaining({ kind: "dm", status: "pending" })]);
-  });
-
-  it("does not apply the sendblue outbound cap to other providers", async () => {
-    const deps = createDeps({
-      identity: {
-        provider: "slack",
-        address: "U123",
-        outboundSinceInbound: MESSAGING_DM_OUTBOUND_CAP,
-      },
-    });
-    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-
-    expect(deps.sendToThread).toHaveBeenCalled();
-    expect(deps.rows).toEqual([
-      expect.objectContaining({ kind: "dm", status: "sent", providerHandle: "handle-out-1" }),
-    ]);
   });
 
   it("returns a transient send failure to pending and schedules a delayed retry", async () => {
@@ -381,7 +351,7 @@ describe("deliverMessagingOutbound", () => {
     await deliverMessagingOutbound(deps, {}, context);
 
     expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:dm-1", body: "pending earlier" },
+      { threadId: "fixture:dm-1", body: "pending earlier" },
       context,
     );
     expect(deps.rows[0]).toEqual(expect.objectContaining({ status: "sent" }));
@@ -498,7 +468,7 @@ describe("deliverMessagingOutbound", () => {
 
     expect(deps.sendToThread).toHaveBeenCalledWith(
       {
-        threadId: "sendblue:dm-1",
+        threadId: "fixture:dm-1",
         body: "wants to connect. Reply YES to allow, NO to decline.",
       },
       context,
@@ -568,7 +538,7 @@ describe("applyMessagingOutboundStatus", () => {
     const deps = createDeps({});
     await applyMessagingOutboundStatus(deps.prisma, {
       type: "status",
-      provider: "sendblue",
+      provider: "fixture",
       handle: "h-1",
       status: "ERROR",
     });
@@ -579,7 +549,7 @@ describe("applyMessagingOutboundStatus", () => {
 
     await applyMessagingOutboundStatus(deps.prisma, {
       type: "status",
-      provider: "sendblue",
+      provider: "fixture",
       handle: "h-2",
       status: "DELIVERED",
     });
@@ -590,7 +560,7 @@ describe("applyMessagingOutboundStatus", () => {
 
     await applyMessagingOutboundStatus(deps.prisma, {
       type: "status",
-      provider: "sendblue",
+      provider: "fixture",
       handle: "h-3",
       status: "QUEUED",
     });
@@ -616,7 +586,7 @@ function createChannelDeps(
       blocks: [
         {
           kind: "channel_message",
-          provider: "sendblue",
+          provider: "fixture",
           ...(overrides.transport ? { transport: overrides.transport } : {}),
           channelId: "ch-1",
           fromAddress: "+15551111111",
@@ -629,9 +599,9 @@ function createChannelDeps(
   };
   const posterIdentity = {
     id: "mi-1",
-    provider: "sendblue",
+    provider: "fixture",
     address: "+15551111111",
-    dmThreadId: "sendblue:dm-1",
+    dmThreadId: "fixture:dm-1",
     userId: "user-1",
     spaceId: "ws-1",
     botId: "bot-1",
@@ -639,9 +609,9 @@ function createChannelDeps(
   };
   const peerIdentity = {
     id: "mi-2",
-    provider: "sendblue",
+    provider: "fixture",
     address: "+15553333333",
-    dmThreadId: "sendblue:dm-2",
+    dmThreadId: "fixture:dm-2",
     userId: "user-2",
     spaceId: "ws-2",
     botId: "bot-2",
@@ -693,8 +663,8 @@ function createChannelDeps(
     messagingChannel: {
       findUnique: vi.fn(async () => ({
         id: "ch-1",
-        provider: "sendblue",
-        threadId: "sendblue:grp-1",
+        provider: "fixture",
+        threadId: "fixture:grp-1",
         name: "Family",
         introPostedAt: null,
       })),
@@ -824,7 +794,7 @@ describe("deliverMessagingOutbound channel runs", () => {
     });
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
     expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:grp-1", body: "Alice's agent: Public update" },
+      { threadId: "fixture:grp-1", body: "Alice's agent: Public update" },
       context,
     );
   });
@@ -834,14 +804,14 @@ describe("deliverMessagingOutbound channel runs", () => {
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
 
     expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:grp-1", body: "Alice's agent: found it" },
+      { threadId: "fixture:grp-1", body: "Alice's agent: found it" },
       context,
     );
     expect(deps.rows).toEqual([
       expect.objectContaining({
         idempotencyKey: "msg:m-1",
         kind: "group",
-        threadId: "sendblue:grp-1",
+        threadId: "fixture:grp-1",
         status: "sent",
       }),
     ]);
@@ -854,7 +824,7 @@ describe("deliverMessagingOutbound channel runs", () => {
         blocks: [
           {
             kind: "channel_message",
-            provider: "sendblue",
+            provider: "fixture",
             channelId: "ch-1",
             fromAddress: "+15551111111",
             fromLabel: "Alice's agent",
@@ -878,7 +848,7 @@ describe("deliverMessagingOutbound channel runs", () => {
         blocks: [
           expect.objectContaining({
             kind: "channel_message",
-            provider: "sendblue",
+            provider: "fixture",
             transport: "SMS",
             text: "found it",
             hop: 1,
@@ -1037,49 +1007,19 @@ describe("deliverMessagingOutbound send failure classification", () => {
 });
 
 describe("deliverMessagingOutbound conversation order", () => {
-  const whatsapp = { provider: "whatsapp", address: "15551234567", dmThreadId: "whatsapp:p:1" };
+  const fixture = { provider: "fixture", address: "15551234567", dmThreadId: "fixture:p:1" };
   const part = (letter: string) => letter.repeat(3000);
   const longReply = [part("a"), part("b"), part("c")].join("\n\n");
 
-  it("queues a long WhatsApp reply as one row per message-sized part", async () => {
+  it("keeps a long reply intact in one durable outbox row", async () => {
     const deps = createDeps({
-      identity: whatsapp,
+      identity: fixture,
       messages: [{ id: "m-1", blocks: [{ kind: "text", text: longReply }] }],
     });
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-
     expect(deps.rows.map((row) => [row.idempotencyKey, row.body, row.status])).toEqual([
-      ["msg:m-1", part("a"), "sent"],
-      ["msg:m-1:2", part("b"), "sent"],
-      ["msg:m-1:3", part("c"), "sent"],
+      ["msg:m-1", longReply, "sent"],
     ]);
-    expect(deps.rows.every((row) => row.sourceMessageId === "m-1")).toBe(true);
-  });
-
-  it("re-sends only the parts that failed, in order", async () => {
-    const deps = createDeps({
-      identity: whatsapp,
-      messages: [{ id: "m-1", blocks: [{ kind: "text", text: longReply }] }],
-    });
-    deps.sendToThread
-      .mockResolvedValueOnce({ handle: "wamid.1" })
-      .mockRejectedValueOnce(new Error("WhatsApp API error"));
-    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-
-    // The third part waits behind the failed second one.
-    expect(deps.rows.map((row) => row.status)).toEqual(["sent", "pending", "pending"]);
-    expect(deps.rows[2]!.attempts ?? 0).toBe(0);
-
-    deps.rows[1]!.nextAttemptAt = new Date(Date.now() - 1);
-    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-
-    expect(deps.sendToThread.mock.calls.map((call) => (call as unknown[])[0])).toEqual(
-      [part("a"), part("b"), part("b"), part("c")].map((body) => ({
-        threadId: "whatsapp:p:1",
-        body,
-      })),
-    );
-    expect(deps.rows.map((row) => row.status)).toEqual(["sent", "sent", "sent"]);
   });
 
   it.each([
@@ -1104,7 +1044,7 @@ describe("deliverMessagingOutbound conversation order", () => {
       });
       const deps = createDeps({
         run: null,
-        identity: whatsapp,
+        identity: fixture,
         outboundRows: [
           part("p-1", "msg:m-1", 0, { status, updatedAt }),
           part("p-2", "msg:m-1:2", 1, { status: "pending" }),
@@ -1138,14 +1078,14 @@ describe("deliverMessagingOutbound conversation order", () => {
           ...pendingRow("out-3", "elsewhere", null),
           identityId: null,
           kind: "group",
-          threadId: "sendblue:grp",
+          threadId: "fixture:grp",
         },
       ],
     });
     await deliverMessagingOutbound(deps, {}, context);
 
     expect(deps.sendToThread).toHaveBeenCalledExactlyOnceWith(
-      { threadId: "sendblue:grp", body: "elsewhere" },
+      { threadId: "fixture:grp", body: "elsewhere" },
       context,
     );
     expect(deps.rows.map((row) => row.status)).toEqual(["pending", "pending", "sent"]);

@@ -198,11 +198,10 @@ describe("builtin tools", () => {
       graphicalToolsAllowed: true,
       groupId: null,
       trigger: "user",
-      semanticMemoryEnabled: true,
       cloudAgentEnabled: true,
+      semanticMemoryEnabled: false,
       historyRetrievalEnabled: true,
       messagingChannelRun: false,
-      voiceCall: true,
     };
     const ticketNames = [
       "board_tickets",

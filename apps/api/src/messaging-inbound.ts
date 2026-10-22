@@ -9,12 +9,12 @@ import {
   redeemMessagingLinkCode,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import type { MessagingReceipts } from "./messaging-receipts.js";
 import {
   MESSAGE_ROUTING_REARMED_REASON,
   MESSAGE_ROUTING_REASON,
   MESSAGE_ROUTING_RESERVATION_MS,
-} from "./team-chat-startup.js";
+} from "./external-conversation-startup.js";
+import type { MessagingReceipts } from "./messaging-receipts.js";
 import {
   deliverWebhookEvent,
   formatUntrustedDeliveryPayload,
@@ -152,14 +152,14 @@ export async function wakeMessageRoutines(
   event: MessagingInboundMessage,
   options?: {
     /**
-     * Provider prefix for the wake clientNonce. TeamChat recovery looks up
-     * nonces with TeamChatBridge.providerId (often "slack"); pass that here when
+     * Provider prefix for the wake clientNonce. external-conversation recovery looks up
+     * nonces with ExternalConversationBridge.providerId (the transport provider id); pass that here when
      * the inbound event.provider differs (e.g. teamchat-emulator).
      */
     deliveryProvider?: string;
     /**
-     * TeamChat external message id. When set, atomically reassert routine
-     * ownership before creating a run so a concurrent TeamChat agent claim
+     * external-conversation external message id. When set, atomically reassert routine
+     * ownership before creating a run so a concurrent external-conversation agent claim
      * cannot also deliver for the same provider event.
      */
     externalMessageId?: string;
@@ -186,7 +186,7 @@ export async function wakeMessageRoutines(
 
   if (options?.externalMessageId) {
     // CAS: only deliver when agent ownership has not claimed the row. Holding
-    // message_routine_routing blocks TeamChat queue() from creating a parallel run.
+    // message_routine_routing blocks external-conversation queue() from creating a parallel run.
     const reserved = await deps.prisma.externalMessage.updateMany({
       where: {
         id: options.externalMessageId,
@@ -234,7 +234,7 @@ export async function wakeMessageRoutines(
         options?.deliveryProvider ?? event.provider,
         event.handle,
       ),
-      // TeamChat channel wakes may share a live thread with an active chat run.
+      // external-conversation channel wakes may share a live thread with an active chat run.
       allowParallelRun: true,
     },
   );
@@ -242,13 +242,13 @@ export async function wakeMessageRoutines(
 }
 
 /**
- * TeamChat engagement can still receive the message, but unattended
+ * external-conversation engagement can still receive the message, but unattended
  * message-routine wakes reuse the personal-line approval boundary:
  * linked identity for DMs; approved channel member when we have membership
  * state; otherwise a linked identity so public-channel strangers cannot start
  * active routines.
  */
-export async function teamChatSenderCanWakeMessageRoutines(
+export async function externalConversationSenderCanWakeMessageRoutines(
   deps: Pick<MessagingInboundDeps, "prisma">,
   event: MessagingInboundMessage,
 ): Promise<boolean> {
@@ -273,7 +273,7 @@ export async function teamChatSenderCanWakeMessageRoutines(
     return member?.status === "approved";
   }
 
-  // Pure TeamChat workspace rooms have no personal membership ledger.
+  // Pure external-conversation workspace rooms have no personal membership ledger.
   // Still require a linked sender before waking message routines.
   return Boolean(linkedIdentity);
 }

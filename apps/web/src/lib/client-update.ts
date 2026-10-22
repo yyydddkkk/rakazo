@@ -3,7 +3,6 @@ import {
   compareBuilds,
   SERVER_BUILD_HEADER,
 } from "@rakazo/contracts";
-import { getSnapshot as activeCall } from "./call-session";
 import { CLIENT_BUILD } from "./client-build";
 import { composerHoldsUnsavedWork, hasUnsentComposerDraft } from "./composer-draft";
 import { recoveryReload } from "./preload-recovery";
@@ -31,7 +30,7 @@ export type ClientUpdateDeps = {
   servedBuild: () => Promise<string | null>;
   /** The shared recovery reload; false when its loop guard refused. */
   reload: () => boolean;
-  /** Work a reload would lose at any moment: a call, a send in flight, attachments in memory. */
+  /** Work a reload would lose at any moment: a send in flight, attachments in memory. */
   holdsUnsavedWork: () => boolean;
   /** Also saved-but-unsent text, which blocks only the idle reload. */
   hasUnsentDraft: () => boolean;
@@ -209,7 +208,7 @@ export function clientUpdates(): ReturnType<typeof createClientUpdates> {
       return response.ok ? (await response.text()).trim() : null;
     },
     reload: recoveryReload,
-    holdsUnsavedWork: () => activeCall() !== null || composerHoldsUnsavedWork(),
+    holdsUnsavedWork: () => composerHoldsUnsavedWork(),
     hasUnsentDraft: () => hasUnsentComposerDraft(),
     now: () => Date.now(),
     setInterval: (callback, ms) => window.setInterval(callback, ms),

@@ -177,7 +177,12 @@ describe("api and worker environment allowlists", () => {
   it("finds the reads it is meant to find", () => {
     const api = expectedKeys("api");
     const worker = expectedKeys("worker");
-    for (const key of ["DATABASE_URL", "ENCRYPTION_KEY", "OPENROUTER_API_KEY", "E2B_API_KEY"]) {
+    for (const key of [
+      "DATABASE_URL",
+      "ENCRYPTION_KEY",
+      "OPENROUTER_API_KEY",
+      "SANDBOX_SUPERVISOR_URL",
+    ]) {
       expect(api).toContain(key);
       expect(worker).toContain(key);
     }

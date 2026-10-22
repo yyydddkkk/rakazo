@@ -40,18 +40,18 @@ export interface MessagingPlatform {
   adapter: Adapter;
   /**
    * The adapter's own thread-id prefix when it differs from `provider`, so
-   * one adapter type can mount more than once (one Telegram bot per space:
-   * "telegram-work"). Rakazo only ever sees `provider`-prefixed thread ids;
+   * one adapter type can mount more than once (multiple independently configured adapters:
+   * "fixture-work"). Rakazo only ever sees `provider`-prefixed thread ids;
    * the adapter keeps its native ones. Defaults to `provider`.
    */
   adapterName?: string;
-  /** Deterministic 1:1 thread id for platforms without openDM (sendblue). */
+  /** Deterministic 1:1 thread id for platforms without openDM. */
   directThreadId?: (address: string) => string;
-  /** Delivery-status events the Chat SDK drops (sendblue is_outbound posts, WhatsApp statuses). */
+  /** Delivery-status events not forwarded by the Chat SDK. */
   peekStatuses?: (payload: unknown) => MessagingOutboundStatus[];
   /**
    * State keys the adapter writes to drop vendor redeliveries of a webhook
-   * (Slack's per-event marker). Cleared when the inbound sink fails so the
+   * (a per-event marker). Cleared when the inbound sink fails so the
    * vendor's retry is processed instead of acknowledged and dropped.
    */
   redeliveryKeys?: (payload: unknown) => string[];
@@ -88,8 +88,8 @@ interface MountedPlatform {
  * contract.
  *
  * Each platform gets its own Chat instance: the SDK routes thread ids by
- * their adapter-name prefix, so two adapters of the same type (two Telegram
- * bots, both minting "telegram:<chatId>") cannot share one instance. The
+ * their adapter-name prefix, so two adapters of the same type (two adapters
+ * both minting the same native thread prefix) cannot share one instance. The
  * surface rewrites that prefix to the platform's provider at the boundary.
  */
 export class ChatSdkMessagingSurface implements MessagingSurface {
@@ -174,13 +174,10 @@ export class ChatSdkMessagingSurface implements MessagingSurface {
   ): Promise<MessagingSendResult> {
     const mounted = this.mountedForThread(request.threadId);
     await this.ensureInitialized();
-    // Telegram converts Markdown and retries parse errors as plain text. Keep
-    // other adapters' existing payloads (Slack markdown_text has a lower limit).
-    const message = mounted.adapterName === "telegram" ? { markdown: request.body } : request.body;
     try {
       const sent = await mounted.chat
         .thread(toAdapterThreadId(mounted, request.threadId))
-        .post(message);
+        .post(request.body);
       const handle = "id" in sent && typeof sent.id === "string" ? sent.id : "";
       return { handle };
     } catch (error) {
@@ -249,27 +246,16 @@ export class ChatSdkMessagingSurface implements MessagingSurface {
       .flatMap((message) => this.toInbound(mounted, adapterThreadId, isDirect, message) ?? []);
   }
 
-  /**
-   * Proactively start the underlying Chat SDK instance. Webhook handling
-   * and outbound sends already trigger this lazily (see ensureInitialized
-   * below), but a polling-mode adapter (Telegram in "auto" mode with no
-   * public webhook URL registered) needs its pull loop running before the
-   * first inbound message can ever arrive, so long-running hosts call this
-   * explicitly at startup instead of waiting on the first send.
-   */
+  /** Initialize webhook and outbound SDK state before accepting work. */
   async initialize(): Promise<void> {
     await this.ensureInitialized();
   }
 
-  /**
-   * Stop Telegram getUpdates before exit. Chat.shutdown() only calls
-   * adapter.disconnect(), which Telegram does not implement.
-   */
+  /** Disconnect the mounted SDK instances during shutdown. */
   async shutdown(): Promise<void> {
     const pending = this.initialized;
     this.initialized = undefined;
     if (pending) await pending.catch(() => undefined);
-    await this.stopPollingAdapters();
     await this.shutdownChats();
   }
 
@@ -283,10 +269,7 @@ export class ChatSdkMessagingSurface implements MessagingSurface {
         () => undefined,
         async (error: unknown) => {
           try {
-            // Telegram may already be polling if another platform's
-            // initialize failed after Telegram's started getUpdates.
             await Promise.allSettled(chats);
-            await this.stopPollingAdapters();
             await this.shutdownChats();
           } finally {
             this.initialized = undefined;
@@ -296,13 +279,6 @@ export class ChatSdkMessagingSurface implements MessagingSurface {
       );
     }
     return this.initialized;
-  }
-
-  private async stopPollingAdapters(): Promise<void> {
-    for (const { platform } of this.byProvider.values()) {
-      const adapter = platform.adapter as { stopPolling?: () => Promise<void> };
-      await adapter.stopPolling?.().catch(() => undefined);
-    }
   }
 
   private async shutdownChats(): Promise<void> {
@@ -348,7 +324,7 @@ export class ChatSdkMessagingSurface implements MessagingSurface {
     });
     const payload = parseJson(body);
     if (drain.failedKeys.length > 0) {
-      // Chat marks a message seen before our handler runs (and Slack marks the
+      // Chat marks a message seen before our handler runs (and an adapter may mark the
       // event delivered), so the vendor's retry would be acknowledged and
       // dropped. Forget the failed deliveries; the sink's per-message client
       // nonce still dedupes anything that partly succeeded.
@@ -423,7 +399,7 @@ function inboundAttachments(message: Message): MessagingInboundAttachment[] {
 }
 
 /**
- * The SDK's message.text keeps only a link's label, so a Slack link labelled
+ * The SDK's message.text keeps only a link's label, so a link labelled
  * `example.com/projects/…` reaches the model without its target.
  */
 function plainTextWithLinks(message: Message): string {
@@ -448,7 +424,7 @@ export function providerOfThreadId(threadId: string): string {
   return threadId.split(":", 1)[0] ?? "";
 }
 
-/** Adapter-native thread id ("telegram:42") → Rakazo thread id ("telegram-work:42"). */
+/** Adapter-native thread id ("fixture:42") → mounted provider thread id ("fixture-work:42"). */
 function toProviderThreadId(mounted: MountedPlatform, threadId: string): string {
   const { provider } = mounted.platform;
   if (mounted.adapterName === provider) return threadId;
@@ -540,7 +516,7 @@ export class MessagingSendError extends Error {
 }
 
 function sendError(platform: MessagingPlatform, error: unknown): MessagingSendError {
-  // Chat SDK AdapterRateLimitError and Slack's rate-limited error both carry seconds.
+  // Chat SDK rate-limit errors carry retry delays in seconds.
   const seconds = (error as { retryAfter?: unknown } | null)?.retryAfter;
   return new MessagingSendError(error, {
     permanent: platform.isPermanentSendError?.(error) ?? false,

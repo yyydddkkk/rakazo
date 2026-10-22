@@ -13,7 +13,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/rpc", () => ({
   rpc: {
     bots: { get: vi.fn(), update: vi.fn(), restoreInstructions: vi.fn() },
-    voice: { voices: vi.fn().mockResolvedValue([]) },
     models: {
       credentials: vi.fn().mockResolvedValue([]),
       list: vi.fn().mockResolvedValue([]),
@@ -99,7 +98,6 @@ function bot(description = "Billing", overrides: Partial<Bot> = {}): Bot {
     archivedAt: null,
     unread: false,
     parentBotId: null,
-    memoryScope: null,
     threadId: "thread-1",
     preview: "",
     status: "idle",
@@ -107,8 +105,6 @@ function bot(description = "Billing", overrides: Partial<Bot> = {}): Bot {
     computerMode: "team",
     updatedAt: "2026-09-01T00:00:00.000Z",
     createdAt: "2026-09-01T00:00:00.000Z",
-    voiceId: null,
-    autoSpeak: false,
     modelProvider: null,
     modelId: null,
     thinkingLevel: null,
@@ -133,7 +129,6 @@ async function render(description = "Billing", overrides: Partial<Bot> = {}) {
     root.render(
       <BotSettings
         bot={bot(description, overrides)}
-        memoryProviderConfigured={false}
         onSkillsChange={() => undefined}
         onSave={onSave}
         onExport={async () => undefined}
@@ -197,9 +192,6 @@ afterEach(async () => {
 });
 
 it("keeps advanced controls inside the disclosure in the shared order", async () => {
-  vi.mocked(rpc.voice.voices).mockResolvedValueOnce([
-    { id: "fixture-voice", label: "Fixture voice" },
-  ]);
   await render();
   const advanced = container.querySelector<HTMLElement>('[data-testid="bot-settings-advanced"]')!;
   expect(advanced.querySelector("button[aria-expanded]")?.getAttribute("aria-expanded")).toBe(
@@ -212,8 +204,6 @@ it("keeps advanced controls inside the disclosure in the shared order", async ()
     instructions: "Instructions",
     computer: "Computer",
     model: "Model",
-    readAloud: "Read replies aloud",
-    voice: "Voice",
     fleetManagement: "Manage the bots it creates",
     scratchpad: "Open work",
     knowledge: "Memory / Shared skills",

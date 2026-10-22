@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { fakeBoatProvider } from "./boat-sandbox.test-support.js";
 import {
   ComputerScreenUnavailableError,
   isComputerScreenUnavailable,
@@ -112,24 +111,6 @@ describe("Team Computer parallel screens", () => {
       }),
     ).resolves.toEqual({ error: expect.stringMatching(/temporarily busy/) });
     expect(isComputerScreenUnavailable(new Error("cannot allocate another screen"))).toBe(true);
-  });
-
-  it("lets Team bots use independent Boat screens concurrently", async () => {
-    const boat = fakeBoatProvider();
-    expect(boat.describe().capabilities.multiScreen).toBe(true);
-    const computer = await boat.provision({ botId: "team-home", homePath: "/tmp" }, writer);
-    await boat.observe(computer, writer);
-    await boat.connectScreen(computer, { view: "stream" }, researcher);
-    await expect(boat.observe(computer, writer)).resolves.toMatchObject({
-      mimeType: "image/png",
-    });
-    await expect(boat.observe(computer, researcher)).resolves.toMatchObject({
-      mimeType: "image/png",
-    });
-    await boat.releaseScreen(computer, writer);
-    await expect(boat.observe(computer, researcher)).resolves.toMatchObject({
-      mimeType: "image/png",
-    });
   });
 
   it("refuses a second graphical session on single-screen providers", () => {

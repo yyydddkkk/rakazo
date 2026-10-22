@@ -245,7 +245,7 @@ export async function loadWebhookTarget(
   };
 }
 
-/** Idempotency key shared by messaging wakes and TeamChat duplicate-skip lookups. */
+/** Idempotency key shared by messaging wakes and external-conversation duplicate-skip lookups. */
 export function messagingWakeIdempotencyKey(provider: string, handle: string): string {
   return `${provider}:${handle}`;
 }

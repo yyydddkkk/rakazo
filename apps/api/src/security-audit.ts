@@ -46,10 +46,6 @@ export const AUDITED_PROCEDURES: Record<string, AuditedProcedure> = {
     fields: ["botId", "name"],
   },
   "bots.rotateWebhookSecret": { type: "credential.changed", kind: "webhook", fields: ["botId"] },
-  "voice.connect": { type: "credential.created", kind: "voice", fields: ["provider"] },
-  "voice.disconnect": { type: "credential.deleted", kind: "voice", fields: ["provider"] },
-  "memory.connectProvider": { type: "credential.created", kind: "memory" },
-  "memory.disconnectProvider": { type: "credential.deleted", kind: "memory" },
   "mcp.assignments.approve": {
     type: "approval.decided",
     kind: "mcp",

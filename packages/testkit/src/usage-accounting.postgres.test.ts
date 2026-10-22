@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
+import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
 import { recordUsage, runAsSystem } from "@rakazo/db";
 import { describe, expect, it } from "vitest";
 import { runAutoReviewJudge } from "../../adapters/src/auto-review.js";
@@ -96,7 +96,7 @@ describe.skipIf(!enabled)("persisted Pi usage accounting", () => {
         contextStrategy: "current",
         wakeupDriver: "memory",
 
-        composio: new ComposioConnector({ client: new FakeComposioClient() }),
+        connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
         encryptionKey: "usage-fixture-encryption-key",
       });
       stop = handles.stop;
@@ -239,7 +239,6 @@ describe.skipIf(!enabled)("persisted Pi usage accounting", () => {
             prisma: handles.prisma,
             runtime: handles.runtime,
             jobs: handles.jobs,
-            memoryProviders: { resolve: async () => null },
             resolveModel: async (scope) => handles.executor.resolveModel(scope),
           },
           thread.id,

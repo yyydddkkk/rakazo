@@ -4,7 +4,6 @@ import {
   captureScreenshot,
   completeOnboarding,
   expandAdvancedSection,
-  realSandboxTimeout,
   rpc,
   setupAdmin,
   showPasswordForm,
@@ -61,10 +60,10 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await page.keyboard.press("Enter");
   await expect(
     page.getByText(/handing you the computer|sign in to continue|protected input/i).first(),
-  ).toBeVisible({ timeout: realSandboxTimeout(90_000, 30_000) });
+  ).toBeVisible({ timeout: 30_000 });
   await expect
     .poll(() => threadRunStatus(page), {
-      timeout: realSandboxTimeout(90_000, 30_000),
+      timeout: 30_000,
       message: "the protected-input run must be ready for takeover",
     })
     .toBe("waiting_takeover");
@@ -81,20 +80,19 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Skip", exact: true }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: "I’m done", exact: true }).last()).toBeVisible();
-  if (process.env.SANDBOX_PROVIDER === "boat") await waitForBoatFramebuffer(page);
   await captureScreenshot(page, testInfo, "09-computer-takeover-outcomes");
   await page.getByRole("button", { name: "I’m done", exact: true }).last().click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
   await page.getByRole("button", { name: "Close computer" }).click();
   await expect(page.getByText(/signed in|session stays/i).first()).toBeVisible({
-    timeout: realSandboxTimeout(90_000, 30_000),
+    timeout: 30_000,
   });
 
   await composer.fill("sign in again so I can skip this time");
   await page.keyboard.press("Enter");
   await expect
     .poll(() => threadRunStatus(page), {
-      timeout: realSandboxTimeout(90_000, 30_000),
+      timeout: 30_000,
       message: "the second protected-input run must be ready for takeover",
     })
     .toBe("waiting_takeover");
@@ -126,7 +124,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
   await page.getByRole("button", { name: "Close computer" }).click();
   await expect(page.getByText(/login was skipped/i).last()).toBeVisible({
-    timeout: realSandboxTimeout(90_000, 30_000),
+    timeout: 30_000,
   });
   await captureScreenshot(page, testInfo, "09a-computer-takeover-skipped");
 
@@ -178,7 +176,6 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await expect(page.getByRole("button", { name: "Add Treg", exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Add MCP server", exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Add OpenAPI", exact: true })).toBeHidden();
-  await expect(page.getByRole("button", { name: "Add GraphQL", exact: true })).toBeHidden();
   await expect(page.getByText("Tool sources", { exact: true })).toBeHidden();
   await expect(
     page.getByText("Connect apps or add Treg, MCP, and OpenAPI tool sources.", { exact: true }),
@@ -257,7 +254,6 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   const advanced = page.getByTestId("integrations-advanced");
   const browseMcp = page.getByRole("button", { name: "Browse MCP servers", exact: true });
   await expect(browseMcp).toBeHidden();
-  await expect(page.getByRole("button", { name: "Add GraphQL", exact: true })).toBeHidden();
   await expandAdvancedSection(advanced);
   await expect(
     advanced.getByRole("button", { name: "Browse MCP servers", exact: true }),
@@ -265,21 +261,19 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await expect(page.getByRole("button", { name: "Manage MCP servers", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add MCP server", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add OpenAPI", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add GraphQL", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Executor", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Treg", exact: true })).toBeVisible();
   await expect(page.getByText("Tool sources", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "MCP servers", exact: true })).toBeHidden();
   await expect(page.getByTestId("integrations-catalog-feed")).toBeVisible();
-  // Catalog Search is optional chrome; add buttons stay MCP → OpenAPI → GraphQL → Executor → Treg.
+  // Catalog Search is optional chrome; source controls include the MCP presets.
   const advancedActions = advanced.getByTestId("integrations-advanced-add").locator("button");
-  await expect(advancedActions).toHaveCount(5);
+  await expect(advancedActions).toHaveCount(4);
   await expect(advancedActions.nth(0)).toHaveText("Add MCP server");
   await expect(advancedActions.nth(1)).toHaveText("Add OpenAPI");
-  await expect(advancedActions.nth(2)).toHaveText("Add GraphQL");
-  await expect(advancedActions.nth(3)).toHaveText("Add Executor");
-  await expect(advancedActions.nth(4)).toHaveText("Add Treg");
-  await captureScreenshot(page, testInfo, "01-graphql-advanced-order");
+  await expect(advancedActions.nth(2)).toHaveText("Add Executor");
+  await expect(advancedActions.nth(3)).toHaveText("Add Treg");
+  await captureScreenshot(page, testInfo, "01-tool-sources-advanced-order");
 
   const feed = page.getByTestId("integrations-catalog-feed");
   await feed.getByRole("textbox", { name: "Integration domain" }).fill("github.com");
@@ -287,7 +281,6 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await expect(feed.getByText("GitHub", { exact: true })).toBeVisible();
   await expect(feed.getByRole("button", { name: "MCP · Add", exact: true })).toBeVisible();
   await expect(feed.getByRole("button", { name: "OPENAPI · Add", exact: true })).toBeVisible();
-  await expect(feed.getByRole("button", { name: "GRAPHQL · Manual", exact: true })).toBeDisabled();
   await expect(feed.getByRole("button", { name: "CLI · Manual", exact: true })).toBeDisabled();
   // Editing the query must drop prior results so a stale Add cannot run for the old domain.
   await feed.getByRole("textbox", { name: "Integration domain" }).fill("gitlab.com");
@@ -339,17 +332,6 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
     page.getByText(/MCP · https:\/\/executor\.example\.test\/mcp · credential saved/),
   ).toBeVisible();
   await captureScreenshot(page, testInfo, "11d-provider-emulators");
-
-  await page.getByRole("button", { name: "Add GraphQL", exact: true }).click();
-  await page.getByPlaceholder("Display name").fill("Browser GraphQL");
-  await page
-    .getByPlaceholder("https://example.com/graphql")
-    .fill("https://graphql.example.test/graphql");
-  await page.getByRole("button", { name: "Verify and add", exact: true }).click();
-  await expect(
-    page.getByText(/GRAPHQL · https:\/\/graphql\.example\.test\/graphql · no auth/),
-  ).toBeVisible();
-  await captureScreenshot(page, testInfo, "02-graphql-installed");
 
   await page.getByRole("button", { name: "Close integrations" }).click();
 
@@ -532,27 +514,4 @@ async function threadRunStatus(page: Page) {
     botId: activeBotId(page),
   });
   return result.run?.status ?? "idle";
-}
-
-async function waitForBoatFramebuffer(page: Page) {
-  await expect
-    .poll(
-      async () => {
-        for (const frame of page.frames()) {
-          if (frame === page.mainFrame()) continue;
-          const canvas = frame.locator("canvas").first();
-          if ((await canvas.count()) === 0) continue;
-          const ready = await canvas
-            .evaluate((element) => {
-              const framebuffer = element as HTMLCanvasElement;
-              return framebuffer.width > 0 && framebuffer.height > 0;
-            })
-            .catch(() => false);
-          if (ready) return true;
-        }
-        return false;
-      },
-      { timeout: 60_000, message: "the Boat noVNC framebuffer must be ready" },
-    )
-    .toBe(true);
 }

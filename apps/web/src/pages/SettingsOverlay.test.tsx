@@ -38,21 +38,14 @@ vi.mock("./AccountSettingsOverlay", () => ({
   UpdatesSettingsPanel: () => null,
   UsageSettingsPanel: () => null,
 }));
-const { memoryConfigs, updaterStatus } = vi.hoisted(() => ({
-  memoryConfigs: [] as unknown[],
+const { updaterStatus } = vi.hoisted(() => ({
   updaterStatus: vi.fn(async (): Promise<unknown> => ({ installKind: "compose" })),
 }));
 vi.mock("../lib/rpc", () => ({
   rpc: { updater: { status: updaterStatus } },
 }));
-vi.mock("./MemorySettingsOverlay", () => ({
-  MemorySettingsOverlay: ({ config }: { config: unknown }) => {
-    memoryConfigs.push(config);
-    return null;
-  },
-}));
+vi.mock("./MemorySettingsOverlay", () => ({ MemorySettingsOverlay: () => null }));
 vi.mock("./ModelSettingsOverlay", () => ({ ModelSettingsOverlay: () => null }));
-vi.mock("./VoiceSettingsOverlay", () => ({ VoiceSettingsOverlay: () => null }));
 vi.mock("../components/ComputersUnavailableHint", () => ({
   computersAreUnavailable: () => false,
 }));
@@ -76,8 +69,6 @@ async function render(props: Partial<React.ComponentProps<typeof SettingsOverlay
           onAvatarStyleChange={async () => undefined}
           timezone={null}
           onTimezoneChange={async () => undefined}
-          memoryConfig={null}
-          onMemoryConfigChange={() => undefined}
           onClose={() => undefined}
           {...next}
         />,

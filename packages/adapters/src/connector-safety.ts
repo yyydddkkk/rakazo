@@ -53,3 +53,31 @@ function redactPayloadValue(value: unknown, secrets: string[]): unknown {
     ]),
   );
 }
+
+export function collectLogIds(value: unknown): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    for (const [key, nested] of Object.entries(record)) {
+      if (
+        (key === "logId" || key === "log_id") &&
+        typeof nested === "string" &&
+        nested &&
+        !seen.has(nested)
+      ) {
+        seen.add(nested);
+        ids.push(nested);
+      } else {
+        walk(nested);
+      }
+    }
+  };
+  walk(value);
+  return ids;
+}

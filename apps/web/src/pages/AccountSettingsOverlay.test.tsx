@@ -5,7 +5,6 @@ import type * as UiWeb from "@rakazo/ui-web";
 import type { ReactNode } from "react";
 import { act, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@lingui/react/macro", () => ({
@@ -274,36 +273,6 @@ it.each([
     expect(container.textContent).toContain(expected);
   } finally {
     await act(async () => root.unmount());
-    vi.unstubAllGlobals();
-  }
-});
-
-it("renders the server integrations entry as a plain link", async () => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  try {
-    await act(async () => {
-      root.render(
-        <MemoryRouter>
-          <GeneralSettingsPanels
-            name="Jamie"
-            avatarStyle="robot"
-            onAvatarStyleChange={async () => undefined}
-            isDeploymentOwner
-          />
-        </MemoryRouter>,
-      );
-    });
-
-    const link = container.querySelector('a[href="/integrations/setup"]');
-    if (!link) throw new Error("Missing server integrations link");
-    expect(link.hasAttribute("type")).toBe(false);
-    expect(link.hasAttribute("role")).toBe(false);
-  } finally {
-    await act(async () => root.unmount());
-    container.remove();
     vi.unstubAllGlobals();
   }
 });

@@ -194,7 +194,6 @@ async function runTurn(
     },
     home: { commit: vi.fn(async () => "fixture-revision") },
     memory: { read: async () => ({ documents: [] }) },
-    memoryProviders: { resolve: async () => null },
     events: { append, finalizeRun },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets,

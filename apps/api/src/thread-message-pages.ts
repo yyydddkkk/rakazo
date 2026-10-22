@@ -2,7 +2,6 @@ import type { MessageBlock, ThreadMessage, ThreadMessagePage } from "@rakazo/con
 import { MessageBlock as MessageBlockSchema } from "@rakazo/contracts";
 import {
   BACKGROUND_RUN_TRIGGERS,
-  callIdFromClientNonce,
   isBackgroundInputBlock,
   isBackgroundRunTrigger,
   isPeerReceiptBlocks,
@@ -290,7 +289,6 @@ function toThreadMessage(row: {
     replyQuote: row.replyQuote ?? undefined,
     replyPreview,
     runId: row.runId ?? undefined,
-    callId: callIdFromClientNonce(row.clientNonce),
     createdAt: row.createdAt.toISOString(),
   };
 }

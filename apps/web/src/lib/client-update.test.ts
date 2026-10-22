@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./rpc", () => ({ onRpcResponse: () => () => {} }));
-vi.mock("./call-session", () => ({ getSnapshot: () => null }));
 
 import type { ClientUpdateDeps } from "./client-update";
 import {

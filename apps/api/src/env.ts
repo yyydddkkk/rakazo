@@ -1,18 +1,13 @@
-import type { TelegramBotCredentials } from "@rakazo/adapters";
 import {
-  boatApiKeyFromEnv,
-  boatApiUrlFromEnv,
   mcpStdioOptionsFromEnv,
   resolveCloudAgentProvider,
   resolveDeploymentModel,
   resolveSandboxProvider,
   secretStoreOptionsFromEnv,
-  telegramBotsFromEnv,
 } from "@rakazo/adapters";
 import type { MinimumClientBuilds } from "@rakazo/contracts";
 import { parseMinimumClientBuilds } from "@rakazo/contracts";
 import {
-  phoneCallSettings,
   resolveAuthSecret,
   resolveContentEncryption,
   resolveEncryptionKey,
@@ -49,9 +44,6 @@ export interface AppEnv {
   /** Opt-in Pi JSONL session recording under DATA_DIR/pi-sessions. Default off. */
   piSessionRecording: boolean;
   ticketBoardEnabled: boolean;
-  phoneCallsEnabled: boolean;
-  phoneCallRingSeconds: number;
-  phoneCallCooldownMinutes: number;
   maxUploadSizeBytes: number;
   sandboxSupervisorUrl: string;
   sandboxSupervisorToken: string | undefined;
@@ -66,47 +58,22 @@ export interface AppEnv {
   deploymentModelConfigured: boolean;
   /** The deployment default model runs on the host's credentials rather than a key. */
   deploymentModelHostCredentials: boolean;
-  e2bApiKey: string | undefined;
-  daytonaApiKey: string | undefined;
-  daytonaApiUrl: string | undefined;
-  daytonaTarget: string | undefined;
-  boatApiKey: string | undefined;
-  boatApiUrl: string | undefined;
-  composioApiKey: string | undefined;
   /** Optional integrations.sh-compatible catalog base URL. */
   integrationsCatalogUrl: string | undefined;
-  pipedreamClientId: string | undefined;
-  pipedreamClientSecret: string | undefined;
-  pipedreamProjectId: string | undefined;
-  pipedreamEnvironment: "development" | "production";
-  sendblueApiKeyId: string | undefined;
-  sendblueApiSecret: string | undefined;
-  sendblueSigningSecret: string | undefined;
-  sendbluePhoneNumber: string | undefined;
   expoAccessToken: string | undefined;
   smtpUrl: string | undefined;
   emailFrom: string | undefined;
   emailEmulator: boolean;
-  slackBotToken: string | undefined;
-  slackSigningSecret: string | undefined;
-  whatsappAccessToken: string | undefined;
-  whatsappPhoneNumberId: string | undefined;
-  whatsappAppSecret: string | undefined;
-  whatsappVerifyToken: string | undefined;
-  telegramBotToken: string | undefined;
-  telegramWebhookSecret: string | undefined;
-  /** Extra named Telegram bots (TELEGRAM_BOT_TOKEN_<NAME>), e.g. one per space. */
-  telegramBots?: TelegramBotCredentials[];
   larkAppId: string | undefined;
   larkAppSecret: string | undefined;
   larkVerificationToken: string | undefined;
   larkEncryptKey: string | undefined;
   larkDomain: string | undefined;
-  /** Bot that owns team/external chat rooms on the messaging surface. */
-  teamChatBotId: string | undefined;
+  /** Bot that owns linked external conversations. */
+  externalConversationBotId: string | undefined;
   /** Optional model override for ambient engagement judging. */
-  teamChatJudgeProvider: string | undefined;
-  teamChatJudgeModel: string | undefined;
+  externalConversationJudgeProvider: string | undefined;
+  externalConversationJudgeModel: string | undefined;
   defaultProvider: string;
   defaultModel: string;
   wakeupDriver: string;
@@ -169,7 +136,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     dataDir: source.DATA_DIR ?? "./data",
     piSessionRecording: source.PI_SESSION_RECORDING === "true",
     ticketBoardEnabled: source.TICKET_BOARD_ENABLED === "true",
-    ...phoneCallSettings(source),
     maxUploadSizeBytes: uploadSizeFromEnv(source),
     sandboxSupervisorUrl: source.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     sandboxSupervisorToken:
@@ -184,44 +150,19 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     deploymentModelKey: deploymentModel.key,
     deploymentModelConfigured: deploymentModel.configured,
     deploymentModelHostCredentials: deploymentModel.hostCredentials,
-    e2bApiKey: source.E2B_API_KEY,
-    daytonaApiKey: source.DAYTONA_API_KEY,
-    daytonaApiUrl: source.DAYTONA_API_URL,
-    daytonaTarget: source.DAYTONA_TARGET,
-    boatApiKey: boatApiKeyFromEnv(source),
-    boatApiUrl: boatApiUrlFromEnv(source),
-    composioApiKey: source.COMPOSIO_API_KEY,
     integrationsCatalogUrl: optional(source.INTEGRATIONS_CATALOG_URL),
-    pipedreamClientId: optional(source.PIPEDREAM_CLIENT_ID),
-    pipedreamClientSecret: optional(source.PIPEDREAM_CLIENT_SECRET),
-    pipedreamProjectId: optional(source.PIPEDREAM_PROJECT_ID),
-    pipedreamEnvironment:
-      source.PIPEDREAM_ENVIRONMENT === "production" ? "production" : "development",
-    sendblueApiKeyId: optional(source.SENDBLUE_API_KEY_ID),
-    sendblueApiSecret: optional(source.SENDBLUE_API_SECRET),
-    sendblueSigningSecret: optional(source.SENDBLUE_SIGNING_SECRET),
-    sendbluePhoneNumber: optional(source.SENDBLUE_PHONE_NUMBER),
     expoAccessToken: optional(source.EXPO_ACCESS_TOKEN),
     smtpUrl: optional(source.SMTP_URL),
     emailFrom: optional(source.EMAIL_FROM),
     emailEmulator: source.EMAIL_EMULATOR === "true" && source.NODE_ENV !== "production",
-    slackBotToken: optional(source.SLACK_BOT_TOKEN),
-    slackSigningSecret: optional(source.SLACK_SIGNING_SECRET),
-    whatsappAccessToken: optional(source.WHATSAPP_ACCESS_TOKEN),
-    whatsappPhoneNumberId: optional(source.WHATSAPP_PHONE_NUMBER_ID),
-    whatsappAppSecret: optional(source.WHATSAPP_APP_SECRET),
-    whatsappVerifyToken: optional(source.WHATSAPP_VERIFY_TOKEN),
-    telegramBotToken: optional(source.TELEGRAM_BOT_TOKEN),
-    telegramWebhookSecret: optional(source.TELEGRAM_WEBHOOK_SECRET_TOKEN),
-    telegramBots: telegramBotsFromEnv(source),
     larkAppId: optional(source.LARK_APP_ID),
     larkAppSecret: optional(source.LARK_APP_SECRET),
     larkVerificationToken: optional(source.LARK_VERIFICATION_TOKEN),
     larkEncryptKey: optional(source.LARK_ENCRYPT_KEY),
     larkDomain: optional(source.LARK_DOMAIN),
-    teamChatBotId: optional(source.TEAM_CHAT_BOT_ID) ?? optional(source.SLACK_RAKAZO_BOT_ID),
-    teamChatJudgeProvider: optional(source.TEAM_CHAT_JUDGE_PROVIDER),
-    teamChatJudgeModel: optional(source.TEAM_CHAT_JUDGE_MODEL),
+    externalConversationBotId: optional(source.EXTERNAL_CONVERSATION_BOT_ID),
+    externalConversationJudgeProvider: optional(source.EXTERNAL_CONVERSATION_JUDGE_PROVIDER),
+    externalConversationJudgeModel: optional(source.EXTERNAL_CONVERSATION_JUDGE_MODEL),
     defaultProvider: deploymentModel.provider,
     defaultModel: deploymentModel.model,
     wakeupDriver: source.WAKEUP_DRIVER ?? "graphile",

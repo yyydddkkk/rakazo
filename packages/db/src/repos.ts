@@ -4,8 +4,6 @@ import {
   BACKGROUND_RUN_TRIGGERS,
   displayName,
   isBackgroundRunTrigger,
-  phoneCallSettings,
-  ringingCall,
   userVisibleMessages,
 } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
@@ -69,13 +67,10 @@ function mapBot(
     sectionId: string | null;
     archivedAt: Date | null;
     parentBotId: string | null;
-    memoryScope: string | null;
     createdAt: Date;
     updatedAt: Date;
     thread: { id: string; unread: boolean } | null;
     computer: { scope: string } | null;
-    voiceId?: string | null;
-    autoSpeak?: boolean;
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: string | null;
@@ -90,7 +85,6 @@ function mapBot(
   status = "idle",
   runErrorId: string | null = null,
   updatedAt: Date = bot.updatedAt,
-  incomingCall: Bot["incomingCall"] = null,
 ): Bot {
   if (!bot.thread) {
     throw new IsolationError("Bot is missing its thread");
@@ -111,7 +105,6 @@ function mapBot(
     archivedAt: bot.archivedAt?.toISOString() ?? null,
     unread: bot.thread.unread,
     parentBotId: bot.parentBotId,
-    memoryScope: bot.memoryScope as "isolated" | "shared" | null,
     threadId: bot.thread.id,
     preview,
     status,
@@ -119,8 +112,6 @@ function mapBot(
     computerMode: bot.computer ? parseComputerMode(bot.computer.scope) : "team",
     createdAt: bot.createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
-    voiceId: bot.voiceId ?? null,
-    autoSpeak: bot.autoSpeak ?? false,
     modelProvider: bot.modelProvider ? canonicalPiProviderId(bot.modelProvider) : null,
     modelId: bot.modelId ?? null,
     thinkingLevel: (bot.thinkingLevel as Bot["thinkingLevel"]) ?? null,
@@ -130,14 +121,10 @@ function mapBot(
     disabledBuiltinTools: bot.disabledBuiltinTools ?? [],
     webhookConfigured: Boolean(bot.webhookSecretId),
     spawnKey: bot.spawnKey ?? null,
-    incomingCall,
   };
 }
 
-export function createRepos(
-  prisma: PrismaClient,
-  capabilities: { phoneCallsEnabled?: boolean; phoneCallRingSeconds?: number } = {},
-) {
+export function createRepos(prisma: PrismaClient) {
   async function listBotSectionsForSpaces(
     actor: Actor,
     spaceIds: string[],
@@ -365,30 +352,6 @@ export function createRepos(
         }),
         SIDEBAR_PREVIEW_MESSAGE_WINDOW,
       );
-      const callThreadIds = capabilities.phoneCallsEnabled
-        ? bots.flatMap((bot) => (bot.thread ? [bot.thread.id] : []))
-        : [];
-      const callMessages = callThreadIds.length
-        ? await prisma.message.findMany({
-            where: {
-              threadId: { in: callThreadIds },
-              createdAt: {
-                gt: new Date(
-                  Date.now() -
-                    (capabilities.phoneCallRingSeconds ??
-                      phoneCallSettings().phoneCallRingSeconds) *
-                      1000,
-                ),
-              },
-              role: "bot",
-              clientNonce: { startsWith: "call:", endsWith: ":request" },
-            },
-            orderBy: { seq: "desc" },
-            distinct: ["threadId"],
-            select: { threadId: true, role: true, blocks: true },
-          })
-        : [];
-      const callsByThread = new Map(callMessages.map((message) => [message.threadId, message]));
       const candidateRunIds = [
         ...new Set(
           bots.flatMap((bot) =>
@@ -459,11 +422,6 @@ export function createRepos(
             bot.runs[0]?.status ?? "idle",
             rosterRunErrorId(bot.thread?.runs[0], bot.runs[0]),
             updatedAt,
-            ringingCall(
-              bot.thread && callsByThread.has(bot.thread.id)
-                ? [callsByThread.get(bot.thread.id)!]
-                : [],
-            ),
           );
         }),
       );

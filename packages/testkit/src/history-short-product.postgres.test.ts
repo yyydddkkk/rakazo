@@ -70,7 +70,7 @@ describe.skipIf(!enabled)("short original product history", () => {
                 contextStrategy: strategy,
                 wakeupDriver: "memory",
 
-                composio,
+                connectors: [composio],
                 encryptionKey: "synthetic-short-history-encryption-key",
               }),
           },

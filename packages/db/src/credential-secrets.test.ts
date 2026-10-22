@@ -2,20 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "./client.js";
 import { deleteUnreferencedCredentialSecret, retireModelCredential } from "./credential-secrets.js";
 
-function credentialSecretPrisma(modelReferences: number, voiceReferences: number) {
+function credentialSecretPrisma(modelReferences: number) {
   return {
     userModelCredential: { count: vi.fn().mockResolvedValue(modelReferences) },
-    userVoiceCredential: { count: vi.fn().mockResolvedValue(voiceReferences) },
     secret: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
   } as unknown as PrismaClient;
 }
 
 describe("deleteUnreferencedCredentialSecret", () => {
-  it("deletes a replaced secret after both credential kinds release it", async () => {
-    const prisma = credentialSecretPrisma(0, 0);
+  it("deletes a replaced secret after other model credentials release it", async () => {
+    const prisma = credentialSecretPrisma(0);
 
     await deleteUnreferencedCredentialSecret(prisma, {
-      credentialKind: "model",
       credentialId: "credential",
       secretId: "secret",
     });
@@ -23,17 +21,13 @@ describe("deleteUnreferencedCredentialSecret", () => {
     expect(prisma.userModelCredential.count).toHaveBeenCalledWith({
       where: { id: { not: "credential" }, secretId: "secret" },
     });
-    expect(prisma.userVoiceCredential.count).toHaveBeenCalledWith({
-      where: { secretId: "secret" },
-    });
     expect(prisma.secret.deleteMany).toHaveBeenCalledWith({ where: { id: "secret" } });
   });
 
-  it("keeps a secret while either credential kind still references it", async () => {
-    const prisma = credentialSecretPrisma(0, 1);
+  it("keeps a secret while another model credential still references it", async () => {
+    const prisma = credentialSecretPrisma(1);
 
     await deleteUnreferencedCredentialSecret(prisma, {
-      credentialKind: "voice",
       credentialId: "credential",
       secretId: "secret",
     });
@@ -62,7 +56,6 @@ function retirePrisma(state: {
   credentials: StoredCredentialRow[];
   preferences: StoredPreferenceRow[];
   secrets: StoredSecretRow[];
-  voiceCredentials?: StoredCredentialRow[];
 }) {
   const tx = {
     userModelCredential: {
@@ -82,13 +75,6 @@ function retirePrisma(state: {
           state.credentials.filter(
             (row) => row.secretId === args.where.secretId && row.id !== args.where.id?.not,
           ).length,
-      ),
-    },
-    userVoiceCredential: {
-      count: vi.fn(
-        async (args: { where: { secretId: string } }) =>
-          (state.voiceCredentials ?? []).filter((row) => row.secretId === args.where.secretId)
-            .length,
       ),
     },
     spaceModelPreference: {
@@ -169,7 +155,7 @@ describe("retireModelCredential", () => {
 
   it("keeps a secret still referenced by another credential", async () => {
     const state = {
-      credentials: [codexCredential(), codexCredential({ id: "cred-voice-shared" })],
+      credentials: [codexCredential(), codexCredential({ id: "cred-shared" })],
       preferences: [codexPreference()],
       secrets: [{ id: "secret-codex" }],
     };
@@ -181,7 +167,7 @@ describe("retireModelCredential", () => {
       secretId: "secret-codex",
     });
 
-    expect(state.credentials).toEqual([codexCredential({ id: "cred-voice-shared" })]);
+    expect(state.credentials).toEqual([codexCredential({ id: "cred-shared" })]);
     expect(state.secrets).toEqual([{ id: "secret-codex" }]);
   });
 

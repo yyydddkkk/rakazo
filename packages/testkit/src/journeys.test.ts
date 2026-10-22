@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runJobKey } from "@rakazo/adapter-kit";
 import {
-  ComposioConnector,
   createScheduleFromTool,
   DestinationEmulator,
   FakeComposioClient,
+  FakeConnectorProvider,
   FakeSandboxProvider,
   handoffToGroupBot,
   organizeBot,
@@ -125,8 +125,7 @@ describeJourneys("required product journeys", () => {
       dataDir,
       sandboxProvider: "fake",
       agentRuntime: "scripted",
-      composio: new ComposioConnector({ client: new FakeComposioClient() }),
-      connectors: [connector],
+      connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() }), connector],
     });
     app = handles.app;
     stop = handles.stop;
@@ -2112,7 +2111,7 @@ describeJourneys("required product journeys", () => {
       app,
       ada,
       "connections/begin",
-      { provider: "gmail", displayName: "Gmail" },
+      { connectorId: "composio", provider: "gmail", displayName: "Gmail" },
     );
     expect(started.authorizationUrl).toBeNull();
     const connected = await rpc<{ status: string }>(app, ada, "connections/complete", {

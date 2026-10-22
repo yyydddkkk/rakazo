@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { MessagingInboundDeps } from "./messaging-inbound.js";
 import {
   createMessagingInboundHandler,
-  teamChatSenderCanWakeMessageRoutines,
+  externalConversationSenderCanWakeMessageRoutines,
   wakeMessageRoutines,
 } from "./messaging-inbound.js";
 import type { MessagingReceipts } from "./messaging-receipts.js";
@@ -406,7 +406,7 @@ describe("createMessagingInboundHandler DM routing", () => {
     expect(deps.enqueue).toHaveBeenCalledTimes(1);
   });
 
-  it("aligns TeamChat wake nonces to deliveryProvider when inbound provider differs", async () => {
+  it("aligns external-conversation wake nonces to deliveryProvider when inbound provider differs", async () => {
     const deps = createDeps({
       routines: [{ id: "routine-1", name: "Emulator triage", prompt: "Review" }],
     });
@@ -442,7 +442,7 @@ describe("createMessagingInboundHandler DM routing", () => {
     expect(expected).not.toBe(mismatched);
   });
 
-  it("refuses TeamChat routine wake when agent ownership already claimed the row", async () => {
+  it("refuses external-conversation routine wake when agent ownership already claimed the row", async () => {
     const deps = createDeps({
       routines: [{ id: "routine-1", name: "Triage", prompt: "Review" }],
     });
@@ -474,7 +474,7 @@ describe("createMessagingInboundHandler DM routing", () => {
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("reasserts routing ownership before creating a TeamChat routine wake run", async () => {
+  it("reasserts routing ownership before creating a external-conversation routine wake run", async () => {
     const deps = createDeps({
       routines: [{ id: "routine-1", name: "Triage", prompt: "Review" }],
     });
@@ -1343,7 +1343,7 @@ describe("createMessagingInboundHandler linking", () => {
   });
 });
 
-describe("teamChatSenderCanWakeMessageRoutines", () => {
+describe("externalConversationSenderCanWakeMessageRoutines", () => {
   it("allows linked DM senders and rejects strangers", async () => {
     const linked = createDeps({
       identity: {
@@ -1356,7 +1356,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
       },
     });
     await expect(
-      teamChatSenderCanWakeMessageRoutines(linked, {
+      externalConversationSenderCanWakeMessageRoutines(linked, {
         ...dmEvent,
         provider: "slack",
         from: "U123",
@@ -1366,7 +1366,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
 
     const stranger = createDeps({ identity: null });
     await expect(
-      teamChatSenderCanWakeMessageRoutines(stranger, {
+      externalConversationSenderCanWakeMessageRoutines(stranger, {
         ...dmEvent,
         provider: "slack",
         from: "U999",
@@ -1396,7 +1396,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
       ],
     });
     await expect(
-      teamChatSenderCanWakeMessageRoutines(approved, {
+      externalConversationSenderCanWakeMessageRoutines(approved, {
         ...groupEvent,
         provider: "slack",
         from: "U123",
@@ -1424,7 +1424,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
       ],
     });
     await expect(
-      teamChatSenderCanWakeMessageRoutines(invited, {
+      externalConversationSenderCanWakeMessageRoutines(invited, {
         ...groupEvent,
         provider: "slack",
         from: "U123",
@@ -1432,7 +1432,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
       }),
     ).resolves.toBe(false);
 
-    // Pure TeamChat room (no MessagingChannel row): linked sender ok, stranger blocked.
+    // Pure external-conversation room (no MessagingChannel row): linked sender ok, stranger blocked.
     const linkedRoom = createDeps({
       identity: {
         id: "mi-2",
@@ -1445,7 +1445,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
     });
     linkedRoom.prisma.messagingChannel.findUnique = vi.fn(async () => null);
     await expect(
-      teamChatSenderCanWakeMessageRoutines(linkedRoom, {
+      externalConversationSenderCanWakeMessageRoutines(linkedRoom, {
         ...groupEvent,
         provider: "slack",
         from: "U222",
@@ -1456,7 +1456,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
     const strangerRoom = createDeps({ identity: null });
     strangerRoom.prisma.messagingChannel.findUnique = vi.fn(async () => null);
     await expect(
-      teamChatSenderCanWakeMessageRoutines(strangerRoom, {
+      externalConversationSenderCanWakeMessageRoutines(strangerRoom, {
         ...groupEvent,
         provider: "slack",
         from: "U999",
@@ -1465,7 +1465,7 @@ describe("teamChatSenderCanWakeMessageRoutines", () => {
     ).resolves.toBe(false);
 
     await expect(
-      teamChatSenderCanWakeMessageRoutines(strangerRoom, {
+      externalConversationSenderCanWakeMessageRoutines(strangerRoom, {
         ...groupEvent,
         provider: "slack",
         from: "B123",

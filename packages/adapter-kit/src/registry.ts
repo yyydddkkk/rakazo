@@ -32,7 +32,6 @@ export const slots = {
   connector: "connector",
   auth: "connection-auth",
   runner: "runner",
-  voice: "voice",
   web: "web",
   browser: "browser",
   cloudAgent: "cloud-agent",

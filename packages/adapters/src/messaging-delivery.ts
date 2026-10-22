@@ -15,14 +15,6 @@ import {
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { MessagingSendError } from "./chat-sdk-surface.js";
-import { splitOutboundBody } from "./messaging-platforms.js";
-
-/**
- * Margin under vendor consecutive-outbound caps (sendblue enforces one hard):
- * past this many DMs without a reply from the owner, mirror rows stay pending
- * until the next inbound resets the counter.
- */
-export const MESSAGING_DM_OUTBOUND_CAP = 140;
 
 /** Provider-send attempts before a mirrored row is declared lost. */
 export const MESSAGING_OUTBOUND_MAX_ATTEMPTS = 5;
@@ -108,20 +100,21 @@ async function mirrorRun(deps: MessagingDeliveryDeps, runId: string): Promise<vo
     where: { runId: run.id, role: "bot" },
     orderBy: { seq: "asc" },
   });
-  // One row per platform-sized part, so a retry re-sends only the parts that
-  // failed. Explicit createdAt keeps the parts in order for the drain.
+  // Explicit createdAt keeps replies in order for the durable outbox drain.
   const createdAt = Date.now();
   const rows = messages
     .flatMap((message) => {
       const body = extractText(message.blocks);
       if (!body) return [];
-      return splitOutboundBody(identity.provider, body).map((part, index) => ({
-        idempotencyKey: index === 0 ? `msg:${message.id}` : `msg:${message.id}:${index + 1}`,
-        kind: "dm",
-        identityId: identity.id,
-        body: part,
-        sourceMessageId: message.id,
-      }));
+      return [
+        {
+          idempotencyKey: `msg:${message.id}`,
+          kind: "dm",
+          identityId: identity.id,
+          body,
+          sourceMessageId: message.id,
+        },
+      ];
     })
     .map((row, index) => ({ ...row, createdAt: new Date(createdAt + index) }));
   if (rows.length === 0) return;
@@ -421,20 +414,6 @@ async function drain(deps: MessagingDeliveryDeps, context: AdapterContext): Prom
           where: { id: row.id },
           data: { status: "failed" },
         });
-        continue;
-      }
-      // Sendblue's consecutive-outbound vendor cap; other providers have no
-      // equivalent limit, so do not hold Slack/WhatsApp/Telegram DMs.
-      if (
-        identity.provider === "sendblue" &&
-        identity.outboundSinceInbound >= MESSAGING_DM_OUTBOUND_CAP
-      ) {
-        // Cap holds are not failures: release the claim back to pending.
-        await deps.prisma.messagingOutbound.update({
-          where: { id: row.id },
-          data: { status: "pending" },
-        });
-        held.add(destination);
         continue;
       }
       const threadId = await resolveDirectThread(deps, identity, context);

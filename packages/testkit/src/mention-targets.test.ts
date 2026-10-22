@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
+import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { fixtureAccountResponse } from "./fixture-account.js";
@@ -31,7 +31,7 @@ describeWithDatabase("structured @ mention targets", () => {
       dataDir,
       sandboxProvider: "fake",
       agentRuntime: "scripted",
-      composio: new ComposioConnector({ client: new FakeComposioClient() }),
+      connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
     });
     app = handles.app;
     prisma = handles.prisma;
@@ -113,6 +113,7 @@ describeWithDatabase("structured @ mention targets", () => {
       notifyOnFinish: true,
     });
     const started = await rpc<{ connectionId: string }>(app, cookie, "connections/begin", {
+      connectorId: "composio",
       provider: "gmail",
       displayName: "Gmail",
     });
@@ -278,6 +279,7 @@ describeWithDatabase("structured @ mention targets", () => {
       active: false,
     });
     const started = await rpc<{ connectionId: string }>(app, ada, "connections/begin", {
+      connectorId: "composio",
       provider: "gmail",
       displayName: "Gmail",
     });

@@ -23,8 +23,6 @@ import {
   toolCompletionAuditPayload,
   toolCompletionFromResult,
   userTurnInstructions,
-  VOICE_CALL_INSTRUCTION,
-  voiceCallInstruction,
   withRecentTurnImages,
 } from "./executor.js";
 import { UnavailableModelForAuthError, validateConnectedModelChoice } from "./model-selection.js";
@@ -429,20 +427,6 @@ describe("run tool selection", () => {
     expect(fleetTools("user", true, false, ["list_fleet", "create_group"])).toEqual(
       all.filter((name) => name !== "list_fleet" && name !== "create_group"),
     );
-  });
-
-  it("offers end_call on a hang-up run so it can title the call", () => {
-    const callEnd = selectBuiltinToolsForRun({
-      graphicalToolsAllowed: true,
-      groupId: null,
-      trigger: "call_end",
-      semanticMemoryEnabled: false,
-      messagingChannelRun: false,
-      voiceCall: true,
-    }).map((tool) => tool.name);
-    expect(callEnd).toContain("end_call");
-    expect(callEnd).toContain("schedule_create");
-    expect(toolNames("call_end")).not.toContain("end_call");
   });
 
   it("omits a disabled builtin and ignores unknown names", () => {
@@ -1133,7 +1117,6 @@ async function continuePinnedRoutineRun(plaintext: string, modelId: string) {
     plaintext,
     {
       runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
-      memoryProviders: { resolve: vi.fn(async () => null) },
       memory: { read: vi.fn(async () => ({ documents: [] })) },
       events: { append: vi.fn(async () => undefined), finalizeRun },
       jobs: { enqueue },
@@ -1636,22 +1619,6 @@ describe("dockerComputerToolInstruction", () => {
     expect(instruction).not.toContain("browser_act");
     expect(instruction).not.toContain("request_takeover");
     expect(instruction).toContain("--with-token");
-  });
-});
-
-describe("voiceCallInstruction", () => {
-  it("preserves live-call guidance when end_call is offered", () => {
-    expect(voiceCallInstruction()).toBe(
-      "You are on a live voice call. Reply in one to three short spoken sentences. No markdown, lists, links, or option cards; do not use ask_user unless you truly cannot proceed. Answer directly from what you already know when you can; use tools or subagents only when the answer requires them. If the user asks to end the call or hang up, or the conversation is finished, call end_call with a short title and a one-sentence farewell instead of saying goodbye in text, then do any remaining work as a normal chat reply.",
-    );
-    expect(voiceCallInstruction(new Set())).toBe(VOICE_CALL_INSTRUCTION);
-    expect(voiceCallInstruction(new Set(["shell"]))).toBe(VOICE_CALL_INSTRUCTION);
-  });
-
-  it("keeps spoken guidance without prescribing an unavailable hang-up tool", () => {
-    const instruction = voiceCallInstruction(new Set(["end_call"]));
-    expect(instruction).toContain("Reply in one to three short spoken sentences.");
-    expect(instruction).not.toContain("end_call");
   });
 });
 
@@ -2735,7 +2702,6 @@ description: Prepare standup notes
         describe: () => ({ capabilities: { scripted: false } }),
         run: runtimeRun,
       },
-      memoryProviders: { resolve: vi.fn(async () => null) },
       memory: { read: vi.fn(async () => ({ documents: [] })) },
       events: { append: vi.fn(async () => undefined), finalizeRun },
       jobs: { enqueue: vi.fn(async () => undefined) },
@@ -2841,7 +2807,6 @@ description: Prepare standup notes
         describe: () => ({ capabilities: { scripted: false } }),
         run: runtimeRun,
       },
-      memoryProviders: { resolve: vi.fn(async () => null) },
       memory: { read: vi.fn(async () => ({ documents: [] })) },
       events: { append: vi.fn(async () => undefined), finalizeRun },
       jobs: { enqueue: vi.fn(async () => undefined) },
@@ -3701,27 +3666,5 @@ describe("ticket board tool capability", () => {
     }).map((tool) => tool.name);
     for (const name of ["message_bot", "handoff_to_bot", "message_agent"])
       expect(backgroundNames).not.toContain(name);
-  });
-});
-
-describe("call_user availability", () => {
-  const options = {
-    graphicalToolsAllowed: false,
-    groupId: null,
-    trigger: "user_message",
-    semanticMemoryEnabled: false,
-    messagingChannelRun: false,
-    phoneCallsEnabled: true,
-  };
-  const offered = (patch = {}) =>
-    selectBuiltinToolsForRun({ ...options, ...patch }).some((tool) => tool.name === "call_user");
-  it("requires the server flag and a private non-ticket turn", () => {
-    expect(offered()).toBe(true);
-    expect(offered({ phoneCallsEnabled: false })).toBe(false);
-    expect(offered({ phoneCallsEnabled: undefined })).toBe(false);
-    expect(offered({ groupId: "group-1" })).toBe(false);
-    expect(offered({ messagingChannelRun: true })).toBe(false);
-    expect(offered({ trigger: "tickets" })).toBe(false);
-    expect(offered({ voiceCall: true })).toBe(false);
   });
 });

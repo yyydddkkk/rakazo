@@ -26,7 +26,6 @@ import type {
   NotificationProvider,
   SandboxProvider,
   SecretStore,
-  SemanticMemoryProvider,
   WebProvider,
 } from "@rakazo/adapter-kit";
 import {
@@ -63,8 +62,6 @@ import {
   assertTransition,
   blocksToAgentHistoryText,
   botMessageAllowsSilence,
-  CALL_CLIENT_NONCE_PREFIX,
-  callIdFromClientNonce,
   connectorKindFromToolName,
   connectorReadRequiresApproval,
   connectorToolRequiresApproval,
@@ -79,7 +76,6 @@ import {
   inboundRoutinePrompts,
   inferAttachmentMimeType,
   isBackgroundRunTrigger,
-  isCallClientNonce,
   isMessagingChannelRun,
   isOneShotRoutineCrons,
   isOwnerStartedRun,
@@ -118,7 +114,6 @@ import type { McpServer, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   appendEventInTransaction,
   createThreadMessageInTransaction,
-  effectiveMemoryScope,
   findDefaultModelCredential,
   InstructionConflictError,
   isTooManyDatabaseConnections,
@@ -210,7 +205,6 @@ import {
   browserSnapshotFromTool,
 } from "./browser-tools.js";
 import { agentConnectionTools, builtinAgentTools, sharedMemorySaveError } from "./builtin-tools.js";
-import { requestUserCall } from "./call-request.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import type { CloudAgentConnection } from "./cloud-agent-factory.js";
 import { cloudAgentsEnabled } from "./cloud-agent-factory.js";
@@ -218,13 +212,6 @@ import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
 import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
 import { cloudflareGatewayProviderEnv } from "./cloudflare-ai-gateway.js";
-import type { PluginConnectionRow } from "./composio-connector.js";
-import {
-  collectLogIds,
-  mergeConnectedPlugins,
-  needsLivePluginSync,
-  planLiveConnectionSync,
-} from "./composio-connector.js";
 import { BACKGROUND_WORK_LAUNCH, scheduleComputerSleep } from "./computer-idle.js";
 import type { ComputerExecutionLease } from "./computer-lifecycle.js";
 import {
@@ -258,7 +245,11 @@ import {
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
 import { connectApp } from "./connect-app.js";
 import { connectedContext, selectRunConnections } from "./connection-context.js";
-import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
+import {
+  collectLogIds,
+  redactConnectorPayload,
+  sanitizeConnectorError,
+} from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import type { FleetPrepareDeps, FleetRun } from "./fleet-tools.js";
@@ -278,11 +269,9 @@ import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
   COMPACTION_BATCH_SIZE,
   formatCompactedSummary,
-  formatRecalledMemory,
   HISTORY_WINDOW_SIZE,
   historyWindowSize,
   LEGACY_HISTORY_WINDOW_SIZE,
-  MAX_RECALLED_MEMORIES,
   selectCompactedHistory,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
@@ -299,7 +288,6 @@ import {
 import { createMediaGenerationProvider } from "./media-generation-factory.js";
 import { generateMediaFromTool } from "./media-generation-tools.js";
 import { loadAgentMemoryContext } from "./memory-context.js";
-import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { appendMemoryFact, selectMemoryTools } from "./memory-tools.js";
 import {
   enabledOpenAiCompatibleModelIds,
@@ -484,15 +472,6 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "list_secrets",
   "cloud_agent_status",
 ]);
-/** Added to the turn prompt when the user spoke this message on a live voice call. */
-const VOICE_CALL_BASE_INSTRUCTION =
-  "You are on a live voice call. Reply in one to three short spoken sentences. No markdown, lists, links, or option cards; do not use ask_user unless you truly cannot proceed. Answer directly from what you already know when you can; use tools or subagents only when the answer requires them.";
-export const VOICE_CALL_INSTRUCTION = `${VOICE_CALL_BASE_INSTRUCTION} If the user asks to end the call or hang up, or the conversation is finished, call end_call with a short title and a one-sentence farewell instead of saying goodbye in text, then do any remaining work as a normal chat reply.`;
-export function voiceCallInstruction(disabled?: ReadonlySet<string>): string {
-  return builtinOffered(disabled, "end_call")
-    ? VOICE_CALL_INSTRUCTION
-    : VOICE_CALL_BASE_INSTRUCTION;
-}
 const MAX_MODEL_FILE_BYTES = 250_000;
 const TURN_ATTACHMENT_UNAVAILABLE =
   "An attachment in this message could not be loaded. Tell the user the attachment was unavailable and do not guess its contents.";
@@ -2728,7 +2707,6 @@ export interface ExecutorDeps {
   runtime: AgentRuntime;
   sandbox: SandboxProvider;
   memory: MemoryStore;
-  memoryProviders: MemoryProviderResolver;
   home: AgentHomeStore;
   artifacts?: ArtifactStore;
   connector?: ConnectorProvider;
@@ -2747,12 +2725,8 @@ export interface ExecutorDeps {
   /** Publishes board-change signals and wakes ticket owners; absent disables both. */
   onTicketChange?: TicketChangeNotifier;
   ticketBoardEnabled?: boolean;
-  phoneCallsEnabled?: boolean;
-  phoneCallCooldownMinutes?: number;
-  phoneCallRingSeconds?: number;
   /** Messaging surface; absent means zero identity queries and no chat prompts. */
   messaging?: { hasIdentity(botId: string): Promise<boolean> };
-  listConnectedPluginSlugs?: (userId: string) => Promise<string[]>;
   /** Builtin web_search / web_fetch. Defaults to keyless HTTP when omitted. */
   web?: WebProvider;
   mediaGeneration?: MediaGenerationProvider;
@@ -2906,53 +2880,6 @@ export async function deferFutureRoutine(
   if (scheduledAt.getTime() <= Date.now() + 1_000) return false;
   await jobs.enqueue(routineWakeupJob(routineId, scheduledAt));
   return true;
-}
-
-async function loadLivePluginSlugs(
-  listConnectedPluginSlugs: ExecutorDeps["listConnectedPluginSlugs"],
-  userId: string,
-): Promise<{ ok: true; slugs: string[] } | { ok: false }> {
-  if (!listConnectedPluginSlugs) return { ok: false };
-  try {
-    return { ok: true, slugs: await listConnectedPluginSlugs(userId) };
-  } catch {
-    return { ok: false };
-  }
-}
-
-export async function persistLivePluginConnections(
-  prisma: PrismaClient,
-  owner: { userId: string; spaceId: string },
-  rows: PluginConnectionRow[],
-  liveSlugs: string[],
-): Promise<void> {
-  const sync = planLiveConnectionSync(rows, liveSlugs);
-  if (sync.connectIds.length > 0) {
-    await prisma.connection.updateMany({
-      where: {
-        id: { in: sync.connectIds },
-        userId: owner.userId,
-        spaceId: owner.spaceId,
-      },
-      data: { status: "connected" },
-    });
-    for (const row of rows) {
-      if (sync.connectIds.includes(row.id)) row.status = "connected";
-    }
-  }
-  if (sync.revokeIds.length > 0) {
-    await prisma.connection.updateMany({
-      where: {
-        id: { in: sync.revokeIds },
-        userId: owner.userId,
-        spaceId: owner.spaceId,
-      },
-      data: { status: "revoked" },
-    });
-    for (const row of rows) {
-      if (sync.revokeIds.includes(row.id)) row.status = "revoked";
-    }
-  }
 }
 
 export const APPROVED_EFFECT_REPLAY_ORDER = [{ createdAt: "asc" as const }, { id: "asc" as const }];
@@ -3711,7 +3638,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           storedConnections,
           defaultCredential,
           settings,
-          configuredMemory,
           savedSkills,
           agentSkills,
           agentSecretRows,
@@ -3742,7 +3668,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           deps.prisma.deploymentSettings.findUnique({
             where: { id: "default" },
           }),
-          deps.memoryProviders.resolve(run.spaceId),
           deps.prisma.taughtSkill.findMany({
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
           }),
@@ -3797,24 +3722,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const onShutdown = () => runAbortController?.abort(deps.shutdownSignal?.reason);
         deps.shutdownSignal?.addEventListener("abort", onShutdown);
         detachShutdown = () => deps.shutdownSignal?.removeEventListener("abort", onShutdown);
-        const composioRows = storedConnections.filter(
-          (connection) => connection.connectorId === "composio",
-        );
-        let liveSlugs: string[] = [];
-        if (needsLivePluginSync(composioRows)) {
-          const listing = await loadLivePluginSlugs(deps.listConnectedPluginSlugs, run.userId);
-          if (listing.ok) {
-            liveSlugs = listing.slugs;
-            await persistLivePluginConnections(deps.prisma, run, composioRows, listing.slugs).catch(
-              () => undefined,
-            );
-          }
-        }
-        const connectedComposio = mergeConnectedPlugins(composioRows, liveSlugs);
-        const connectedPlugins = selectRunConnections(
-          storedConnections,
-          connectedComposio.map((connection) => connection.provider),
-        );
+        const connectedPlugins = selectRunConnections(storedConnections);
         const context = {
           operationId: runId,
           traceId: runId,
@@ -3825,13 +3733,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           screenLeaseId: screenLeaseIdForRun(computerLease, runId, fence),
           signal: runAbortController.signal,
           ...connectedContext(connectedPlugins),
-          connectedProviders: connectedComposio.map((row) => row.provider),
         };
-        const memoryScope = configuredMemory
-          ? effectiveMemoryScope(bot.memoryScope, configuredMemory.defaultScope)
-          : null;
-        const semanticMemory: SemanticMemoryProvider | null = configuredMemory?.provider ?? null;
-
         await deps.events.append({
           spaceId: run.spaceId,
           threadId: thread.id,
@@ -3901,66 +3803,32 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ? `Update from ${peerMessage.fromBotName}: ${peerMessage.text}`
             : DELEGATED_EMPTY_NOTICE
           : undefined;
-        const recallPromise =
-          threadContext.includeSemanticRecall &&
-          semanticMemory &&
-          memoryScope &&
-          thread.historyCompactedUpToSeq != null
-            ? semanticMemory.recall(
-                {
-                  query: task.prompt,
-                  scope: memoryScope,
+        const [discovered, currentTurnImages, memoryContext, scratchpadContext, ticketContext] =
+          await Promise.all([
+            discoveredPromise,
+            loadCurrentTurnImages(deps, turnBlocks, context),
+            messagingChannelRun
+              ? Promise.resolve("")
+              : loadAgentMemoryContext(deps.memory, bot.id, context),
+            messagingChannelRun
+              ? Promise.resolve("")
+              : loadAgentScratchpadContext(deps, {
+                  spaceId: run.spaceId,
                   botId: bot.id,
-                  historyGeneration: thread.historyCompactionGeneration,
-                  limit: MAX_RECALLED_MEMORIES,
-                },
-                context,
-              )
-            : Promise.resolve(null);
-        const [
-          discovered,
-          currentTurnImages,
-          memoryContext,
-          scratchpadContext,
-          ticketContext,
-          recalled,
-        ] = await Promise.all([
-          discoveredPromise,
-          loadCurrentTurnImages(deps, turnBlocks, context),
-          messagingChannelRun
-            ? Promise.resolve("")
-            : loadAgentMemoryContext(deps.memory, bot.id, context),
-          messagingChannelRun
-            ? Promise.resolve("")
-            : loadAgentScratchpadContext(deps, {
-                spaceId: run.spaceId,
-                botId: bot.id,
-              }),
-          messagingChannelRun || !deps.ticketBoardEnabled
-            ? Promise.resolve(undefined)
-            : loadAgentTicketContext(deps, {
-                spaceId: run.spaceId,
-                text: task.prompt,
-              }),
-          recallPromise,
-        ]);
-        const semanticMemoryEnabled = Boolean(semanticMemory) && !messagingChannelRun;
-        let recalledMemory = "";
-        let recallSucceeded = false;
-        if (recalled) {
-          if (recalled.ok && recalled.value.length > 0) {
-            recallSucceeded = true;
-            recalledMemory = formatRecalledMemory(recalled.value);
-          } else if (!recalled.ok) {
-            getLogger().error("semantic memory recall failed", recalled.error);
-          }
-        }
+                }),
+            messagingChannelRun || !deps.ticketBoardEnabled
+              ? Promise.resolve(undefined)
+              : loadAgentTicketContext(deps, {
+                  spaceId: run.spaceId,
+                  text: task.prompt,
+                }),
+          ]);
         if (!compactedHistory.usedLocalSummary) {
           history = history.slice(
             -historyWindowSize({
-              semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
+              semanticMemoryEnabled: false,
               compacted: thread.historyCompactedUpToSeq != null,
-              recallSucceeded,
+              recallSucceeded: false,
             }),
           );
         }
@@ -4174,14 +4042,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 select: { clientNonce: true, role: true, blocks: true },
               })
             : null;
-        // Calls carry no schema flag: the sending client encodes them in the clientNonce.
-        const sourceClientNonce = sourceMessage?.clientNonce ?? null;
         // A follow-up can be queued by a bot (group handoffs); only the user's own counts.
         const ownerStartedRun = isOwnerStartedRun(run.trigger, sourceMessage?.role === "user");
-        // A hang-up run has no source message: its own nonce carries the call it closes.
-        const callEndRun = run.trigger === "call_end";
-        const callClientNonceForRun = callEndRun ? run.clientNonce : sourceClientNonce;
-        const voiceCall = callEndRun || isCallClientNonce(sourceClientNonce);
         const graphicalToolsAllowed = graphical && acceptsImages && !heldForTakeover;
         const pageBrowserAllowed =
           graphical && browser.describe().capabilities.page && !heldForTakeover;
@@ -4189,19 +4051,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const builtins = [
           ...selectBuiltinToolsForRun({
             ticketBoardEnabled: deps.ticketBoardEnabled,
-            phoneCallsEnabled: deps.phoneCallsEnabled,
             historyRetrievalEnabled: contextStrategy !== "current",
             graphicalToolsAllowed,
             pageBrowserAllowed,
             groupId: thread.groupId,
             trigger: run.trigger,
-            semanticMemoryEnabled,
-            semanticMemoryForgets: Boolean(semanticMemory?.forget),
+            semanticMemoryEnabled: false,
+
             mediaImagesEnabled: Boolean(deps.artifacts && mediaGeneration?.capabilities.images),
             mediaVideoEnabled: Boolean(deps.artifacts && mediaGeneration?.capabilities.video),
             cloudAgentEnabled: cloudAgentsEnabled(cloudAgent, run.spaceId),
             messagingChannelRun,
-            voiceCall,
             disabledBuiltinTools: bot.disabledBuiltinTools,
             fleetManagement: bot.fleetManagement,
             followUpFromUser: sourceMessage?.role === "user",
@@ -6237,23 +6097,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             return finish(created);
           }
-          if (name === "call_user") {
-            if (
-              messagingChannelRun ||
-              thread.groupId ||
-              voiceCall ||
-              isBackgroundRunTrigger(run.trigger)
-            ) {
-              return finish({ error: "Calls require a one-to-one chat." });
-            }
-            return finish(
-              await requestUserCall(deps, run, {
-                reason: String(args.reason ?? ""),
-                opening: String(args.opening ?? ""),
-              }),
-            );
-          }
-
           if (name === "schedule_list") {
             return listSchedulesFromTool(deps, {
               spaceId: run.spaceId,
@@ -6454,20 +6297,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 : "The server was registered without assigning it to this bot.",
             });
           }
-          if (name === "recall_memory") {
-            return semanticMemory!.recall(
-              {
-                query: String(args.query ?? ""),
-                scope: memoryScope!,
-                botId: bot.id,
-                ...(thread.historyCompactedUpToSeq == null
-                  ? {}
-                  : { historyGeneration: thread.historyCompactionGeneration }),
-                limit: MAX_RECALLED_MEMORIES,
-              },
-              context,
-            );
-          }
           if (name === "search_history" || name === "read_history") {
             const scope = {
               spaceId: run.spaceId,
@@ -6491,130 +6320,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
               });
             }
             return finish(redacted);
-          }
-          if (name === "save_memory") {
-            return finish(
-              await semanticMemory!.save(
-                {
-                  content: String(args.content ?? ""),
-                  scope: memoryScope!,
-                  botId: bot.id,
-                  source: { kind: "durable" },
-                },
-                context,
-              ),
-            );
-          }
-          if (name === "forget_memory") {
-            if (!semanticMemory?.forget) {
-              return finish({
-                error: "This memory provider does not support forgetting individual facts.",
-              });
-            }
-            return finish(
-              await semanticMemory.forget(
-                {
-                  id: String(args.id ?? ""),
-                  scope: memoryScope!,
-                  botId: bot.id,
-                  ...(typeof args.entity === "string" && args.entity.trim()
-                    ? { entity: args.entity.trim() }
-                    : {}),
-                  ...(typeof args.reason === "string" && args.reason.trim()
-                    ? { reason: args.reason.trim() }
-                    : {}),
-                },
-                context,
-              ),
-            );
-          }
-          if (name === "end_call") {
-            const callId = callIdFromClientNonce(callClientNonceForRun);
-            const title = String(args.title ?? "")
-              .trim()
-              .slice(0, 40);
-            const farewell = String(args.farewell ?? "")
-              .trim()
-              .slice(0, 160);
-            // The client may have hung up first and already closed the card: title that
-            // marker instead of leaving a second one behind. The marker's deterministic
-            // nonce is the idempotency key, so a resumed run cannot double-publish.
-            const nonce = callId ? `${CALL_CLIENT_NONCE_PREFIX}${callId}:marker` : undefined;
-            const findMarker = async () =>
-              nonce
-                ? await deps.prisma.message.findUnique({
-                    where: { threadId_clientNonce: { threadId: thread.id, clientNonce: nonce } },
-                    select: { id: true, blocks: true },
-                  })
-                : null;
-            let existing = await findMarker();
-            let markerId = "";
-            let changed = true;
-            if (!existing) {
-              try {
-                const marker = await publishMessage(
-                  deps,
-                  run,
-                  "bot",
-                  [{ kind: "voice_call", ...(callId ? { callId } : {}), title, farewell }],
-                  true,
-                  nonce,
-                );
-                markerId = marker?.id ?? "";
-              } catch (error) {
-                if (!isUniqueViolation(error)) throw error;
-                existing = await findMarker();
-              }
-            }
-            if (existing) {
-              const before = Array.isArray(existing.blocks)
-                ? (existing.blocks as MessageBlock[])
-                : [];
-              const blocks = before.map((block) =>
-                block.kind === "voice_call" && block.callId === callId
-                  ? { ...block, title, ...(farewell ? { farewell } : {}) }
-                  : block,
-              );
-              changed = JSON.stringify(blocks) !== JSON.stringify(before);
-              if (changed) {
-                await deps.prisma.message.update({
-                  where: { id: existing.id },
-                  data: { blocks: blocks as Prisma.InputJsonValue },
-                });
-                await deps.events.append({
-                  spaceId: run.spaceId,
-                  threadId: thread.id,
-                  botId: bot.id,
-                  runId: run.id,
-                  type: "thread.message.updated",
-                  payload: { messageId: existing.id, role: "bot", blocks, callId },
-                });
-              }
-              markerId = existing.id;
-            }
-            if (changed) {
-              await deps.events.append({
-                spaceId: run.spaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                runId: run.id,
-                type: "thread.call.ended",
-                payload: {
-                  botId: bot.id,
-                  threadId: thread.id,
-                  runId: run.id,
-                  callId,
-                  title,
-                  farewell,
-                  messageId: markerId,
-                },
-              });
-            }
-            return finish({
-              ok: callEndRun
-                ? "The call is already closed and now carries your title. The user is reading, not listening: finish any remaining work as a normal chat reply with full formatting."
-                : "Call ended and your farewell was spoken. The user is now reading, not listening: finish any remaining work as a normal chat reply with full formatting.",
-            });
           }
           if (name === "connect_app") {
             await flushProgress();
@@ -7360,7 +7065,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           takeoverResume?.promptNote,
           approvalContinuation,
           // A hang-up turn is read, not heard: no spoken-reply constraint.
-          voiceCall && !callEndRun ? voiceCallInstruction(disabledBuiltinTools) : undefined,
           // Per-turn, not in the system prompt: the timestamp changes every call and would break the cacheable prefix.
           formatCurrentTimeInstruction(new Date(), userTimeZone),
         ]
@@ -7374,12 +7078,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
               formatCompactedSummary(compactedHistory.summary, thread.historyCompactedUpToSeq!),
               runSecrets,
             ),
-          });
-        }
-        if (recalledMemory) {
-          historicalContext.push({
-            role: "user",
-            content: redactSecrets(recalledMemory, runSecrets),
           });
         }
         const modelImageBudget =
@@ -8666,7 +8364,6 @@ function fleetPrepareDeps(
 
 export function selectBuiltinToolsForRun(options: {
   ticketBoardEnabled?: boolean;
-  phoneCallsEnabled?: boolean;
   historyRetrievalEnabled?: boolean;
   graphicalToolsAllowed: boolean;
   /** Page browser tools need a graphical computer (Chrome), not model vision. */
@@ -8680,8 +8377,6 @@ export function selectBuiltinToolsForRun(options: {
   mediaImagesEnabled?: boolean;
   mediaVideoEnabled?: boolean;
   messagingChannelRun: boolean;
-  /** Hanging up is only offered to a turn the caller spoke on a live call. */
-  voiceCall?: boolean;
   /** Built-in names this bot turned off. Unknown names are ignored. */
   disabledBuiltinTools?: readonly string[];
   /** The bot's fleet management switch. */
@@ -8725,14 +8420,6 @@ export function selectBuiltinToolsForRun(options: {
           "generate_image",
           "generate_video",
         ].includes(tool.name)) &&
-      (options.voiceCall || tool.name !== "end_call") &&
-      // Already on a call, or reached through a messaging channel that cannot ring.
-      ((options.phoneCallsEnabled &&
-        !options.groupId &&
-        !options.voiceCall &&
-        !options.messagingChannelRun &&
-        !isBackgroundRunTrigger(options.trigger)) ||
-        tool.name !== "call_user") &&
       (options.historyRetrievalEnabled ||
         !["search_history", "read_history"].includes(tool.name)) &&
       (!options.messagingChannelRun ||
@@ -9524,7 +9211,6 @@ async function persistMessageInTransaction(
       messageId: message.id,
       role,
       blocks,
-      callId: callIdFromClientNonce(clientNonce),
     },
   });
   return { message, eventSeq: event.seq };

@@ -176,7 +176,6 @@ const OWN_STATE_RESULT_TOOLS = new Set([
   "ask_user",
   "connect_app",
   "attach_file",
-  "end_call",
   "list_fleet",
   "list_secrets",
   "message_user",

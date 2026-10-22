@@ -42,7 +42,7 @@ import { optionalCatalogFeedProbe } from "../lib/optional-catalog-feed";
 import { rpc } from "../lib/rpc";
 import { errorText } from "../lib/user-error";
 
-type SourceKind = "treg" | "executor" | "mcp" | "api" | "graphql";
+type SourceKind = "treg" | "executor" | "mcp" | "api";
 
 type ConnectionTool = { name: string; description: string };
 
@@ -130,11 +130,7 @@ export function PluginsOverlay({
       }
       return next;
     });
-    setSources(
-      installs.filter(
-        (install) => install.kind === "mcp" || install.kind === "api" || install.kind === "graphql",
-      ),
-    );
+    setSources(installs.filter((install) => install.kind === "mcp" || install.kind === "api"));
     setCatalogFeedEnabled(catalogFeed.enabled);
     return items;
   }
@@ -380,9 +376,7 @@ export function PluginsOverlay({
             ? "Treg"
             : sourceKind === "executor"
               ? "Executor"
-              : sourceKind === "graphql"
-                ? "GraphQL"
-                : "Custom connector"),
+              : "Custom connector"),
         source: sourceUrl.trim(),
         credential: credential.trim() || undefined,
         config:
@@ -390,12 +384,7 @@ export function PluginsOverlay({
             ? { preset: "treg", auth: { type: "bearer" } }
             : sourceKind === "api"
               ? { openApi: true, auth }
-              : sourceKind === "graphql"
-                ? { auth }
-                : {
-                    preset: "custom",
-                    auth: sourceKind === "executor" ? { type: "bearer" } : auth,
-                  },
+              : { preset: "custom", auth: sourceKind === "executor" ? { type: "bearer" } : auth },
       });
       setCredential("");
       setSourceKind(null);
@@ -943,15 +932,6 @@ export function PluginsOverlay({
                       variant="secondary"
                       className="rounded-full"
                       size="sm"
-                      onClick={() => beginSource("graphql")}
-                    >
-                      <Trans>Add GraphQL</Trans>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="rounded-full"
-                      size="sm"
                       onClick={() => beginSource("executor")}
                     >
                       <Trans>Add Executor</Trans>
@@ -979,8 +959,6 @@ export function PluginsOverlay({
                             <Trans>Connect Executor</Trans>
                           ) : sourceKind === "mcp" ? (
                             <Trans>Add remote MCP server</Trans>
-                          ) : sourceKind === "graphql" ? (
-                            <Trans>Add GraphQL endpoint</Trans>
                           ) : (
                             <Trans>Import OpenAPI JSON</Trans>
                           )}
@@ -1001,9 +979,7 @@ export function PluginsOverlay({
                                 ? "https://example.com/mcp"
                                 : sourceKind === "executor"
                                   ? "https://executor.example/mcp"
-                                  : sourceKind === "graphql"
-                                    ? "https://example.com/graphql"
-                                    : "https://example.com/openapi.json"
+                                  : "https://example.com/openapi.json"
                             }
                           />
                         ) : null}
@@ -1100,7 +1076,7 @@ export function PluginsOverlay({
                         className="flex items-center gap-4 rounded-xl px-3 py-2.5"
                       >
                         <div className="grid h-[42px] w-[42px] place-items-center rounded-xl bg-accent font-semibold uppercase text-foreground">
-                          {source.kind === "mcp" ? "M" : source.kind === "graphql" ? "G" : "A"}
+                          {source.kind === "mcp" ? "M" : "A"}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-[15.5px] font-medium text-foreground">

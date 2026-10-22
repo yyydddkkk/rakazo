@@ -4,7 +4,6 @@ import { accountDisplay, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@rakaz
 import {
   BotAvatar,
   Button,
-  buttonVariants,
   Field,
   FieldLabel,
   Input,
@@ -20,7 +19,6 @@ import {
 import { Disclosure } from "@rakazo/ui-web/components/ui/disclosure";
 import type { RefObject } from "react";
 import { useId, useRef, useState, useSyncExternalStore } from "react";
-import { Link } from "react-router-dom";
 import { AccountAccess } from "../components/AccountAccess";
 import { SuccessPop } from "../components/ai/primitives";
 import { ComputersUnavailableHint } from "../components/ComputersUnavailableHint";
@@ -68,7 +66,6 @@ export type SettingsGeneralProps = {
   onTimezoneChange?: (timezone: string) => Promise<void>;
   messagingEnabled?: boolean;
   onOpenMessaging?: () => void;
-  isDeploymentOwner?: boolean;
 };
 
 export function GeneralSettingsPanels({
@@ -80,7 +77,6 @@ export function GeneralSettingsPanels({
   onTimezoneChange,
   messagingEnabled = false,
   onOpenMessaging,
-  isDeploymentOwner = false,
 }: SettingsGeneralProps) {
   const { t } = useLingui();
   const account = accountDisplay({ name, email }, t`You`);
@@ -312,12 +308,6 @@ export function GeneralSettingsPanels({
           </p>
         ) : null}
       </section>
-
-      {isDeploymentOwner ? (
-        <Link to="/integrations/setup" className={buttonVariants({ variant: "outline" })}>
-          <Trans>Server integrations</Trans>
-        </Link>
-      ) : null}
 
       <Disclosure
         data-testid="advanced-settings"

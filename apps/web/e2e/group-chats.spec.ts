@@ -41,10 +41,6 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
     name: "Review team",
     botIds: [researcherId, writerId],
   });
-  await rpc(page, "voice/connect", {
-    provider: "scripted",
-    apiKey: "fake-group-voice-key",
-  });
   await page.reload();
   await expect(page).toHaveURL(groupUrl);
   await expect(page.getByRole("combobox", { name: "Message Draft team" })).toBeVisible();
@@ -152,19 +148,6 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   const transcript = page.getByTestId("transcript");
   await expect(transcript.getByText("Researcher", { exact: true }).first()).toBeVisible();
   await expect(transcript.getByText("Research Writer", { exact: true }).first()).toBeVisible();
-  const researcherSpeak = transcript
-    .locator("div")
-    .filter({ has: page.getByText("Researcher", { exact: true }) })
-    .filter({ has: page.getByRole("button", { name: "Speak this reply" }) })
-    .first()
-    .getByRole("button", { name: "Speak this reply" });
-  const [speechRequest] = await Promise.all([
-    page.waitForRequest(
-      (request) => request.url().includes("/api/voice/speak") && request.method() === "POST",
-    ),
-    researcherSpeak.click(),
-  ]);
-  expect(speechRequest.postDataJSON()).toMatchObject({ botId: researcherId });
   await captureScreenshot(page, testInfo, "group-transcript");
 
   await composer.fill("@Res");

@@ -603,50 +603,6 @@ export interface AgentRuntimeCapabilities {
   scripted: boolean;
 }
 
-export interface VoiceInfo {
-  id: string;
-  label: string;
-  description?: string;
-}
-
-export interface SpeechClip {
-  bytes: Uint8Array;
-  mimeType: "audio/mpeg" | "audio/wav" | "audio/ogg";
-}
-
-export interface VoiceCapabilities {
-  catalog: boolean;
-  synthesize: boolean;
-  transcribe: boolean;
-}
-
-export interface VoiceVerifyResult {
-  ok: boolean;
-  message?: string;
-}
-
-export interface VoiceSynthesizeRequest {
-  text: string;
-  voiceId: string;
-  apiKey: string;
-  /** Connection speech model. Fish uses this, then `FISH_TTS_MODEL`, then s2.1-pro. */
-  model?: string;
-  signal?: AbortSignal;
-}
-
-export interface VoiceTranscribeRequest {
-  audio: Uint8Array;
-  mimeType: string;
-  apiKey: string;
-  /**
-   * Language of the recording, as a BCP-47 tag or an ISO 639-1 code. Providers treat it
-   * as a hint: Fish Audio guesses when it is missing, and a wrong guess turns speech in
-   * one language into lookalike words of another.
-   */
-  language?: string;
-  signal?: AbortSignal;
-}
-
 export interface BackgroundJobPayloads {
   "run.continue": { runId: string };
   "routine.wakeup": { routineId: string; scheduledFor: string };
@@ -657,7 +613,6 @@ export interface BackgroundJobPayloads {
   "computer.control-expire": { computerId: string; leaseId: string };
   "skill.teaching-expire": { skillId: string };
   /** The bot's call rang out: mark it missed if nobody answered. */
-  "call.expire": { threadId: string; callId: string };
   "history.compact": { threadId: string };
   "messaging.deliver": { runId?: string };
   /** Reconcile durable remote-agent intent; scope is loaded from the database. */
@@ -759,7 +714,7 @@ export interface MessagingSendResult {
 }
 
 /** Provider-neutral inbound message after platform webhook parsing. */
-export type TeamChatMessageKind = "direct" | "mention" | "ambient";
+export type ExternalConversationMessageKind = "direct" | "mention" | "ambient";
 
 export interface MessagingInboundMessage {
   type: "message";
@@ -791,7 +746,7 @@ export interface MessagingInboundMessage {
   /** Stable conversation key within the workspace (channel id, DM key, …). */
   conversationKey?: string;
   /** How this message should engage the team-chat bot. */
-  kind?: TeamChatMessageKind;
+  kind?: ExternalConversationMessageKind;
   /** Provider thread id for in-channel replies (Slack thread_ts); null for channel root. */
   replyThreadId?: string | null;
   /** True when the sender is another bot/app. */
@@ -809,11 +764,11 @@ export interface MessagingInboundAttachment {
   fetch: () => Promise<Uint8Array>;
 }
 
-/** Provider-neutral inbound team/external room message for TeamChatBridge. */
-export interface TeamChatInboundMessage {
+/** Provider-neutral inbound team/external room message for ExternalConversationBridge. */
+export interface ExternalConversationInboundMessage {
   eventId: string;
   workspaceId: string;
-  kind: TeamChatMessageKind;
+  kind: ExternalConversationMessageKind;
   conversationType?: "im" | "channel" | "group" | "mpim";
   conversationKey: string;
   /** Messaging threadId used with sendToThread. */
@@ -828,14 +783,14 @@ export interface TeamChatInboundMessage {
   attachments?: MessagingInboundAttachment[];
 }
 
-export interface TeamChatSendRequest {
+export interface ExternalConversationSendRequest {
   conversationId: string;
   replyThreadId: string | null;
   content: string;
   idempotencyKey?: string;
 }
 
-export interface TeamChatSendResult {
+export interface ExternalConversationSendResult {
   handle: string;
 }
 

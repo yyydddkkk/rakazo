@@ -10,7 +10,7 @@ import { MESSAGING_WEBHOOK_BASE_PATH, mountMessagingWebhookRoutes } from "./mess
  */
 function mount(respond?: (provider: string, request: Request) => Response) {
   const handleWebhook = vi.fn((provider: string, request: Request) => {
-    if (provider !== "sendblue" && provider !== "whatsapp") return null;
+    if (provider !== "lark") return null;
     return Promise.resolve(respond?.(provider, request) ?? Response.json({ ok: true }));
   });
   const app = new Hono();
@@ -28,21 +28,21 @@ function post(body: string) {
   };
 }
 
-const payload = JSON.stringify({ content: "hi", is_outbound: false });
+const payload = JSON.stringify({ message: "hi" });
 
 describe("messaging webhook HTTP routes", () => {
   it("forwards the raw request to the surface under the :provider param", async () => {
     const { app, handleWebhook } = mount();
-    const res = await app.request(`${MESSAGING_WEBHOOK_BASE_PATH}/sendblue`, post(payload));
+    const res = await app.request(`${MESSAGING_WEBHOOK_BASE_PATH}/lark`, post(payload));
 
     expect(res.status).toBe(200);
     expect(handleWebhook).toHaveBeenCalledTimes(1);
     const [provider, request] = handleWebhook.mock.calls[0]! as [string, Request];
-    expect(provider).toBe("sendblue");
+    expect(provider).toBe("lark");
     // The raw Request passes through untouched so platform adapters can
     // verify signatures against the exact body bytes and headers.
     expect(request.method).toBe("POST");
-    expect(new URL(request.url).pathname).toBe(`${MESSAGING_WEBHOOK_BASE_PATH}/sendblue`);
+    expect(new URL(request.url).pathname).toBe(`${MESSAGING_WEBHOOK_BASE_PATH}/lark`);
     await expect(request.text()).resolves.toBe(payload);
   });
 
@@ -55,39 +55,17 @@ describe("messaging webhook HTTP routes", () => {
     expect(handleWebhook).toHaveBeenCalledWith("carrier-pigeon", expect.any(Request));
   });
 
-  it("keeps the legacy phone webhook path routing to sendblue", async () => {
+  it("does not mount the removed phone webhook path", async () => {
     const { app, handleWebhook } = mount();
-    const res = await app.request("/api/v1/phone/webhook", post(payload));
-
-    expect(res.status).toBe(200);
-    expect(handleWebhook).toHaveBeenCalledWith("sendblue", expect.any(Request));
-    const [, request] = handleWebhook.mock.calls[0]! as [string, Request];
-    await expect(request.text()).resolves.toBe(payload);
+    expect((await app.request("/api/v1/phone/webhook", post(payload))).status).toBe(404);
+    expect(handleWebhook).not.toHaveBeenCalled();
   });
 
   it("returns the surface's response verbatim, including rejections", async () => {
     const { app } = mount(() => new Response("signature mismatch", { status: 401 }));
-    const res = await app.request(`${MESSAGING_WEBHOOK_BASE_PATH}/sendblue`, post(payload));
+    const res = await app.request(`${MESSAGING_WEBHOOK_BASE_PATH}/lark`, post(payload));
 
     expect(res.status).toBe(401);
     await expect(res.text()).resolves.toBe("signature mismatch");
-  });
-
-  it("passes GET requests through for provider challenges", async () => {
-    // WhatsApp verifies its webhook with a GET hub.challenge handshake.
-    const { app, handleWebhook } = mount((_provider, request) => {
-      const challenge = new URL(request.url).searchParams.get("hub.challenge");
-      return new Response(challenge ?? "", { status: 200 });
-    });
-    const res = await app.request(
-      `${MESSAGING_WEBHOOK_BASE_PATH}/whatsapp?hub.mode=subscribe&hub.challenge=12345`,
-      { method: "GET" },
-    );
-
-    expect(res.status).toBe(200);
-    await expect(res.text()).resolves.toBe("12345");
-    const [provider, request] = handleWebhook.mock.calls[0]! as [string, Request];
-    expect(provider).toBe("whatsapp");
-    expect(request.method).toBe("GET");
   });
 });

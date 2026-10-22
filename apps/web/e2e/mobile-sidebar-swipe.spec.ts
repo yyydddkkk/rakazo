@@ -14,18 +14,6 @@ async function prepareOnboarding(page: Page) {
     const body = (await response.json()) as { json: Record<string, unknown> };
     await route.fulfill({ response, json: { json: { ...body.json, needsModel: false } } });
   });
-  await page.route("**/rpc/integrationSetup/get", (route) =>
-    route.fulfill({
-      json: {
-        json: {
-          canConfigure: false,
-          needsSetup: false,
-          providers: [],
-          webUrl: "https://example.test/integrations/setup",
-        },
-      },
-    }),
-  );
 }
 
 async function swipe(page: Page, start: [number, number], end: [number, number]) {

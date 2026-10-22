@@ -1,17 +1,13 @@
-import type { AdapterContext } from "@rakazo/adapter-kit";
 import type { BotSecretDestination } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApprovalAskBlock } from "./approval-ask.js";
 import { redactToolArgsForReview } from "./auto-review.js";
 import { requestWithBotSecret } from "./bot-secrets.js";
-import { sanitizeComposioError } from "./composio-connector.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { McpConnector } from "./mcp-connector.js";
 import type { OAuthMaterial } from "./mcp-oauth.js";
 import { oauthMaterialSecrets } from "./mcp-oauth.js";
-import { PipedreamConnector } from "./pipedream-connector.js";
-import * as remoteMcp from "./remote-mcp.js";
 import { EncryptedSecretStore } from "./secrets.js";
 
 /**
@@ -229,76 +225,6 @@ describe("secrets model-visibility conformance", () => {
     });
   });
 
-  describe("Pipedream connector OAuth boundary", () => {
-    it("redacts access token and client secret from echoed tool results", async () => {
-      const accessToken = "pd-access-token-conformance";
-      const clientSecret = "pd-client-secret-conformance";
-      vi.spyOn(remoteMcp, "callRemoteMcpTool").mockResolvedValue({
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              access_token: accessToken,
-              client_secret: clientSecret,
-              ok: true,
-            }),
-          },
-        ],
-        isError: false,
-      });
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (input: string | URL | Request) => {
-          const url = String(input);
-          if (url.includes("/v1/oauth/token")) {
-            return Response.json({ access_token: accessToken, expires_in: 3_600 });
-          }
-          throw new Error(`Unexpected fetch ${url}`);
-        }),
-      );
-
-      const connector = new PipedreamConnector({
-        clientId: "pd-client-id",
-        clientSecret,
-        projectId: "pd-project",
-        environment: "development",
-        identitySecret: "pd-identity-secret",
-      });
-      const context = {
-        operationId: "conformance",
-        traceId: "conformance",
-        spaceId: "space-1",
-        userId: "user-1",
-        signal: new AbortController().signal,
-        connectedConnections: [
-          {
-            id: "c1",
-            connectorId: "pipedream",
-            externalId: "gmail",
-            displayName: "Gmail",
-          },
-        ],
-      } as AdapterContext;
-
-      const events = [];
-      for await (const event of connector.execute(
-        {
-          tool: "gmail.list",
-          args: {},
-          executionId: "exec-1",
-          route: { connectorId: "pipedream", resourceId: "gmail", toolName: "gmail.list" },
-        },
-        context,
-      )) {
-        events.push(event);
-      }
-
-      expect(events).toHaveLength(1);
-      expect(events[0]?.type).toBe("result");
-      assertNoLeak(events, [accessToken, clientSecret]);
-    });
-  });
-
   describe("MCP connector OAuth boundary", () => {
     it("redacts OAuth tokens and client secrets echoed by tool results", async () => {
       const material: OAuthMaterial = {
@@ -423,18 +349,6 @@ describe("secrets model-visibility conformance", () => {
       expect(events[0]).toMatchObject({ type: "result" });
       assertNoLeak(events, [OAUTH_ACCESS, OAUTH_REFRESH, OAUTH_CLIENT_SECRET, "mcp-static-token"]);
       await connector.close();
-    });
-  });
-
-  describe("Composio pattern redaction", () => {
-    it("redacts API keys and Bearer tokens from connector errors", () => {
-      const message = sanitizeComposioError(
-        "denied ak_secretvaluehere COMPOSIO_API_KEY=ak_shouldnotleak Bearer tok_abc",
-      );
-      expect(message).not.toContain("ak_secretvaluehere");
-      expect(message).not.toContain("ak_shouldnotleak");
-      expect(message).not.toContain("tok_abc");
-      expect(message).toContain("[redacted]");
     });
   });
 

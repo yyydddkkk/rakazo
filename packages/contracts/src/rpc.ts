@@ -59,7 +59,6 @@ import {
   McpServerConfigInput,
   McpServerSchema,
   MemoryDocumentSchema,
-  MemoryScopeSchema,
   MeSchema,
   MessagingAgentConnectionSchema,
   MessagingChannelMembershipSchema,
@@ -71,7 +70,6 @@ import {
   ModelConnectInputSchema,
   ModelCredentialSchema,
   ModelOAuthBeginSchema,
-  OPENAI_COMPATIBLE_PROVIDER_ID,
   REPLY_QUOTE_MAX_LENGTH,
   ReorderBotsInput,
   RoutineSchema,
@@ -82,7 +80,6 @@ import {
   ServerUpdateRunSchema,
   ServerUpdateStatusSchema,
   SkillPlaybookSchema,
-  SpaceMemoryConfigSchema,
   SpaceNavigationSchema,
   TaughtSkillSchema,
   TeachRecordingEventSchema,
@@ -95,17 +92,9 @@ import {
   UpdateExternalConversationPolicyInput,
   UpdateGroupInput,
   UsageRecordSchema,
-  VoiceCatalogEntrySchema,
-  VoiceCredentialSchema,
-  VoiceInfoSchema,
-  VoiceStatusSchema,
 } from "./domain.js";
 import { ComputerCommandSchema, ProductEventSchema } from "./events.js";
 import { Id, IsoDate } from "./ids.js";
-import {
-  IntegrationProviderConfigSchema,
-  IntegrationSetupStateSchema,
-} from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RoutineWatchSchema } from "./routine-watch.js";
 import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
@@ -389,53 +378,7 @@ export const appContract = {
       .input(
         threadTarget.safeExtend({
           text: z.string().min(1),
-          /** Carries the call id, so a turn taken mid-run stays in the call's card. */
           clientNonce: z.string().min(1).max(200).optional(),
-        }),
-      )
-      .output(z.object({ ok: z.literal(true) })),
-    /** The client hung up: close the call card and let the bot finish what was asked on it. */
-    endCall: oc
-      // ":" separates the call id from the nonce suffix, so it can never appear inside one.
-      .input(
-        botId.safeExtend({
-          callId: z
-            .string()
-            .min(1)
-            .max(200)
-            .regex(/^[^:]+$/),
-          /** How long the call was connected, measured from pickup on the caller's client. */
-          durationSeconds: z
-            .number()
-            .int()
-            .nonnegative()
-            .max(7 * 24 * 60 * 60)
-            .optional(),
-        }),
-      )
-      .output(z.object({ ok: z.literal(true) })),
-    /** The user picked up the bot's call: returns what the bot opens with. */
-    answerCall: oc
-      .input(
-        botId.safeExtend({
-          callId: z
-            .string()
-            .min(1)
-            .max(200)
-            .regex(/^[^:]+$/),
-        }),
-      )
-      .output(z.object({ opening: z.string(), reason: z.string() })),
-    /** The user turned the bot's call down, asked for it later, or it rang out. */
-    declineCall: oc
-      .input(
-        botId.safeExtend({
-          callId: z
-            .string()
-            .min(1)
-            .max(200)
-            .regex(/^[^:]+$/),
-          outcome: z.enum(["declined", "missed"]),
         }),
       )
       .output(z.object({ ok: z.literal(true) })),
@@ -447,7 +390,6 @@ export const appContract = {
             runId: Id,
             messageId: Id,
             answer: z.string(),
-            /** Carries the call id for an answer spoken during a call. */
             clientNonce: z.string().min(1).max(200).optional(),
             /** Only for a login card; `answer` carries its password. */
             username: z.string().min(1).max(512).optional(),
@@ -538,21 +480,6 @@ export const appContract = {
       .output(MemoryDocumentSchema),
     remove: oc.input(z.object({ documentId: Id })).output(z.object({ ok: z.literal(true) })),
     exportMarkdown: oc.input(z.object({ botId: Id.optional() })).output(z.string()),
-    providerConfig: oc.output(SpaceMemoryConfigSchema.nullable()),
-    connectProvider: oc
-      .input(
-        z.object({
-          provider: z.string().min(1),
-          settings: z.record(z.string(), z.string()),
-          credentials: z.record(z.string(), z.string()),
-          defaultMemoryScope: MemoryScopeSchema.default("isolated"),
-        }),
-      )
-      .output(SpaceMemoryConfigSchema),
-    setDefaultScope: oc
-      .input(z.object({ defaultMemoryScope: MemoryScopeSchema }))
-      .output(SpaceMemoryConfigSchema),
-    disconnectProvider: oc.output(z.object({ ok: z.literal(true) })),
   },
   routines: {
     list: oc.input(botId).output(z.array(RoutineSchema)),
@@ -723,7 +650,7 @@ export const appContract = {
     install: oc
       .input(
         z.object({
-          kind: z.enum(["skill", "plugin", "mcp", "api", "graphql"]),
+          kind: z.enum(["skill", "plugin", "mcp", "api"]),
           name: z.string().min(1).max(120),
           source: z.string().min(1).max(2048),
           config: z.record(z.string(), z.unknown()).default({}),
@@ -812,14 +739,10 @@ export const appContract = {
           /** The card's own message, so it is found however far back it is. */
           messageId: Id.optional(),
           provider: z.string(),
-          connectorId: z.string().default("composio"),
+          connectorId: z.string(),
         }),
       )
       .output(z.object({ ok: z.literal(true) })),
-  },
-  integrationSetup: {
-    get: oc.output(IntegrationSetupStateSchema),
-    save: oc.input(IntegrationProviderConfigSchema).output(z.object({ ok: z.literal(true) })),
   },
   connections: {
     catalog: oc
@@ -829,7 +752,7 @@ export const appContract = {
     begin: oc
       .input(
         z.object({
-          connectorId: z.string().default("composio"),
+          connectorId: z.string(),
           provider: z.string(),
           displayName: z.string(),
         }),
@@ -973,57 +896,6 @@ export const appContract = {
   },
   runs: {
     list: oc.input(z.object({ filter: z.enum(["active", "recent"]) })).output(RunsListOutputSchema),
-  },
-  voice: {
-    catalog: oc.output(z.array(VoiceCatalogEntrySchema)),
-    status: oc.output(VoiceStatusSchema),
-    credentials: oc.output(z.array(VoiceCredentialSchema)),
-    connect: oc
-      .input(
-        z
-          .object({
-            provider: z.string(),
-            /** Optional only for a self-hosted server, which may run without a key. */
-            apiKey: z.string().max(4096).default(""),
-            voiceId: z.string().max(120).optional(),
-            speechModel: z.string().max(64).optional(),
-            /** Self-hosted (OpenAI-compatible) server address and model ids. */
-            baseUrl: z.string().max(2048).optional(),
-            ttsModel: z.string().max(200).optional(),
-            sttModel: z.string().max(200).optional(),
-          })
-          .superRefine((input, ctx) => {
-            if (input.provider === OPENAI_COMPATIBLE_PROVIDER_ID) {
-              if (!input.baseUrl?.trim()) {
-                ctx.addIssue({ code: "custom", path: ["baseUrl"], message: "Enter a server URL." });
-              }
-            } else if (input.apiKey.length < 8) {
-              ctx.addIssue({ code: "custom", path: ["apiKey"], message: "Enter an API key." });
-            }
-          }),
-      )
-      .output(VoiceCredentialSchema),
-    disconnect: oc
-      .input(z.object({ provider: z.string().min(1) }))
-      .output(z.object({ ok: z.literal(true) })),
-    setVoice: oc
-      .input(z.object({ voiceId: z.string().min(1).max(120), provider: z.string().optional() }))
-      .output(VoiceStatusSchema),
-    setSpeechModel: oc
-      .input(z.object({ provider: z.string().min(1), speechModel: z.string().max(64) }))
-      .output(VoiceCredentialSchema),
-    voices: oc
-      .input(z.object({ provider: z.string().optional() }))
-      .output(z.array(VoiceInfoSchema)),
-    prepare: oc
-      .input(
-        z.object({
-          text: z.string().max(20000),
-          voiceId: z.string().max(120).optional(),
-          botId: Id.optional(),
-        }),
-      )
-      .output(z.object({ ready: z.boolean(), utterances: z.array(z.string()) })),
   },
   externalConversations: {
     updatePolicy: oc

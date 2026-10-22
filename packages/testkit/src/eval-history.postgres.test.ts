@@ -79,7 +79,7 @@ describe.skipIf(!databaseAvailable)("eval history accounting", () => {
                 agentRuntime: "pi",
                 wakeupDriver: "memory",
 
-                composio,
+                connectors: [composio],
                 encryptionKey: "offline-eval-history-encryption-key",
               }),
           },

@@ -184,7 +184,7 @@ describe.skipIf(!enabled)("unfinished broad history search", () => {
                 agentRuntime: "pi",
                 wakeupDriver: "memory",
 
-                composio,
+                connectors: [composio],
                 encryptionKey: "synthetic-history-continuation-encryption-key",
               }),
           },

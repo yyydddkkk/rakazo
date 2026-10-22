@@ -55,11 +55,6 @@ test("logout protects bot deep links and sign-in restores the session", async ({
       .locator('[data-slot="popover-content"]')
       .getByRole("button", { name: "Memory", exact: true }),
   ).toHaveCount(0);
-  await expect(
-    page
-      .locator('[data-slot="popover-content"]')
-      .getByRole("button", { name: "Voice", exact: true }),
-  ).toHaveCount(0);
   await captureScreenshot(page, testInfo, "36-account-menu");
 
   // A failed sign-out keeps the user in place and says so instead of silently bouncing back.

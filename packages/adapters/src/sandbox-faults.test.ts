@@ -1,6 +1,5 @@
 import type { PortableFile, SandboxProvider } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { fakeBoatProvider as fakeBoat } from "./boat-sandbox.test-support.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { provisionPrepared } from "./sandbox-test-support.js";
 
@@ -12,159 +11,161 @@ const context = {
   signal: new AbortController().signal,
 };
 
-describe.each([
-  ["fake", () => Promise.resolve(new FakeSandboxProvider())],
-  ["Boat over a fake API", () => Promise.resolve(fakeBoat())],
-] as const)("%s sandbox negative contract", (_name, makeProvider) => {
-  it("rejects traversal through every portable workspace entry point", async () => {
-    const provider = await makeProvider();
-    const computer = await provisionPrepared(
-      provider,
-      {
-        botId: "traversal",
-        homePath: "/unused",
-      },
-      context,
-    );
-    const escapingFile = {
-      path: "safe/../../outside.txt",
-      content: new TextEncoder().encode("nope"),
-    };
-
-    await expect(provider.listFiles(computer, "../outside", context)).rejects.toThrow(
-      /escapes the computer workspace/i,
-    );
-    await expect(provider.readFile(computer, "..\\outside.txt", context)).rejects.toThrow(
-      /escapes the computer workspace/i,
-    );
-    await expect(provider.writeFile(computer, escapingFile, context)).rejects.toThrow(
-      /escapes the computer workspace/i,
-    );
-    await expect(
-      provider.importWorkspace(computer, portableFiles([escapingFile]), context),
-    ).rejects.toThrow(/escapes the computer workspace/i);
-  });
-
-  it("reports missing and oversized reads without returning partial data", async () => {
-    const provider = await makeProvider();
-    const computer = await provisionPrepared(
-      provider,
-      { botId: "reads", homePath: "/unused" },
-      context,
-    );
-    await provider.writeFile(
-      computer,
-      { path: "payload.bin", content: Uint8Array.from([0, 1, 2, 3, 255]) },
-      context,
-    );
-
-    await expect(provider.readFile(computer, "missing.bin", context)).rejects.toThrow(
-      /not found|no such file/i,
-    );
-    await expect(
-      provider.readFile(computer, "payload.bin", context, { maxBytes: 4 }),
-    ).rejects.toThrow("computer file exceeds 4 bytes");
-    expect(
-      await provider.readFile(computer, "payload.bin", context, {
-        maxBytes: 5,
-      }),
-    ).toEqual(Uint8Array.from([0, 1, 2, 3, 255]));
-  });
-
-  it("rejects oversized action batches before applying any action", async () => {
-    const provider = await makeProvider();
-    const computer = await provisionPrepared(
-      provider,
-      {
-        botId: "actions",
-        homePath: "/unused",
-      },
-      context,
-    );
-    const before = await provider.observe(computer, context);
-
-    await expect(
-      provider.act(
-        computer,
+describe.each([["fake", () => Promise.resolve(new FakeSandboxProvider())]] as const)(
+  "%s sandbox negative contract",
+  (_name, makeProvider) => {
+    it("rejects traversal through every portable workspace entry point", async () => {
+      const provider = await makeProvider();
+      const computer = await provisionPrepared(
+        provider,
         {
-          actions: Array.from({ length: 25 }, (_, index) => ({
-            kind: "clipboard" as const,
-            text: `action-${index}`,
-          })),
-          observe: true,
+          botId: "traversal",
+          homePath: "/unused",
         },
         context,
-      ),
-    ).rejects.toThrow("computer action batch exceeds 24 actions");
-    expect((await provider.observe(computer, context)).activeWindow).toEqual(before.activeWindow);
-  });
+      );
+      const escapingFile = {
+        path: "safe/../../outside.txt",
+        content: new TextEncoder().encode("nope"),
+      };
 
-  it("stops idempotently and reports whether provisioning reuses workspace files", async () => {
-    const provider = await makeProvider();
-    const request = { botId: "lifecycle", homePath: "/unused" };
-    const first = await provisionPrepared(provider, request, context);
-    await provider.writeFile(
-      first,
-      { path: "state.txt", content: new TextEncoder().encode("preserved") },
-      context,
-    );
-
-    await provider.stop(first, context);
-    await provider.stop(first, context);
-    const reconnect = { ...request, providerRef: first.providerRef, providerKind: first.kind };
-    const resumed = await provisionPrepared(provider, reconnect, context);
-    expect(resumed).toMatchObject({
-      id: first.id,
-      providerRef: first.providerRef,
-      fresh: false,
+      await expect(provider.listFiles(computer, "../outside", context)).rejects.toThrow(
+        /escapes the computer workspace/i,
+      );
+      await expect(provider.readFile(computer, "..\\outside.txt", context)).rejects.toThrow(
+        /escapes the computer workspace/i,
+      );
+      await expect(provider.writeFile(computer, escapingFile, context)).rejects.toThrow(
+        /escapes the computer workspace/i,
+      );
+      await expect(
+        provider.importWorkspace(computer, portableFiles([escapingFile]), context),
+      ).rejects.toThrow(/escapes the computer workspace/i);
     });
-    expect(new TextDecoder().decode(await provider.readFile(resumed, "state.txt", context))).toBe(
-      "preserved",
-    );
 
-    await provider.destroy(resumed, context);
-    await provider.destroy(resumed, context);
-    const replacement = await provisionPrepared(provider, reconnect, context);
-    expect(replacement.fresh).toBe(true);
-    await expect(provider.readFile(replacement, "state.txt", context)).rejects.toThrow(
-      /not found/i,
-    );
-    await provider.destroy(replacement, context);
-  });
+    it("reports missing and oversized reads without returning partial data", async () => {
+      const provider = await makeProvider();
+      const computer = await provisionPrepared(
+        provider,
+        { botId: "reads", homePath: "/unused" },
+        context,
+      );
+      await provider.writeFile(
+        computer,
+        { path: "payload.bin", content: Uint8Array.from([0, 1, 2, 3, 255]) },
+        context,
+      );
 
-  it("surfaces injected lifecycle and transfer failures and remains retryable", async () => {
-    const provider = await makeProvider();
-    const faulted = faultOnce(provider, [
-      "provision",
-      "prepare",
-      "importWorkspace",
-      "exportWorkspace",
-    ]);
-    const request = { botId: "faults", homePath: "/unused" };
+      await expect(provider.readFile(computer, "missing.bin", context)).rejects.toThrow(
+        /not found|no such file/i,
+      );
+      await expect(
+        provider.readFile(computer, "payload.bin", context, { maxBytes: 4 }),
+      ).rejects.toThrow("computer file exceeds 4 bytes");
+      expect(
+        await provider.readFile(computer, "payload.bin", context, {
+          maxBytes: 5,
+        }),
+      ).toEqual(Uint8Array.from([0, 1, 2, 3, 255]));
+    });
 
-    await expect(faulted.provision(request, context)).rejects.toThrow("injected provision failure");
-    const computer = await faulted.provision(request, context);
-    expect(computer.fresh).toBe(true);
-    await expect(faulted.prepare(computer, context)).rejects.toThrow("injected prepare failure");
-    await faulted.prepare(computer, context);
+    it("rejects oversized action batches before applying any action", async () => {
+      const provider = await makeProvider();
+      const computer = await provisionPrepared(
+        provider,
+        {
+          botId: "actions",
+          homePath: "/unused",
+        },
+        context,
+      );
+      const before = await provider.observe(computer, context);
 
-    const file = {
-      path: "retry.bin",
-      content: Uint8Array.from([0, 255, 128, 1]),
-      executable: true,
-    };
-    await expect(faulted.importWorkspace(computer, portableFiles([file]), context)).rejects.toThrow(
-      "injected importWorkspace failure",
-    );
-    await faulted.importWorkspace(computer, portableFiles([file]), context);
+      await expect(
+        provider.act(
+          computer,
+          {
+            actions: Array.from({ length: 25 }, (_, index) => ({
+              kind: "clipboard" as const,
+              text: `action-${index}`,
+            })),
+            observe: true,
+          },
+          context,
+        ),
+      ).rejects.toThrow("computer action batch exceeds 24 actions");
+      expect((await provider.observe(computer, context)).activeWindow).toEqual(before.activeWindow);
+    });
 
-    await expect(collect(faulted.exportWorkspace(computer, context))).rejects.toThrow(
-      "injected exportWorkspace failure",
-    );
-    const exported = await collect(faulted.exportWorkspace(computer, context));
-    expect(exported).toEqual([file]);
-  });
-});
+    it("stops idempotently and reports whether provisioning reuses workspace files", async () => {
+      const provider = await makeProvider();
+      const request = { botId: "lifecycle", homePath: "/unused" };
+      const first = await provisionPrepared(provider, request, context);
+      await provider.writeFile(
+        first,
+        { path: "state.txt", content: new TextEncoder().encode("preserved") },
+        context,
+      );
+
+      await provider.stop(first, context);
+      await provider.stop(first, context);
+      const reconnect = { ...request, providerRef: first.providerRef, providerKind: first.kind };
+      const resumed = await provisionPrepared(provider, reconnect, context);
+      expect(resumed).toMatchObject({
+        id: first.id,
+        providerRef: first.providerRef,
+        fresh: false,
+      });
+      expect(new TextDecoder().decode(await provider.readFile(resumed, "state.txt", context))).toBe(
+        "preserved",
+      );
+
+      await provider.destroy(resumed, context);
+      await provider.destroy(resumed, context);
+      const replacement = await provisionPrepared(provider, reconnect, context);
+      expect(replacement.fresh).toBe(true);
+      await expect(provider.readFile(replacement, "state.txt", context)).rejects.toThrow(
+        /not found/i,
+      );
+      await provider.destroy(replacement, context);
+    });
+
+    it("surfaces injected lifecycle and transfer failures and remains retryable", async () => {
+      const provider = await makeProvider();
+      const faulted = faultOnce(provider, [
+        "provision",
+        "prepare",
+        "importWorkspace",
+        "exportWorkspace",
+      ]);
+      const request = { botId: "faults", homePath: "/unused" };
+
+      await expect(faulted.provision(request, context)).rejects.toThrow(
+        "injected provision failure",
+      );
+      const computer = await faulted.provision(request, context);
+      expect(computer.fresh).toBe(true);
+      await expect(faulted.prepare(computer, context)).rejects.toThrow("injected prepare failure");
+      await faulted.prepare(computer, context);
+
+      const file = {
+        path: "retry.bin",
+        content: Uint8Array.from([0, 255, 128, 1]),
+        executable: true,
+      };
+      await expect(
+        faulted.importWorkspace(computer, portableFiles([file]), context),
+      ).rejects.toThrow("injected importWorkspace failure");
+      await faulted.importWorkspace(computer, portableFiles([file]), context);
+
+      await expect(collect(faulted.exportWorkspace(computer, context))).rejects.toThrow(
+        "injected exportWorkspace failure",
+      );
+      const exported = await collect(faulted.exportWorkspace(computer, context));
+      expect(exported).toEqual([file]);
+    });
+  },
+);
 
 describe("portable workspace transfer", () => {
   it("preserves binary bytes and executable metadata across every provider pairing", async () => {
@@ -244,10 +245,7 @@ function faultOnce(provider: SandboxProvider, methods: FaultableMethod[]): Sandb
 }
 
 async function providerSet(): Promise<Array<[string, SandboxProvider]>> {
-  return [
-    ["fake", new FakeSandboxProvider()],
-    ["boat", fakeBoat()],
-  ];
+  return [["fake", new FakeSandboxProvider()]];
 }
 
 async function* portableFiles(files: Iterable<PortableFile>): AsyncIterable<PortableFile> {

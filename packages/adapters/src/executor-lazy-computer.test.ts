@@ -215,7 +215,6 @@ async function runRoutine(
     sandbox,
     home: { commit: vi.fn(async () => "fixture-revision") },
     memory: { read: async () => ({ documents: [] }) },
-    memoryProviders: { resolve: async () => null },
     artifacts: { get: vi.fn(async () => new Uint8Array([1, 2, 3, 4])) },
     events: {
       append: vi.fn(async () => undefined),

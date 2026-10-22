@@ -7,21 +7,6 @@ const base = {
 };
 
 describe("loadEnv", () => {
-  it("keeps calls off unless explicitly enabled", () => {
-    expect(loadEnv(base).phoneCallsEnabled).toBe(false);
-    for (const value of ["false", "1", ""]) {
-      expect(loadEnv({ ...base, PHONE_CALLS_ENABLED: value }).phoneCallsEnabled).toBe(false);
-    }
-    expect(loadEnv({ ...base, PHONE_CALLS_ENABLED: "true" }).phoneCallsEnabled).toBe(true);
-  });
-  it("parses the call ring window and falls back for invalid values", () => {
-    expect(loadEnv(base).phoneCallRingSeconds).toBe(45);
-    expect(loadEnv({ ...base, PHONE_CALL_RING_SECONDS: "90" }).phoneCallRingSeconds).toBe(90);
-    for (const value of ["", "0", "-1", "invalid", "NaN", "Infinity"]) {
-      expect(loadEnv({ ...base, PHONE_CALL_RING_SECONDS: value }).phoneCallRingSeconds).toBe(45);
-    }
-  });
-
   it("defaults uploads to 10 MiB and parses a configured limit", () => {
     expect(loadEnv(base).maxUploadSizeBytes).toBe(10 * 1024 * 1024);
     expect(loadEnv({ ...base, MAX_UPLOAD_SIZE_MB: "" }).maxUploadSizeBytes).toBe(10 * 1024 * 1024);
@@ -78,60 +63,23 @@ describe("loadEnv", () => {
     ).toBe("https://catalog.example.test/feed");
   });
 
-  it("falls back to none when a remote provider key is missing", () => {
-    expect(
-      loadEnv({
-        ...base,
-        SANDBOX_PROVIDER: "e2b",
-      }).sandboxProvider,
-    ).toBe("none");
-    expect(
-      loadEnv({
-        ...base,
-        SANDBOX_PROVIDER: "createos",
-      }).sandboxProvider,
-    ).toBe("none");
-    expect(
-      loadEnv({
-        ...base,
-        SANDBOX_PROVIDER: "none",
-      }).sandboxProvider,
-    ).toBe("none");
-    expect(
-      loadEnv({
-        ...base,
-        SANDBOX_PROVIDER: "",
-      }).sandboxProvider,
-    ).toBe("none");
+  it("keeps computers disabled when requested", () => {
+    expect(loadEnv({ ...base, SANDBOX_PROVIDER: "none" }).sandboxProvider).toBe("none");
+    expect(loadEnv({ ...base, SANDBOX_PROVIDER: "" }).sandboxProvider).toBe("none");
   });
 
-  it("loads provider-specific Daytona configuration", () => {
-    const env = loadEnv({
-      ...base,
-      SANDBOX_PROVIDER: "daytona",
-      DAYTONA_API_KEY: "test-daytona-key",
-      DAYTONA_API_URL: "https://daytona.test/api",
-      DAYTONA_TARGET: "test-target",
-    });
-    expect(env).toMatchObject({
-      sandboxProvider: "daytona",
-      daytonaApiKey: "test-daytona-key",
-      daytonaApiUrl: "https://daytona.test/api",
-      daytonaTarget: "test-target",
-    });
-  });
-
-  it("loads provider-specific Boat configuration", () => {
-    const env = loadEnv({
-      ...base,
-      SANDBOX_PROVIDER: "boat",
-      BOAT_API_KEY: "test-boat-key",
-      BOAT_API_URL: "https://boat.test/api/v1",
-    });
-    expect(env).toMatchObject({
-      sandboxProvider: "boat",
-      boatApiKey: "test-boat-key",
-      boatApiUrl: "https://boat.test/api/v1",
+  it("loads provider-neutral external conversation settings", () => {
+    expect(
+      loadEnv({
+        ...base,
+        EXTERNAL_CONVERSATION_BOT_ID: " bot-id ",
+        EXTERNAL_CONVERSATION_JUDGE_PROVIDER: "local",
+        EXTERNAL_CONVERSATION_JUDGE_MODEL: "judge-model",
+      }),
+    ).toMatchObject({
+      externalConversationBotId: "bot-id",
+      externalConversationJudgeProvider: "local",
+      externalConversationJudgeModel: "judge-model",
     });
   });
 
@@ -164,7 +112,7 @@ describe("loadEnv", () => {
       BETTER_AUTH_SECRET: "prod-auth-secret-with-enough-length",
       ENCRYPTION_KEY: "prod-encryption-key-with-enough-length",
       SCREEN_PROXY_SECRET: "prod-screen-proxy-secret-with-enough-length",
-      SANDBOX_PROVIDER: "e2b",
+      SANDBOX_PROVIDER: "none",
       API_HOST: "0.0.0.0",
     });
     expect(env.authSecret).toBe("prod-auth-secret-with-enough-length");
@@ -181,7 +129,7 @@ describe("loadEnv", () => {
       BETTER_AUTH_SECRET: "prod-auth-secret-with-enough-length",
       ENCRYPTION_KEY: "prod-encryption-key-with-enough-length",
       SCREEN_PROXY_SECRET: "prod-screen-proxy-secret-with-enough-length",
-      SANDBOX_PROVIDER: "e2b",
+      SANDBOX_PROVIDER: "none",
     };
     expect(loadEnv(production).contentEncryption).toBe(true);
     expect(loadEnv({ ...production, CONTENT_ENCRYPTION: "off" }).contentEncryption).toBe(false);

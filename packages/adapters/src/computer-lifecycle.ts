@@ -738,9 +738,7 @@ export type ComputerReplaceMode = "recover" | "reset" | "update";
 
 /** Kinds whose provider opens a user terminal through the shared Linux screen gateway. */
 export function computerSupportsTerminal(kind: string): boolean {
-  return (
-    kind === "docker" || kind === "e2b" || kind === "daytona" || kind === "boat" || kind === "fake"
-  );
+  return kind === "docker" || kind === "fake";
 }
 
 export async function replaceComputer(

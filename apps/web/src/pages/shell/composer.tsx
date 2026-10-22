@@ -15,13 +15,7 @@ import { Button } from "@rakazo/ui-web";
 import { ArrowUp, Box, Paperclip, Plus, Settings, Square, X } from "lucide-react";
 import type { ClipboardEvent, DragEvent, RefObject } from "react";
 import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
-import {
-  HoldToTalkControls,
-  HoldToTalkStrip,
-  useHoldToTalk,
-} from "../../components/composer/HoldToTalk";
 import type { ArtifactTarget } from "../../lib/artifact-open";
-import { useCallSession } from "../../lib/call-session";
 import { newClientId } from "../../lib/client-id";
 import {
   beginComposerDraftSubmission,
@@ -58,8 +52,6 @@ export const Composer = memo(function Composer({
   onRemoveAttachment,
   onSend,
   onStop,
-  phoneCallsEnabled,
-  dictationTranscribe,
   replyTarget,
   replyQuote,
   replyTargetName,
@@ -88,9 +80,6 @@ export const Composer = memo(function Composer({
   onRemoveAttachment: (attachment: PendingAttachment) => void;
   onSend: (text: string, mentions: ComposerMention[], clientNonce: string) => Promise<boolean>;
   onStop: () => Promise<void>;
-  phoneCallsEnabled?: boolean;
-  /** Hold-to-talk falls back to the voice provider's transcription; undefined while unknown. */
-  dictationTranscribe?: boolean;
   artifactTarget: ArtifactTarget;
   replyTarget?: ThreadMessage | null;
   replyQuote?: string | null;
@@ -113,19 +102,6 @@ export const Composer = memo(function Composer({
   const [slashQuery, setSlashQuery] = useState<string | null>(() => {
     const slashMatch = /^\/([^\n]*)$/.exec(draft);
     return slashMatch ? (slashMatch[1] ?? "") : null;
-  });
-  const onCall = useCallSession() !== null;
-  const talk = useHoldToTalk({
-    transcribe: dictationTranscribe,
-    disabled: disabled || onCall || !phoneCallsEnabled,
-    onText: (text) => {
-      // A refused send keeps the words: they land in the field to edit or retry.
-      void onSend(text, [], newClientId())
-        .then((accepted) => {
-          if (accepted === false) setDraft((current) => (current ? `${current} ${text}` : text));
-        })
-        .catch(() => setDraft((current) => (current ? `${current} ${text}` : text)));
-    },
   });
   const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
   const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
@@ -672,10 +648,8 @@ export const Composer = memo(function Composer({
               </button>
             </span>
           ))}
-          <HoldToTalkStrip talk={talk} />
           <textarea
             ref={textareaRef}
-            hidden={talk.recording !== null}
             value={draft}
             onChange={(event) => updateDraft(event.target.value)}
             onPaste={handlePaste}
@@ -750,13 +724,8 @@ export const Composer = memo(function Composer({
             expanded ? "row-start-2" : ""
           }`}
         >
-          {talk.recording?.locked ? (
-            <HoldToTalkControls talk={talk} />
-          ) : running ? (
+          {running ? (
             <>
-              {phoneCallsEnabled && draft.trim().length === 0 ? (
-                <HoldToTalkControls talk={talk} disabled={disabled || onCall} />
-              ) : null}
               <Button
                 size="icon"
                 aria-label={t`Send`}
@@ -778,20 +747,15 @@ export const Composer = memo(function Composer({
               </Button>
             </>
           ) : (
-            <>
-              {phoneCallsEnabled && draft.trim().length === 0 ? (
-                <HoldToTalkControls talk={talk} disabled={disabled || onCall} />
-              ) : null}
-              <Button
-                size="icon"
-                aria-label={t`Send`}
-                disabled={sending || !canSend || disabled}
-                onClick={send}
-                className="size-8 shrink-0 rounded-full bg-white text-black hover:bg-white/90 shadow-sm transition-transform active:scale-95 disabled:bg-white/10 disabled:text-muted-foreground/30 disabled:shadow-none"
-              >
-                <ArrowUp size={16} strokeWidth={2.2} />
-              </Button>
-            </>
+            <Button
+              size="icon"
+              aria-label={t`Send`}
+              disabled={sending || !canSend || disabled}
+              onClick={send}
+              className="size-8 shrink-0 rounded-full bg-white text-black hover:bg-white/90 shadow-sm transition-transform active:scale-95 disabled:bg-white/10 disabled:text-muted-foreground/30 disabled:shadow-none"
+            >
+              <ArrowUp size={16} strokeWidth={2.2} />
+            </Button>
           )}
         </div>
       </div>

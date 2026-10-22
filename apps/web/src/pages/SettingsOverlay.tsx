@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AvatarStyle, SpaceMemoryConfig } from "@rakazo/contracts";
+import type { AvatarStyle } from "@rakazo/contracts";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import {
   Brain,
@@ -11,7 +11,6 @@ import {
   Monitor,
   Settings,
   ShieldCheck,
-  Volume2,
   XIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -28,25 +27,18 @@ import {
 } from "./AccountSettingsOverlay";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
-import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
 export type SettingsSection =
   | "general"
   | "models"
   | "memory"
-  | "voice"
   | "confirmations"
   | "usage"
   | "computer"
   | "updates";
 
 /** Sections whose settings belong to the space. */
-const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set([
-  "models",
-  "memory",
-  "voice",
-  "confirmations",
-]);
+const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set(["models", "memory", "confirmations"]);
 
 type NavItem = {
   id: SettingsSection;
@@ -70,10 +62,7 @@ export function SettingsOverlay({
   onSandboxProviderChange,
   messagingEnabled = false,
   onOpenMessaging,
-  memoryConfig,
-  onMemoryConfigChange,
   onClose,
-  onVoiceStatusMaybeChanged,
 }: {
   /** The space the per-space sections act on. */
   space?: { id: string; name: string } | null;
@@ -96,10 +85,7 @@ export function SettingsOverlay({
   onSandboxProviderChange?: (sandboxProvider: string) => void;
   messagingEnabled?: boolean;
   onOpenMessaging?: () => void;
-  memoryConfig: SpaceMemoryConfig | null | undefined;
-  onMemoryConfigChange: (config: SpaceMemoryConfig | null) => void;
   onClose: () => void;
-  onVoiceStatusMaybeChanged?: () => void | Promise<void>;
 }) {
   const { t, i18n } = useLingui();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -107,15 +93,12 @@ export function SettingsOverlay({
   const [navOverflow, setNavOverflow] = useState({ previous: false, next: false });
   const usageRef = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<SettingsSection>(initialSection);
-  const [memoryBusy, setMemoryBusy] = useState(false);
-  const [voiceBusy, setVoiceBusy] = useState(false);
   const [keepComputerRecovery, setKeepComputerRecovery] = useState(false);
   const recoveryHoldTimer = useRef<number | undefined>(undefined);
   const showComputer =
     keepComputerRecovery || (isDeploymentOwner && computersAreUnavailable(sandboxProvider));
   const serverUpdate = useServerUpdateStatus(isDeploymentOwner);
   const showUpdates = hasServerUpdates(serverUpdate);
-  const panelBusy = memoryBusy || voiceBusy;
   const spaceScoped = SPACE_SECTIONS.has(section);
   const spaceId = spaceScoped ? (space?.id ?? null) : null;
   const releaseComputerRecovery = useCallback(() => {
@@ -160,7 +143,6 @@ export function SettingsOverlay({
     { id: "general", label: t`General`, icon: Settings },
     { id: "models", label: t`Models`, icon: Cpu },
     { id: "memory", label: t`Memory`, icon: Brain },
-    { id: "voice", label: t`Voice`, icon: Volume2 },
     { id: "confirmations", label: t`Confirmations`, icon: ShieldCheck },
     { id: "usage", label: t`Usage`, icon: Gauge },
     ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
@@ -213,33 +195,15 @@ export function SettingsOverlay({
       ? t`Close model settings`
       : section === "memory"
         ? t`Close memory settings`
-        : section === "voice"
-          ? t`Close voice settings`
-          : t`Close user settings`;
+        : t`Close user settings`;
 
-  async function refreshVoiceStatus() {
-    await onVoiceStatusMaybeChanged?.();
-  }
-
-  function leaveSettings(next: () => void) {
-    if (panelBusy) return;
-    void refreshVoiceStatus().finally(next);
-  }
-
-  function requestClose() {
-    leaveSettings(onClose);
-  }
+  const requestClose = onClose;
 
   return (
     <Dialog
       open
-      onOpenChange={(open, details) => {
-        if (open) return;
-        if (panelBusy) {
-          details.cancel();
-          return;
-        }
-        requestClose();
+      onOpenChange={(open) => {
+        if (!open) requestClose();
       }}
     >
       <DialogContent
@@ -260,7 +224,7 @@ export function SettingsOverlay({
               size="icon-sm"
               className={`shrink-0 md:hidden ${navOverflow.previous || navOverflow.next ? "" : "invisible"}`}
               aria-label={t`Previous settings sections`}
-              disabled={!navOverflow.previous || panelBusy}
+              disabled={!navOverflow.previous}
               onClick={() => scrollSections(-1)}
             >
               <ChevronLeft className="rtl:rotate-180" />
@@ -280,7 +244,6 @@ export function SettingsOverlay({
                     type="button"
                     data-testid={`settings-nav-${item.id}`}
                     aria-current={active ? "page" : undefined}
-                    disabled={panelBusy}
                     onClick={() => setSection(item.id)}
                     className={`flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-[13.5px] transition-colors disabled:pointer-events-none disabled:opacity-50 ${
                       active
@@ -299,7 +262,7 @@ export function SettingsOverlay({
               size="icon-sm"
               className={`shrink-0 md:hidden ${navOverflow.previous || navOverflow.next ? "" : "invisible"}`}
               aria-label={t`Next settings sections`}
-              disabled={!navOverflow.next || panelBusy}
+              disabled={!navOverflow.next}
               onClick={() => scrollSections(1)}
             >
               <ChevronRight className="rtl:rotate-180" />
@@ -318,7 +281,6 @@ export function SettingsOverlay({
               </div>
               <DialogClose
                 aria-label={closeLabel}
-                disabled={panelBusy}
                 render={<Button variant="ghost" size="icon-sm" />}
               >
                 <XIcon />
@@ -330,7 +292,7 @@ export function SettingsOverlay({
                 key={spaceId ?? "selected"}
                 data-testid="settings-scroll"
                 className={`min-h-0 flex-1 ${
-                  section === "models" || section === "voice" || section === "memory"
+                  section === "models" || section === "memory"
                     ? "flex flex-col overflow-hidden"
                     : "rk-scroll overflow-y-auto overscroll-contain px-6 pb-6 pt-6 sm:px-8 sm:pb-8"
                 }`}
@@ -344,10 +306,7 @@ export function SettingsOverlay({
                     timezone={timezone}
                     onTimezoneChange={onTimezoneChange}
                     messagingEnabled={messagingEnabled}
-                    onOpenMessaging={
-                      onOpenMessaging ? () => leaveSettings(onOpenMessaging) : undefined
-                    }
-                    isDeploymentOwner={isDeploymentOwner}
+                    onOpenMessaging={onOpenMessaging}
                   />
                 ) : null}
                 {section === "confirmations" ? <ApprovalRulesSettings /> : null}
@@ -371,20 +330,7 @@ export function SettingsOverlay({
                   <ModelSettingsOverlay embedded onClose={requestClose} />
                 ) : null}
                 {section === "memory" ? (
-                  <MemorySettingsOverlay
-                    embedded
-                    onClose={requestClose}
-                    config={memoryConfig}
-                    onConfigChange={onMemoryConfigChange}
-                    onBusyChange={setMemoryBusy}
-                  />
-                ) : null}
-                {section === "voice" ? (
-                  <VoiceSettingsOverlay
-                    embedded
-                    onClose={requestClose}
-                    onBusyChange={setVoiceBusy}
-                  />
+                  <MemorySettingsOverlay embedded onClose={requestClose} />
                 ) : null}
               </div>
             </SpaceRpcProvider>

@@ -1,5 +1,4 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { appendFile } from "node:fs/promises";
 import { bootstrapAdmin } from "@rakazo/auth";
 import { resolveAuthSecret } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -100,18 +99,6 @@ async function resetFixtureDatabase<T>(afterReset: (db: PrismaClient) => Promise
   if (process.env.RAKAZO_E2E_DATABASE_RESET !== "1" && process.env.VERIFY_DATABASE !== "1")
     throw new Error("E2E database reset requires the isolated E2E harness");
   return withFixtureDb(async (db) => {
-    const manifest = process.env.RAKAZO_E2E_COMPUTER_MANIFEST;
-    if (manifest) {
-      const computers = await db.computer.findMany({
-        where: { providerRef: { not: null } },
-        select: { homeKey: true, kind: true, providerRef: true, userId: true, spaceId: true },
-      });
-      if (computers.length)
-        await appendFile(
-          manifest,
-          `${computers.map((computer) => JSON.stringify(computer)).join("\n")}\n`,
-        );
-    }
     const tables = await db.$queryRaw<
       Array<{ tablename: string }>
     >`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;

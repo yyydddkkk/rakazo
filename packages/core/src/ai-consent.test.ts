@@ -20,14 +20,6 @@ const status: AiConsentStatus = {
       privacyUrl: "https://example.com/privacy",
       allowed: false,
     },
-    {
-      key: "voice",
-      name: "Example Voice",
-      use: "voice",
-      detail: "",
-      privacyUrl: "https://example.com/privacy",
-      allowed: false,
-    },
   ],
 };
 
@@ -101,14 +93,13 @@ describe("foreground AI consent", () => {
     });
     expect(prompt).not.toHaveBeenCalled();
     expect(aiDataUsesForProcedure("threads/get")).toEqual([]);
-    expect(aiDataUsesForProcedure("threads/send")).toEqual(["model", "memory"]);
-    expect(aiDataUsesForProcedure("voice/prepare")).toEqual(["voice"]);
+    expect(aiDataUsesForProcedure("threads/send")).toEqual(["model"]);
     expect(
       aiDataUsesForProcedure("routines/update", { routineId: "routine", active: false }),
     ).toEqual([]);
     expect(
       aiDataUsesForProcedure("routines/update", { routineId: "routine", active: true }),
-    ).toEqual(["model", "memory"]);
+    ).toEqual(["model"]);
     expect(aiConsentTarget({ routineId: "routine-1" })).toEqual({ routineId: "routine-1" });
     expect(aiConsentTarget({ botId: "bot", text: "hello" })).toEqual({ botId: "bot" });
   });
@@ -159,14 +150,14 @@ describe("foreground AI consent", () => {
       {
         ...status,
         scope: "account-a-space",
-        recipients: [status.recipients[1]!],
+        recipients: [{ ...status.recipients[0]!, key: "other-model" }],
       },
     ];
 
     await Promise.all(
       statuses.map((current) =>
         ensureAiDataConsent({
-          uses: ["model", "voice"],
+          uses: ["model"],
           status: async () => current,
           prompt,
           allow,

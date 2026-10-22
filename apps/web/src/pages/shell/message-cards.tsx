@@ -163,6 +163,7 @@ export function AppConnectCard({
   useEffect(() => () => connectionAttempt.current?.abort(), []);
 
   async function authorize() {
+    if (!block.connectorId) return;
     connectionAttempt.current?.abort();
     const controller = new AbortController();
     connectionAttempt.current = controller;
@@ -229,7 +230,11 @@ export function AppConnectCard({
         {status === "connected" ? (
           <SuccessPop label={t`Connected`} />
         ) : (
-          <Button className="rounded-full" disabled={busy} onClick={() => void authorize()}>
+          <Button
+            className="rounded-full"
+            disabled={busy || !block.connectorId}
+            onClick={() => void authorize()}
+          >
             {busy ? t`Waiting…` : t`Authorize`}
           </Button>
         )}

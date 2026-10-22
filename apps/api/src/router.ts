@@ -25,15 +25,12 @@ import {
 import type {
   CloudAgentConnection,
   CodexLiveCatalog,
-  ComposioProvider,
   ComputerExecutionLease,
   ConnectorRegistry,
   FaviconResolver,
   getBotSecretMetadata,
-  IntegrationProviderSettings,
   McpConnector,
   McpOAuthSummary,
-  MemoryProviderResolver,
   PiOAuthLogins,
   ProviderCatalogCache,
   RemoteConnectorDependencies,
@@ -94,11 +91,7 @@ import {
   parseRoutineWatch,
   parseRoutineWatchState,
   persistPreparedSecret,
-  pickReusableConnection,
-  planLiveConnectionSync,
   prepareApiInstall,
-  prepareGraphqlInstall,
-  prepareManagedConnectorForTransaction,
   prepareAllowedThinkingLevels as prepareModelThinkingLevels,
   prepareStoredModelAuth,
   probeCatalogProviderModels,
@@ -116,7 +109,7 @@ import {
   resolveBotWorkspacePath,
   revokeScreenControl,
   routineRunModelPin,
-  sanitizeComposioError,
+  sanitizeConnectorError,
   savedCatalogSelections,
   savePushToken,
   scheduleComputerControlExpiry,
@@ -125,7 +118,6 @@ import {
   scriptedCatalogEntry,
   selectDefaultCredentialId,
   serializeModelSecret,
-  settleCallRequest,
   stableStringify,
   storeBotSecret,
   storedOpenAiCompatibleProbeKey,
@@ -164,7 +156,6 @@ import {
   ComputerCommandSchema,
   canonicalPiProviderId,
   foldComputerCommands,
-  IntegrationProviderIdSchema,
   isDeletableMemoryDocument,
   mcpOAuthEnvReferences,
   OPENAI_COMPATIBLE_PROVIDER_ID,
@@ -175,8 +166,6 @@ import {
 import {
   ACTIVE_RUN_STATUSES,
   AttachmentValidationError,
-  CALL_CLIENT_NONCE_PREFIX,
-  callClientNonce,
   clampCatalogThinkingLevel,
   containsSecret,
   displayName,
@@ -210,9 +199,7 @@ import {
   deleteUnreferencedCredentialSecret,
   ensureBoard,
   findDefaultModelCredential,
-  findDefaultVoiceCredential,
   findModelCredential,
-  findSpaceMemoryConfig,
   findTicket,
   formatMessagingLinkCode,
   InstructionConflictError,
@@ -225,7 +212,6 @@ import {
   lockOwnedGroup,
   modelCredentialProviderFilter,
   newestModelCredentialOrder,
-  newestVoiceCredentialOrder,
   Prisma,
   parseComputerMode,
   pushSessionExpiresAt,
@@ -236,7 +222,6 @@ import {
   runAsTenant,
   SpaceDeletionInProgressError,
   selectSpaceModelPreference,
-  selectSpaceVoicePreference,
   toBoardDto,
   toTicketCommentDto,
   toTicketDto,
@@ -269,12 +254,6 @@ import {
 } from "./mcp-approval.js";
 import type { McpSecretMaterial } from "./mcp-material.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
-import {
-  disconnectMemoryProvider,
-  persistMemoryProviderConfig,
-  serializeSpaceMemoryConfig,
-  updateMemoryProviderDefaultScope,
-} from "./memory-provider-config.js";
 import {
   chooseFocus,
   dismissFocus,
@@ -313,20 +292,6 @@ import {
   threadHead,
   threadSnapshot,
 } from "./thread-target.js";
-import {
-  disconnectVoiceCredential,
-  listVoiceCatalog,
-  loadDefaultVoiceCredential,
-  loadVoiceCredential,
-  persistVoiceCredential,
-  prepareVoice,
-  toVoiceCredential,
-  toVoiceStatus,
-  updateVoiceSpeechModel,
-  voiceContext,
-  voiceCredentialServer,
-  voiceProviderFor,
-} from "./voice.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 /** Each command writes a running and a done event, so this keeps about 100 commands. */
@@ -337,6 +302,70 @@ export const HEARTBEAT_MS = 20_000;
 /** A thread stream re-checks its session at least this often while it delivers. */
 export const SESSION_RECHECK_MS = 10_000;
 const EXPORT_MESSAGE_PAGE_SIZE = 500;
+
+function connectionProviderKey(provider: string): string {
+  return provider.trim().toLowerCase();
+}
+
+/** Reuse a revoked/error row only when this provider has no live sibling. */
+function pickReusableConnection<T extends { id: string; status: string }>(
+  rows: T[],
+): T | undefined {
+  if (rows.some((row) => row.status === "connected" || row.status === "pending")) {
+    return undefined;
+  }
+  return rows.find((row) => row.status === "revoked" || row.status === "error");
+}
+
+function planLiveConnectionSync(
+  rows: Array<{ id: string; provider: string; status: string }>,
+  liveSlugs: string[],
+): { connectIds: string[]; revokeIds: string[] } {
+  const live = new Set(liveSlugs.map(connectionProviderKey).filter(Boolean));
+  const connectIds: string[] = [];
+  const connectedProviders = new Set(
+    rows
+      .filter((row) => row.status === "connected")
+      .map((row) => connectionProviderKey(row.provider)),
+  );
+  for (const slug of live) {
+    if (connectedProviders.has(slug)) continue;
+    const matches = rows.filter((row) => connectionProviderKey(row.provider) === slug);
+    // Recover in-flight pending/error rows only. A revoked sibling stays
+    // revoked even when another row (or the upstream listing) is live for
+    // the same slug — reviving it would reattach a dead providerRef.
+    const reusable = matches.find((row) => row.status === "pending" || row.status === "error");
+    if (!reusable) continue;
+    connectIds.push(reusable.id);
+    connectedProviders.add(slug);
+  }
+  const connectIdSet = new Set(connectIds);
+  // Providers that already have a connected row before this sync. Extra pending
+  // rows for those providers are additional-account attempts, not abandoned
+  // first connects — keep them. Concurrent pendings with no connected row yet
+  // still collapse to one connect + revoke the rest.
+  const previouslyConnected = new Set(
+    rows
+      .filter((row) => row.status === "connected")
+      .map((row) => connectionProviderKey(row.provider)),
+  );
+  const revokeIds = rows
+    .filter((row) => {
+      if (row.status !== "pending" && row.status !== "error") return false;
+      if (connectIdSet.has(row.id)) return false;
+      // Keep only in-flight additional-account pendings; clear abandoned errors
+      // so live sync does not keep re-listing forever after a failed attempt.
+      if (
+        row.status === "pending" &&
+        previouslyConnected.has(connectionProviderKey(row.provider))
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .map((row) => row.id);
+  return { connectIds, revokeIds };
+}
 
 async function reconcileConnections(
   prisma: PrismaClient,
@@ -646,7 +675,6 @@ export interface RouterDeps {
   jobs: JobPublisher;
   sandbox: SandboxProvider;
   memory: MemoryStore;
-  memoryProviders: MemoryProviderResolver;
   home: AgentHomeStore;
   secrets: SecretStore;
   oauthLogins: PiOAuthLogins;
@@ -666,8 +694,6 @@ export interface RouterDeps {
     secretId: string,
     provider: string,
   ) => void;
-  integrationSettings?: IntegrationProviderSettings;
-  composio?: ComposioProvider;
   mcpOAuth?: McpOAuthBroker;
   /**
    * The API process's MCP connector, used to launch/list an MCP server once so its health
@@ -683,12 +709,10 @@ export interface RouterDeps {
   messaging?: { enabled: boolean; providers: string[] };
   env: {
     ticketBoardEnabled?: boolean;
-    phoneCallsEnabled?: boolean;
-    phoneCallRingSeconds?: number;
     maxUploadSizeBytes?: number;
     agentRuntime: string;
-    teamChatJudgeProvider?: string;
-    teamChatJudgeModel?: string;
+    externalConversationJudgeProvider?: string;
+    externalConversationJudgeModel?: string;
     defaultProvider: string;
     defaultModel: string;
     deploymentModelConfigured?: boolean;
@@ -705,21 +729,6 @@ export interface RouterDeps {
     mcpAllowPrivateEndpoint?: boolean;
   };
 }
-
-/** Bound for one provider sandbox destroy during Space deletion. Providers may
- * ignore the request abort signal, so without a deadline a hung destroy would
- * keep the deletion claim renewed forever and block stale-claim recovery. */
-
-/** The card is closed by a marker; the run that follows finishes whatever the call left open. */
-/** Deterministic nonce for a call's marker message. The unique (threadId, clientNonce)
- * index makes it the hang-up idempotency key, and the "call:" prefix lets clients derive
- * the marker's callId. User turns carry a uuid suffix, so they never collide. */
-export function callMarkerClientNonce(callId: string): string {
-  return `${CALL_CLIENT_NONCE_PREFIX}${callId}:marker`;
-}
-
-const HANG_UP_PROMPT =
-  "The voice call just ended because the user hung up. First call end_call with a short title for the call (leave farewell empty). Then, if anything the user asked for during the call is still unfinished, complete it now as a normal chat reply with full formatting. If nothing is pending, reply with one short sentence.";
 
 /** Surface a Space deletion race as a retryable conflict instead of a generic failure. */
 function mapSpaceLifecycleError(error: unknown): unknown {
@@ -881,10 +890,7 @@ export function createRouter(deps: RouterDeps) {
     /** Re-runs the request's auth so a long-lived stream notices sign-out and revocation. */
     stillAuthorized?: () => Promise<boolean>;
   }>();
-  const repos = createRepos(deps.prisma, {
-    phoneCallsEnabled: deps.env?.phoneCallsEnabled,
-    phoneCallRingSeconds: deps.env?.phoneCallRingSeconds,
-  });
+  const repos = createRepos(deps.prisma);
   const onboardingDeps = { prisma: deps.prisma, events: deps.events, connectors: deps.connectors };
   const mcpOAuth = deps.mcpOAuth ?? new McpOAuthBroker(deps.prisma, deps.secrets);
   const mcpAwaitsOAuth = async (server: McpServerRow, actor: Actor, oauth: McpOAuthSummary) => {
@@ -1004,11 +1010,6 @@ export function createRouter(deps: RouterDeps) {
       if (event) await recordSecurityEvent(event);
       return result;
     });
-
-  const callsEnabled = authed.use(async ({ next }) => {
-    if (!deps.env?.phoneCallsEnabled) throw new ORPCError("NOT_FOUND");
-    return next();
-  });
 
   const boardEnabled = os
     .use(async ({ next }) => {
@@ -1650,7 +1651,6 @@ export function createRouter(deps: RouterDeps) {
               });
               for (const row of existing) {
                 await deleteUnreferencedCredentialSecret(tx, {
-                  credentialKind: "model",
                   credentialId: row.id,
                   secretId: row.secretId,
                 });
@@ -1785,10 +1785,7 @@ export function createRouter(deps: RouterDeps) {
             notifyOnFinish: input.notifyOnFinish,
             color: input.color,
             pinned: input.pinned,
-            memoryScope: input.memoryScope,
             sectionId: input.sectionId,
-            voiceId: input.voiceId,
-            autoSpeak: input.autoSpeak,
             ...(input.modelProvider !== undefined
               ? { modelProvider: input.modelProvider, modelId: input.modelId ?? null }
               : {}),
@@ -2280,49 +2277,15 @@ export function createRouter(deps: RouterDeps) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
         if (!contextBotId) throw new IsolationError();
-        const { cancelledRunIds, historyCompactionGeneration } = await deps.events.clearThread({
+        const { cancelledRunIds } = await deps.events.clearThread({
           spaceId: context.actor.spaceId,
           threadId: target.threadId,
           botId: contextBotId,
           ...(target.kind === "group" ? { groupId: target.groupId } : {}),
         });
-        const [configuredMemory] = await Promise.all([
-          target.kind === "bot"
-            ? deps.memoryProviders.resolve(context.actor.spaceId).catch((error) => {
-                getLogger().error("semantic memory resolution after thread clear failed", error);
-                return null;
-              })
-            : Promise.resolve(null),
-          Promise.all(
-            cancelledRunIds.map((runId) =>
-              deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
-            ),
-          ),
-        ]);
-        // Durable memories remain in their Space-private containers. Clear only removes
-        // conversation-derived summaries from the previous generation; including the new
-        // generation also covers a compaction job that began just after the clear committed.
-        if (configuredMemory && target.kind === "bot") {
-          // Best effort: the conversation rows are already deleted, so failing the clear here
-          // would help nothing — a failed purge only leaves stale summaries recallable.
-          try {
-            const purged = await configuredMemory.provider.purgeHistory(
-              {
-                botId: target.botId,
-                generations: [
-                  Math.max(0, historyCompactionGeneration - 1),
-                  historyCompactionGeneration,
-                ],
-              },
-              computerContext(context.actor, target.botId, `thread-clear:${target.threadId}`),
-            );
-            if (!purged.ok) {
-              getLogger().error("semantic memory purge after thread clear failed", purged.error);
-            }
-          } catch (error) {
-            getLogger().error("semantic memory purge after thread clear failed", error);
-          }
-        }
+        await Promise.all(
+          cancelledRunIds.map((runId) => deps.jobs.cancel(runJobKey(runId)).catch(() => undefined)),
+        );
         return { ok: true as const };
       }),
       followUp: authed.threads.followUp.handler(async ({ context, input }) => {
@@ -2439,138 +2402,6 @@ export function createRouter(deps: RouterDeps) {
             });
           }
         }
-        return { ok: true as const };
-      }),
-      answerCall: callsEnabled.threads.answerCall.handler(async ({ context, input }) => {
-        const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        if (target.kind !== "bot") throw new IsolationError();
-        const answered = await settleCallRequest(deps, {
-          threadId: target.threadId,
-          callId: input.callId,
-          from: ["ringing"],
-          status: "answered",
-        });
-        if (answered?.status !== "answered")
-          throw new ORPCError("CONFLICT", { message: "This call is no longer ringing." });
-        return { opening: answered.opening, reason: answered.reason };
-      }),
-      declineCall: callsEnabled.threads.declineCall.handler(async ({ context, input }) => {
-        const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        if (target.kind !== "bot") throw new IsolationError();
-        await settleCallRequest(deps, {
-          threadId: target.threadId,
-          callId: input.callId,
-          from: ["ringing"],
-          status: input.outcome,
-        });
-        return { ok: true as const };
-      }),
-      endCall: callsEnabled.threads.endCall.handler(async ({ context, input }) => {
-        const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        if (target.kind !== "bot") throw new IsolationError();
-        await assertTeachingSendAllowed(deps.prisma, context.actor.spaceId, target.botId);
-        const { botId, threadId } = target;
-        // The bot's own call: its card keeps how long the user stayed on.
-        await settleCallRequest(deps, {
-          threadId,
-          callId: input.callId,
-          from: ["answered"],
-          ...(input.durationSeconds === undefined
-            ? {}
-            : { durationSeconds: input.durationSeconds }),
-        });
-        const blocks = [
-          {
-            kind: "voice_call" as const,
-            callId: input.callId,
-            title: "",
-            farewell: "",
-            ...(input.durationSeconds === undefined
-              ? {}
-              : { durationSeconds: input.durationSeconds }),
-          },
-        ];
-        const committed = await deps.prisma
-          .$transaction(async (tx) => {
-            // A late provider hang-up is harmless when the call never produced a
-            // user utterance; do not create a phantom marker or follow-up run.
-            const userUtterance = await tx.message.findFirst({
-              where: {
-                threadId,
-                role: "user",
-                clientNonce: { startsWith: `${CALL_CLIENT_NONCE_PREFIX}${input.callId}:` },
-              },
-              select: { id: true },
-            });
-            if (!userUtterance) return null;
-            // The marker's deterministic nonce is the idempotency key: the unique
-            // (threadId, clientNonce) index rejects a second hang-up, concurrent or not.
-            const message = await createThreadMessageInTransaction(tx, {
-              threadId,
-              role: "bot",
-              botId,
-              blocks,
-              clientNonce: callMarkerClientNonce(input.callId),
-            });
-            await appendEventInTransaction(tx, {
-              spaceId: context.actor.spaceId,
-              threadId,
-              botId,
-              type: "thread.message.created",
-              payload: { messageId: message.id, role: "bot", blocks, callId: input.callId },
-            });
-            const task = await tx.task.create({
-              data: {
-                spaceId: context.actor.spaceId,
-                botId,
-                threadId,
-                userId: context.actor.userId,
-                prompt: HANG_UP_PROMPT,
-                status: "queued",
-              },
-            });
-            const run = await tx.run.create({
-              data: {
-                spaceId: context.actor.spaceId,
-                botId,
-                threadId,
-                taskId: task.id,
-                userId: context.actor.userId,
-                status: "queued",
-                trigger: "call_end",
-                clientNonce: callClientNonce(input.callId),
-              },
-              select: { id: true },
-            });
-            const ended = await appendEventInTransaction(tx, {
-              spaceId: context.actor.spaceId,
-              threadId,
-              botId,
-              type: "thread.call.ended",
-              runId: run.id,
-              payload: {
-                botId,
-                threadId,
-                callId: input.callId,
-                title: "",
-                farewell: "",
-                messageId: message.id,
-              },
-            });
-            return { runId: run.id, eventSeq: ended.seq };
-          })
-          .catch((error) => {
-            if (!isUniqueViolation(error)) throw error;
-            return null;
-          });
-        if (!committed) return { ok: true as const };
-        await deps.events.notify(threadId, committed.eventSeq).catch((error) => {
-          getLogger().error("call end realtime notification", error);
-        });
-        // The queued run is durable; a missed wake is repaired by the reconciler.
-        await deps.jobs.enqueue(runContinueJob(committed.runId)).catch((error) => {
-          getLogger().error("call end enqueue", error);
-        });
         return { ok: true as const };
       }),
       answer: authed.threads.answer.handler(async ({ context, input }) => {
@@ -3426,19 +3257,6 @@ export function createRouter(deps: RouterDeps) {
         });
         return docs.map((d) => `# ${d.path}\n\n${d.content}`).join("\n\n");
       }),
-      providerConfig: authed.memory.providerConfig.handler(async ({ context }) => {
-        const config = await findSpaceMemoryConfig(deps.prisma, context.actor.spaceId);
-        return config ? serializeSpaceMemoryConfig(config) : null;
-      }),
-      connectProvider: authed.memory.connectProvider.handler(async ({ context, input }) =>
-        persistMemoryProviderConfig(deps, context.actor, input),
-      ),
-      setDefaultScope: authed.memory.setDefaultScope.handler(async ({ context, input }) =>
-        updateMemoryProviderDefaultScope(deps, context.actor, input.defaultMemoryScope),
-      ),
-      disconnectProvider: authed.memory.disconnectProvider.handler(async ({ context }) =>
-        disconnectMemoryProvider(deps, context.actor),
-      ),
     },
     routines: {
       history: authed.routines.history.handler(async ({ context, input }) =>
@@ -4101,7 +3919,11 @@ export function createRouter(deps: RouterDeps) {
     capabilities: {
       list: authed.capabilities.list.handler(async ({ context }) => {
         const rows = await deps.prisma.capabilityInstall.findMany({
-          where: { spaceId: context.actor.spaceId, userId: context.actor.userId },
+          where: {
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+            kind: { in: ["skill", "plugin", "mcp", "api", "connection"] },
+          },
         });
         return rows.map((row) => ({
           id: row.id,
@@ -4150,14 +3972,9 @@ export function createRouter(deps: RouterDeps) {
         if (JSON.stringify(config).length > 2_000_000) {
           throw new ORPCError("BAD_REQUEST", { message: "Capability configuration is too large" });
         }
-        if (
-          credential &&
-          input.kind !== "mcp" &&
-          input.kind !== "api" &&
-          input.kind !== "graphql"
-        ) {
+        if (credential && input.kind !== "mcp" && input.kind !== "api") {
           throw new ORPCError("BAD_REQUEST", {
-            message: "Credentials are only accepted for MCP, API, and GraphQL tool sources",
+            message: "Credentials are only accepted for MCP and API tool sources",
           });
         }
         try {
@@ -4188,20 +4005,8 @@ export function createRouter(deps: RouterDeps) {
             source = prepared.source;
             config = prepared.config;
           }
-          if (input.kind === "graphql") {
-            const prepared = await prepareGraphqlInstall({
-              source,
-              config,
-              credential,
-              signal: context.signal,
-              remote: deps.remoteConnectors,
-              allowPrivateEndpoint: mayUsePrivateEndpoint(context.actor, deps),
-            });
-            source = prepared.source;
-            config = prepared.config;
-          }
         } catch (error) {
-          const message = sanitizeComposioError(error);
+          const message = sanitizeConnectorError(error);
           throw new ORPCError("BAD_REQUEST", {
             message: credential ? message.split(credential).join("[redacted]") : message,
           });
@@ -4895,42 +4700,6 @@ export function createRouter(deps: RouterDeps) {
         return { ok: true as const };
       }),
     },
-    integrationSetup: {
-      get: authed.integrationSetup.get.handler(async ({ context }) => {
-        const canConfigure = context.actor.isDeploymentOwner;
-        const providers = canConfigure
-          ? await Promise.all(
-              IntegrationProviderIdSchema.options.map(async (id) => ({
-                id,
-                configured: deps.integrationSettings
-                  ? await deps.integrationSettings.configured(id)
-                  : Boolean(deps.connectors.managed(id)),
-              })),
-            )
-          : [];
-        return {
-          canConfigure,
-          needsSetup: canConfigure && !providers.some((provider) => provider.configured),
-          webUrl: new URL("/integrations/setup", deps.env.webOrigin).toString(),
-          providers,
-        };
-      }),
-      save: authed.integrationSetup.save.handler(async ({ context, input }) => {
-        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
-        if (!deps.integrationSettings) throw new ORPCError("NOT_IMPLEMENTED");
-        try {
-          await deps.integrationSettings.save(
-            input,
-            connectionContext(context.actor, "integrationSetup.save", context.signal),
-          );
-        } catch {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "Could not verify or save these credentials",
-          });
-        }
-        return { ok: true as const };
-      }),
-    },
     connections: {
       catalog: authed.connections.catalog.handler(async ({ context, input }) => {
         const adapterContext = connectionContext(
@@ -4988,11 +4757,7 @@ export function createRouter(deps: RouterDeps) {
         }));
       }),
       begin: authed.connections.begin.handler(async ({ context, input }) => {
-        const connector =
-          deps.integrationSettings &&
-          (input.connectorId === "composio" || input.connectorId === "pipedream")
-            ? await deps.integrationSettings.resolve(input.connectorId)
-            : deps.connectors.managed(input.connectorId);
+        const connector = deps.connectors.managed(input.connectorId);
         if (!connector) {
           throw new ORPCError("BAD_REQUEST", {
             message: `Connector ${input.connectorId} is not configured`,
@@ -5073,7 +4838,7 @@ export function createRouter(deps: RouterDeps) {
               context.signal,
             );
             if (state && state !== input.provider) {
-              // Composio browser OAuth stores an authorization-request id in
+              // Browser OAuth stores an authorization-request id in
               // auth.state. Prefer canceling that pending request by id so the
               // authorization URL cannot later create an untracked remote. The
               // request id is the connected-account nanoid (INITIATED until OAuth
@@ -5121,7 +4886,7 @@ export function createRouter(deps: RouterDeps) {
                 }
               }
             } else if (state === input.provider) {
-              // Pipedream begin only returns the app slug. Drop remotes that no
+              // A provider that only returns the app slug. Drop remotes that no
               // remaining local row still references so a lost race cannot leave
               // an orphan authorization, without wiping sibling accounts.
               const revokeUnreferenced = (
@@ -5185,7 +4950,7 @@ export function createRouter(deps: RouterDeps) {
             },
             data: { status: "error" },
           });
-          throw new ORPCError("BAD_REQUEST", { message: sanitizeComposioError(error) });
+          throw new ORPCError("BAD_REQUEST", { message: sanitizeConnectorError(error) });
         }
       }),
       complete: authed.connections.complete.handler(async ({ context, input }) => {
@@ -5203,10 +4968,7 @@ export function createRouter(deps: RouterDeps) {
             message: `Connector ${existing.connectorId} is not configured`,
           });
         }
-        const prepared =
-          existing.status !== "connected"
-            ? await prepareManagedConnectorForTransaction(connector)
-            : { provider: connector, recheck: undefined };
+        const prepared = { provider: connector };
         const transactionConnector = prepared.provider;
         if (!transactionConnector)
           throw new ORPCError("BAD_REQUEST", { message: "Integration provider is not configured" });
@@ -5233,15 +4995,10 @@ export function createRouter(deps: RouterDeps) {
                 },
               });
               if (!current) throw new IsolationError();
-              if (prepared.recheck && !(await prepared.recheck(tx))) {
-                throw new ORPCError("CONFLICT", {
-                  message: "Integration credentials changed; retry.",
-                });
-              }
               if (current.status === "connected") return current;
               if (current.status === "revoked") {
                 // Authorization URLs from a revoke-win begin can still finish
-                // remotely. Cancel leftover Composio request ids / drop Pipedream
+                // remotely. Cancel leftover pending authorization ids / drop
                 // remotes no active local row still references before rejecting.
                 // Not the request signal: clients abort a poll they no longer need, and
                 // that must not cut short removing the leftover remote account.
@@ -5361,7 +5118,7 @@ export function createRouter(deps: RouterDeps) {
                 try {
                   await transactionConnector.complete({ state, code: input.code }, adapterContext);
                 } catch (error) {
-                  throw new ORPCError("BAD_REQUEST", { message: sanitizeComposioError(error) });
+                  throw new ORPCError("BAD_REQUEST", { message: sanitizeConnectorError(error) });
                 }
               }
               const ready = await transactionConnector.connectionReady(
@@ -5587,9 +5344,7 @@ export function createRouter(deps: RouterDeps) {
         const configured = needsProvider
           ? deps.connectors.managed(snapshot.connectorId)
           : undefined;
-        const prepared = configured
-          ? await prepareManagedConnectorForTransaction(configured)
-          : undefined;
+        const prepared = configured ? { provider: configured } : undefined;
         const outcome = await deps.prisma.$transaction(
           async (tx) => {
             const row = await tx.connection.findFirst({
@@ -5658,13 +5413,12 @@ export function createRouter(deps: RouterDeps) {
 
             // Slug-only remote delete is provider-wide. Run it before commit while
             // still holding the begin/revoke lock so a new authorization cannot be
-            // created and then wiped by Pipedream's slug-scoped DELETE.
+            // created and then wiped by a provider-wide DELETE.
             if (!accountSpecific) {
               if (
                 !needsProvider ||
                 row.connectorId !== snapshot?.connectorId ||
-                row.provider !== snapshot?.provider ||
-                (prepared?.recheck && !(await prepared.recheck(tx)))
+                row.provider !== snapshot?.provider
               ) {
                 throw new ORPCError("CONFLICT", {
                   message: "Integration credentials changed; retry.",
@@ -5688,7 +5442,7 @@ export function createRouter(deps: RouterDeps) {
                 );
               } catch (error) {
                 if (error instanceof ORPCError) throw error;
-                throw new ORPCError("BAD_REQUEST", { message: sanitizeComposioError(error) });
+                throw new ORPCError("BAD_REQUEST", { message: sanitizeConnectorError(error) });
               }
               return {
                 remote: null as null | RemoteRevoke,
@@ -5750,7 +5504,7 @@ export function createRouter(deps: RouterDeps) {
               );
             }
             if (error instanceof ORPCError) throw error;
-            throw new ORPCError("BAD_REQUEST", { message: sanitizeComposioError(error) });
+            throw new ORPCError("BAD_REQUEST", { message: sanitizeConnectorError(error) });
           }
         }
         return { ok: true as const };
@@ -6442,103 +6196,6 @@ export function createRouter(deps: RouterDeps) {
         runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
       })),
     },
-    voice: {
-      catalog: authed.voice.catalog.handler(async () => listVoiceCatalog()),
-      status: authed.voice.status.handler(async ({ context }) => {
-        const cred = await findDefaultVoiceCredential(deps.prisma, context.actor);
-        return toVoiceStatus(cred);
-      }),
-      credentials: authed.voice.credentials.handler(async ({ context }) => {
-        const rows = await deps.prisma.userVoiceCredential.findMany({
-          where: { userId: context.actor.userId },
-          include: {
-            preferences: {
-              where: { userId: context.actor.userId, spaceId: context.actor.spaceId },
-            },
-          },
-          orderBy: newestVoiceCredentialOrder,
-        });
-        return Promise.all(
-          rows.map(async (row) => {
-            const preference = row.preferences[0];
-            return toVoiceCredential({
-              ...row,
-              isDefault: preference?.isDefault ?? false,
-              voiceId: preference?.voiceId ?? "",
-              speechModel: preference?.speechModel ?? "",
-              server: await voiceCredentialServer(deps, context.actor, row),
-            });
-          }),
-        );
-      }),
-      connect: authed.voice.connect.handler(async ({ context, input }) =>
-        persistVoiceCredential(deps, context.actor, {
-          provider: input.provider,
-          plaintext: input.apiKey,
-          voiceId: input.voiceId,
-          speechModel: input.speechModel,
-          baseUrl: input.baseUrl,
-          ttsModel: input.ttsModel,
-          sttModel: input.sttModel,
-          signal: context.signal,
-        }),
-      ),
-      disconnect: authed.voice.disconnect.handler(async ({ context, input }) =>
-        disconnectVoiceCredential(deps, context.actor, { provider: input.provider }),
-      ),
-      setVoice: authed.voice.setVoice.handler(async ({ context, input }) => {
-        const cred = await withSerializableRetry(() =>
-          deps.prisma.$transaction(
-            async (tx) => {
-              const found = input.provider
-                ? await tx.userVoiceCredential.findFirst({
-                    where: { userId: context.actor.userId, provider: input.provider },
-                    orderBy: newestVoiceCredentialOrder,
-                  })
-                : (
-                    await tx.spaceVoicePreference.findFirst({
-                      where: {
-                        userId: context.actor.userId,
-                        spaceId: context.actor.spaceId,
-                        isDefault: true,
-                      },
-                      include: { credential: true },
-                      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-                    })
-                  )?.credential;
-              if (!found) {
-                throw new ORPCError("BAD_REQUEST", { message: "Connect a voice provider first." });
-              }
-              // Picking a voice also makes its provider the one speak/transcribe use.
-              await selectSpaceVoicePreference(tx, context.actor, found.id, input.voiceId);
-              return { ...found, voiceId: input.voiceId, isDefault: true };
-            },
-            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-          ),
-        );
-        return toVoiceStatus(cred);
-      }),
-      setSpeechModel: authed.voice.setSpeechModel.handler(async ({ context, input }) =>
-        updateVoiceSpeechModel(deps, context.actor, input),
-      ),
-      voices: authed.voice.voices.handler(async ({ context, input }) => {
-        const loaded = await loadDefaultVoiceCredential(deps, context.actor);
-        if (!loaded) return [];
-        const providerId = input.provider ?? loaded.cred.provider;
-        const row =
-          providerId === loaded.cred.provider
-            ? loaded
-            : await loadVoiceCredential(deps, context.actor, providerId);
-        if (!row) return [];
-        return (await voiceProviderFor(deps, context.actor, row.cred.provider)).listVoices(
-          row.apiKey,
-          voiceContext(context.actor, context.signal),
-        );
-      }),
-      prepare: authed.voice.prepare.handler(async ({ context, input }) =>
-        prepareVoice(deps, context.actor, input),
-      ),
-    },
   });
 }
 
@@ -6750,7 +6407,6 @@ async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
   ]);
   return {
     ticketBoardEnabled: deps.env.ticketBoardEnabled === true,
-    phoneCallsEnabled: deps.env.phoneCallsEnabled === true,
     maxUploadSizeBytes: attachmentMaxBytes(deps.env),
     userId: actor.userId,
     email: user.email,
@@ -7199,7 +6855,6 @@ async function persistModelCredential(
         throwIfAborted(input.signal);
         if (existing) {
           await deleteUnreferencedCredentialSecret(tx, {
-            credentialKind: "model",
             credentialId: existing.id,
             secretId: existing.secretId,
           });

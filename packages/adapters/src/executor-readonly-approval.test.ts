@@ -414,7 +414,6 @@ function fixture({
       },
       commit,
     },
-    memoryProviders: { resolve: async () => null },
     events: {
       append: vi.fn(async () => undefined),
       notify: vi.fn(async () => undefined),

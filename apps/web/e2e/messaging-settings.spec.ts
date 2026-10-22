@@ -21,19 +21,19 @@ test("messaging settings show linked chat apps, channels, connections, and team 
       body: JSON.stringify({
         json: {
           enabled: true,
-          providers: ["sendblue", "slack", "whatsapp", "telegram", "telegram-work", "lark"],
+          providers: ["lark"],
           openSignup: false,
           identities: [
             {
               id: "mi-1",
-              provider: "sendblue",
+              provider: "lark",
               address: "+15551230001",
               botId: "bot-1",
               botName: "Chief",
             },
             {
               id: "mi-2",
-              provider: "telegram-work",
+              provider: "lark",
               address: "424242",
               botId: "bot-2",
               botName: "Lead",
@@ -60,7 +60,7 @@ test("messaging settings show linked chat apps, channels, connections, and team 
             id: "cm1",
             channelId: "ch1",
             identityId: "mi-1",
-            provider: "sendblue",
+            provider: "fixture",
             name: "Family",
             status: "invited",
             memberCount: 3,
@@ -120,7 +120,7 @@ test("messaging settings show linked chat apps, channels, connections, and team 
         id: "clexternal000000000000001",
         spaceId: current.id,
         botId,
-        provider: "slack",
+        provider: "fixture",
         displayName: "#launch",
         participantNames: ["Ada", "Grace"],
         teamChatAmbientEnabled: null,
@@ -164,10 +164,10 @@ test("messaging settings show linked chat apps, channels, connections, and team 
   const messagingSettings = page.getByTestId("messaging-settings");
   await expect(messagingSettings).toBeVisible();
   await expect(
-    messagingSettings.getByRole("heading", { name: "Team conversations" }),
+    messagingSettings.getByRole("heading", { name: "External conversations" }),
   ).toBeVisible();
   await expect(messagingSettings.getByText("#launch")).toBeVisible();
-  await expect(messagingSettings.getByText("Slack", { exact: true })).toBeVisible();
+  await expect(messagingSettings.getByText("fixture", { exact: true })).toBeVisible();
   await messagingSettings.getByRole("button", { name: "Settings", exact: true }).click();
   const conversationSettings = page.getByTestId("external-conversation-settings");
   await expect(conversationSettings).toBeVisible();
@@ -186,12 +186,10 @@ test("messaging settings show linked chat apps, channels, connections, and team 
   await page.getByRole("button", { name: "메시징 설정 관리" }).click();
 
   await expect(page.getByTestId("messaging-settings")).toBeVisible();
-  await expect(
-    page.getByText("iMessage · Slack · WhatsApp · Telegram · Telegram (work) · Feishu"),
-  ).toBeVisible();
-  await expect(page.getByText("iMessage · +15551230001")).toBeVisible();
+  await expect(page.getByText("Feishu")).toBeVisible();
+  await expect(page.getByText("Feishu · +15551230001")).toBeVisible();
   await expect(page.getByText("→ Chief")).toBeVisible();
-  await expect(page.getByText("Telegram (work) · 424242")).toBeVisible();
+  await expect(page.getByText("Feishu · 424242")).toBeVisible();
   await expect(page.getByText("→ Lead")).toBeVisible();
   await expect(page.getByRole("button", { name: "연결 해제" })).toHaveCount(2);
   await expect(page.getByText("Family")).toBeVisible();
@@ -201,9 +199,7 @@ test("messaging settings show linked chat apps, channels, connections, and team 
   // Linking flow: pick a bot, request a code, read it back.
   await page.getByLabel("연결할 Bot").selectOption({ index: 1 });
   await page.getByRole("button", { name: "채팅 앱 연결" }).click();
-  await expect(page.getByTestId("messaging-link-code")).toContainText(
-    "채팅 앱에서 연결할 회선으로 ABCD-2345를 보내세요.",
-  );
+  await expect(page.getByTestId("messaging-link-code")).toContainText("ABCD-2345");
   await captureScreenshot(page, testInfo, "messaging-settings-ko");
 
   await page.getByRole("button", { name: "메시징 설정 닫기" }).click();

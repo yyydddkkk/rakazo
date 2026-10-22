@@ -11,7 +11,6 @@ import { messagingDeliverJob } from "@rakazo/adapter-kit";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { runAsSystem, runAsTenant } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { settleCallRequest } from "./call-request.js";
 import type { CloudAgentConnection } from "./cloud-agent-factory.js";
 import { pollCloudAgent } from "./cloud-agent-poll.js";
 import { expireComputerControl } from "./computer-control.js";
@@ -20,7 +19,6 @@ import { performComputerUpdate } from "./computer-update.js";
 import type { createRunExecutor } from "./executor.js";
 import type { ExpoPushProvider } from "./expo-push.js";
 import { compactHistory } from "./history-compaction.js";
-import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
 
@@ -56,7 +54,6 @@ export function createBackgroundJobHandlers(deps: {
   workerId: string;
   runtime: AgentRuntime;
   secretStore: SecretStore;
-  memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
   deploymentModelConfigured?: boolean;
   messaging?: MessagingSurface;
@@ -142,9 +139,6 @@ export function createBackgroundJobHandlers(deps: {
     "skill.teaching-expire": asOwner(skill, async (payload) => {
       await expireTaughtSkillTeaching(deps, payload.skillId);
     }),
-    "call.expire": asOwner(thread, async (payload) => {
-      await settleCallRequest(deps, { ...payload, from: ["ringing"], status: "missed" });
-    }),
     "cloud_agent.poll": asOwner(cloudAgent, async (payload) => {
       await pollCloudAgent(
         { prisma: deps.prisma, jobs: deps.jobs, events: deps.events, cloudAgent: deps.cloudAgent },
@@ -164,7 +158,6 @@ export function createBackgroundJobHandlers(deps: {
           prisma: deps.prisma,
           runtime: deps.runtime,
           jobs: deps.jobs,
-          memoryProviders: deps.memoryProviders,
           deploymentModelKey: deps.deploymentModelKey,
           deploymentModelConfigured: deps.deploymentModelConfigured,
           ...(deps.executor.resolveModel ? { resolveModel: deps.executor.resolveModel } : {}),

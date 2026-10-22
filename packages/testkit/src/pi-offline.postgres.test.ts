@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
+import { FakeComposioClient, FakeConnectorProvider } from "@rakazo/adapters";
 import { describe, expect, it } from "vitest";
 import { discardBotIntroRun } from "./discard-bot-intro.js";
 import { fixtureAccountResponse } from "./fixture-account.js";
@@ -75,7 +75,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         agentRuntime: "pi",
         wakeupDriver: "memory",
 
-        composio: new ComposioConnector({ client: new FakeComposioClient() }),
+        connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
         encryptionKey: "offline-model-fixture-encryption-key",
       });
       stop = handles.stop;

@@ -53,9 +53,6 @@ export const MessageView = memo(function MessageView({
   onRefresh,
   onBotChanged,
   onAddRoutine,
-  voiceReady,
-  speaking,
-  onSpeak,
   onOpenComputer,
   showToolActivity,
   onReply,
@@ -84,9 +81,6 @@ export const MessageView = memo(function MessageView({
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
-  voiceReady: boolean;
-  speaking: boolean;
-  onSpeak: () => void;
   onOpenComputer: (botId?: string) => void;
   showToolActivity: boolean;
   onReply: (message: ThreadMessage) => void;
@@ -205,16 +199,6 @@ export const MessageView = memo(function MessageView({
                 }
                 return null;
               })}
-              {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
-                <button
-                  type="button"
-                  aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
-                  onClick={onSpeak}
-                  className="text-[12px] text-muted-foreground hover:text-foreground"
-                >
-                  {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
-                </button>
-              ) : null}
             </div>
           </div>
           {hoverActions}
@@ -496,16 +480,6 @@ export const MessageView = memo(function MessageView({
                   <div data-quote-message-id={quoteMessageId}>
                     <ChatMarkdown>{block.text}</ChatMarkdown>
                   </div>
-                  {voiceReady ? (
-                    <button
-                      type="button"
-                      aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
-                      onClick={onSpeak}
-                      className="mt-2 text-[12px] text-muted-foreground hover:text-foreground"
-                    >
-                      {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
-                    </button>
-                  ) : null}
                 </div>
                 {i === hoverAnchorIndex ? hoverActions : null}
               </div>

@@ -22,9 +22,6 @@ import { RunTriggerSchema } from "./runs.js";
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
 export type ComputerMode = z.infer<typeof ComputerModeSchema>;
 
-export const MemoryScopeSchema = z.enum(["isolated", "shared"]);
-export type MemoryScopeValue = z.infer<typeof MemoryScopeSchema>;
-
 export const AvatarStyleSchema = z.enum(["robot", "organic"]);
 
 /** True for an IANA timezone this runtime can format in, such as "Pacific/Auckland". */
@@ -96,7 +93,6 @@ export const BotSchema = z.object({
   archivedAt: z.string().nullable(),
   unread: z.boolean(),
   parentBotId: Id.nullable(),
-  memoryScope: MemoryScopeSchema.nullable(),
   threadId: Id,
   preview: z.string(),
   status: z.string(),
@@ -104,8 +100,6 @@ export const BotSchema = z.object({
   computerMode: ComputerModeSchema,
   updatedAt: z.string(),
   createdAt: z.string(),
-  voiceId: z.string().nullable(),
-  autoSpeak: z.boolean(),
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
   thinkingLevel: ThinkingLevelSchema.nullable(),
@@ -116,16 +110,6 @@ export const BotSchema = z.object({
   webhookConfigured: z.boolean(),
   /** Present when created with an idempotency key (e.g. onboarding:first). */
   spawnKey: z.string().nullable(),
-  /** The bot is ringing the user right now. */
-  incomingCall: z
-    .object({
-      callId: z.string(),
-      reason: z.string(),
-      opening: z.string(),
-      expiresAt: z.string(),
-    })
-    .nullable()
-    .optional(),
 });
 export type Bot = z.infer<typeof BotSchema>;
 
@@ -395,10 +379,7 @@ export const UpdateBotInput = z
     notifyOnFinish: z.boolean().optional(),
     color: BotAvatarValueSchema.optional(),
     pinned: z.boolean().optional(),
-    memoryScope: MemoryScopeSchema.nullable().optional(),
     sectionId: Id.nullable().optional(),
-    voiceId: z.string().max(120).nullable().optional(),
-    autoSpeak: z.boolean().optional(),
     modelProvider: z.string().trim().min(1).max(80).nullable().optional(),
     modelId: z.string().trim().min(1).max(200).nullable().optional(),
     thinkingLevel: ThinkingLevelSchema.nullable().optional(),
@@ -739,7 +720,7 @@ export type ActionAutoReviewSettings = z.infer<typeof ActionAutoReviewSettingsSc
 
 export const CapabilityInstallSchema = z.object({
   id: Id,
-  kind: z.enum(["skill", "plugin", "mcp", "api", "graphql", "connection"]),
+  kind: z.enum(["skill", "plugin", "mcp", "api", "connection"]),
   name: z.string(),
   source: z.string(),
   version: z.string().nullable(),
@@ -751,7 +732,7 @@ export const CapabilityInstallSchema = z.object({
 export type CapabilityInstall = z.infer<typeof CapabilityInstallSchema>;
 
 export const IntegrationCatalogSurfaceSchema = z.object({
-  kind: z.enum(["mcp", "openapi", "graphql", "cli"]),
+  kind: z.enum(["mcp", "openapi", "cli"]),
   slug: z.string(),
   source: z.string().nullable(),
   auth: z
@@ -948,7 +929,6 @@ export const UsageRecordSchema = z.object({
   costSource: z.string().nullable().optional(),
   pricingVersion: z.string().nullable().optional(),
   usageSource: z.string().nullable().optional(),
-  callId: z.string().nullable().optional(),
   operationId: z.string().nullable().optional(),
   operationKind: z.enum(["answer", "setup", "retrieval", "subagent", "compaction"]).optional(),
   parentRunId: z.string().nullable().optional(),
@@ -1309,14 +1289,6 @@ export const ModelOAuthBeginSchema = z.discriminatedUnion("mode", [
 ]);
 export type ModelOAuthBegin = z.infer<typeof ModelOAuthBeginSchema>;
 
-export const SpaceMemoryConfigSchema = z.object({
-  provider: z.string(),
-  settings: z.record(z.string(), z.string()),
-  defaultMemoryScope: MemoryScopeSchema,
-  updatedAt: z.string(),
-});
-export type SpaceMemoryConfig = z.infer<typeof SpaceMemoryConfigSchema>;
-
 export const ModelCatalogEntrySchema = z.object({
   provider: z.string(),
   providerName: z.string().optional(),
@@ -1340,46 +1312,6 @@ export const ModelCatalogEntrySchema = z.object({
   live: z.literal(true).optional(),
 });
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
-
-export const VoiceCatalogEntrySchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string(),
-  transcribe: z.boolean(),
-});
-export type VoiceCatalogEntry = z.infer<typeof VoiceCatalogEntrySchema>;
-
-export const VoiceInfoSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  description: z.string().optional(),
-});
-export type VoiceInfo = z.infer<typeof VoiceInfoSchema>;
-
-export const VoiceCredentialSchema = z.object({
-  id: Id,
-  provider: z.string(),
-  hasKey: z.boolean(),
-  isDefault: z.boolean(),
-  voiceId: z.string(),
-  /** Fish speech-model override. Empty uses the deployment default. */
-  speechModel: z.string(),
-  transcribe: z.boolean(),
-  /** Self-hosted server base URL and model ids (never the key). Empty for hosted providers. */
-  endpoint: z.string().default(""),
-  ttsModel: z.string().default(""),
-  sttModel: z.string().default(""),
-});
-export type VoiceCredential = z.infer<typeof VoiceCredentialSchema>;
-
-export const VoiceStatusSchema = z.object({
-  configured: z.boolean(),
-  ready: z.boolean(),
-  transcribe: z.boolean(),
-  provider: z.string().nullable(),
-  voiceId: z.string(),
-});
-export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
 
 export const DeploymentSettingsSchema = z.object({
   ownerUserId: Id.nullable(),
@@ -1492,7 +1424,6 @@ export type ServerUpdateRequest = z.infer<typeof ServerUpdateRequestSchema>;
 export const MeSchema = z.object({
   maxUploadSizeBytes: z.number().int().positive().optional(),
   ticketBoardEnabled: z.boolean(),
-  phoneCallsEnabled: z.boolean().default(false),
   userId: Id,
   email: z.string().email(),
   name: z.string(),

@@ -8,7 +8,15 @@ import {
   mcpOAuthEnvReferences,
 } from "@rakazo/contracts";
 import { deriveMcpSlug } from "@rakazo/core";
-import { toStringRecord } from "./memory-provider-factory.js";
+
+function toStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
 
 export { deriveMcpSlug } from "@rakazo/core";
 

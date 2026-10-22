@@ -16,7 +16,6 @@ import { TimeSeparator } from "../../src/pages/shell/chat-context";
 import "../../src/styles.css";
 
 const demoRpc: Record<string, unknown> = {
-  "voice/voices": [],
   "models/credentials": [
     {
       id: "cred-demo",
@@ -85,8 +84,6 @@ function inboxBot(): Bot {
     computerMode: "team",
     updatedAt: "2026-10-07T00:00:00.000Z",
     createdAt: "2026-10-07T00:00:00.000Z",
-    voiceId: null,
-    autoSpeak: false,
     modelProvider: "openai",
     modelId: "gpt-4.1",
     thinkingLevel: null,
@@ -219,7 +216,6 @@ function ApprovalShot() {
 
 const subscriptionMe: Me = {
   ticketBoardEnabled: false,
-  phoneCallsEnabled: false,
   userId: "user-demo",
   email: "ada@example.test",
   name: "Ada",

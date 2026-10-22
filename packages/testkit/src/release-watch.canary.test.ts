@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  ComposioConnector,
   diagnoseReleaseWatchRun,
   FakeComposioClient,
+  FakeConnectorProvider,
   githubToolResultHasSeededRelease,
   RELEASE_WATCH_GITHUB_TOOL_NAMES,
   resolveReleaseWatchEvalModelId,
@@ -25,7 +25,7 @@ describeLive("live release-watch eval (GPT 5.6 Luna + GitHub emulator)", () => {
   let stop: (() => Promise<void>) | undefined;
   let dataDir: string | undefined;
   const fake = new FakeComposioClient();
-  const composio = new ComposioConnector({ client: fake });
+  const composio = new FakeConnectorProvider({ client: fake });
 
   afterAll(async () => {
     try {
@@ -46,7 +46,7 @@ describeLive("live release-watch eval (GPT 5.6 Luna + GitHub emulator)", () => {
       dataDir,
       sandboxProvider: "fake",
       agentRuntime: "pi",
-      composio,
+      connectors: [composio],
     });
     stop = handles.stop;
 

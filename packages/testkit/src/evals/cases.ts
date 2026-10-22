@@ -10,7 +10,7 @@ const INJECTION =
 
 export type Step =
   | { ask: string }
-  | { slack: string }
+  | { messaging: string }
   | { clear: true }
   | { newWorkspace: true }
   | { wakeRoutine: true; releases?: "unchanged" | "new" | "empty" };
@@ -243,13 +243,13 @@ export const EVAL_CASES: EvalCase[] = [
     ],
   },
   {
-    id: "slack-customer-update",
+    id: "messaging-customer-update",
     purpose:
-      "Answer a colleague in Slack from the matching Salesforce renewal and Zendesk support records.",
+      "Answer a colleague in the originating conversation from the matching Salesforce renewal and Zendesk support records.",
     connections: [CUSTOMER_SUPPORT_PROVIDERS.salesforce, CUSTOMER_SUPPORT_PROVIDERS.zendesk],
     steps: [
       {
-        slack:
+        messaging:
           "Could you check Fairhaven Robotics before my call—who owns the renewal, where does it stand, and is support blocking it? Reply here with the ticket reference and current next step.",
       },
     ],
@@ -300,7 +300,7 @@ export const EVAL_CASES: EvalCase[] = [
             !contradictory,
         ),
         check(
-          "originating-slack-thread",
+          "originating-messaging-thread",
           e.messaging.originThreadId !== null &&
             e.messaging.outbound.length > 0 &&
             e.messaging.outbound.length <= 3 &&

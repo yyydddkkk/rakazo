@@ -12,23 +12,8 @@ export type SandboxAvailabilityPhase = "idle" | "loading" | "recovered" | "unava
 /** Lines to paste into `.env` — placeholders only, never real secrets. */
 export function sandboxEnvGuidanceLines(): string[] {
   return [
-    "# Pick one provider. Leave every other SANDBOX_PROVIDER line commented out.",
-    "",
-    "# Docker on your server or Compose stack",
     "SANDBOX_PROVIDER=docker",
     "SANDBOX_SUPERVISOR_TOKEN=<generate-a-secret>",
-    "",
-    "# Hosted sandbox: E2B",
-    "# SANDBOX_PROVIDER=e2b",
-    "# E2B_API_KEY=<your-key>",
-    "",
-    "# Hosted sandbox: Daytona",
-    "# SANDBOX_PROVIDER=daytona",
-    "# DAYTONA_API_KEY=<your-key>",
-    "",
-    "# Hosted sandbox: Boat",
-    "# SANDBOX_PROVIDER=boat",
-    "# BOAT_API_KEY=<your-key>",
     "",
     "# Recreate the stack after changing .env",
   ];
@@ -38,20 +23,16 @@ export function sandboxEnvGuidanceText(): string {
   return sandboxEnvGuidanceLines().join("\n");
 }
 
-export type SandboxProviderKind = "none" | "docker" | "hosted" | "other";
+export type SandboxProviderKind = "none" | "docker" | "other";
 
 export function classifySandboxProvider(provider: string | null | undefined): SandboxProviderKind {
   if (provider == null || provider === "" || computersAreUnavailable(provider)) return "none";
   if (provider === "docker") return "docker";
-  if (provider === "e2b" || provider === "daytona" || provider === "boat") return "hosted";
   return "other";
 }
 
 export function sandboxProviderLabel(provider: string): string {
   if (provider === "docker") return "Docker";
-  if (provider === "e2b") return "E2B";
-  if (provider === "daytona") return "Daytona";
-  if (provider === "boat") return "Boat";
   if (provider === "fake") return "Fake";
   return provider;
 }

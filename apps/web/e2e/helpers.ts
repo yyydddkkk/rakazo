@@ -2,15 +2,6 @@ import type { Locator, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { resetAdminFixture } from "../../../packages/testkit/src/fixture-account";
 
-export function isRealSandboxProvider(provider = process.env.SANDBOX_PROVIDER) {
-  return provider === "e2b" || provider === "daytona" || provider === "boat";
-}
-
-export function realSandboxTimeout(real: number, emulated: number) {
-  if (process.env.SANDBOX_PROVIDER === "boat") return Math.max(real, 300_000);
-  return isRealSandboxProvider() ? real : emulated;
-}
-
 export function activeBotId(page: Page) {
   const id = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
   if (!id || id === "app") throw new Error(`missing bot id in ${page.url()}`);
@@ -28,22 +19,6 @@ export async function rpc<T>(page: Page, procedure: string, body: unknown): Prom
 
 export async function completeOnboarding(page: Page, testInfo?: TestInfo) {
   await page.waitForURL(/\/(onboarding|app)/, { timeout: 20_000 });
-  // Optional Server integrations step (needsSetup). Skip when shown, then the
-  // first bot is created automatically — land in Chief's chat with no form.
-  const integrations = page.getByRole("heading", { name: "Server integrations", exact: true });
-  const chief = page.getByText("Chief").first();
-  await integrations.or(chief).or(page.getByText("Opening chat…")).waitFor({ timeout: 20_000 });
-  if ((await chief.isVisible().catch(() => false)) && page.url().includes("/app")) {
-    if (testInfo) {
-      await captureScreenshot(page, testInfo, "03-create-first-bot");
-      await captureScreenshot(page, testInfo, "06-onboarding-complete");
-    }
-    return;
-  }
-  if (await integrations.isVisible().catch(() => false)) {
-    if (testInfo) await captureScreenshot(page, testInfo, "02-connect-apps");
-    await page.getByRole("button", { name: "Skip", exact: true }).click();
-  }
   await page.waitForURL(/\/app\//, { timeout: 20_000 });
   await expect(page.getByText("Chief").first()).toBeVisible();
   if (testInfo) {
@@ -188,7 +163,7 @@ export async function createBotFromPicker(
 /** Open the user Settings overlay, optionally switching to a sidebar section. */
 export async function openUserSettings(
   page: Page,
-  section?: "general" | "models" | "memory" | "voice" | "usage" | "computer" | "updates",
+  section?: "general" | "models" | "memory" | "usage" | "computer" | "updates",
 ) {
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();

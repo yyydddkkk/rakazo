@@ -46,7 +46,7 @@ describe("API request body limits", () => {
     mountApiRequestBodyLimits(app);
     app.post("/api/auth/sign-in/email", async (c) => c.json(await parse(c.req.raw)));
     app.post("/rpc/test", async (c) => c.json(await parse(c.req.raw)));
-    app.post("/api/voice/speak", async (c) => c.json(await parse(c.req.raw)));
+    app.post("/api/independent", async (c) => c.json(await parse(c.req.raw)));
 
     const request = (path: string, contentLength: number) =>
       app.request(path, {
@@ -59,11 +59,11 @@ describe("API request body limits", () => {
       });
     const auth = await request("/api/auth/sign-in/email", MAX_AUTH_REQUEST_BYTES + 1);
     const rpc = await request("/rpc/test", MAX_RPC_REQUEST_BYTES + 1);
-    const voice = await request("/api/voice/speak", MAX_RPC_REQUEST_BYTES + 1);
+    const independent = await request("/api/independent", MAX_RPC_REQUEST_BYTES + 1);
 
     expect(auth.status).toBe(413);
     expect(rpc.status).toBe(413);
-    expect(voice.status).toBe(200);
+    expect(independent.status).toBe(200);
     expect(parse).toHaveBeenCalledOnce();
   });
 

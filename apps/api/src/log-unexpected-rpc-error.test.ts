@@ -1,6 +1,6 @@
 import { ORPCError, onError, os } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
-import { SandboxRateLimitError, VoiceAccountError } from "@rakazo/adapter-kit";
+import { SandboxRateLimitError } from "@rakazo/adapter-kit";
 import { IsolationError } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterEach, describe, expect, it } from "vitest";
@@ -85,37 +85,6 @@ describe("logUnexpectedRpcError", () => {
 
     expect(response?.status).toBe(429);
     expect(await response?.text()).toContain("Too many computer requests. Try again later.");
-  });
-
-  it("sends a spent voice provider account to the client as HTTP 402 with its code and no error report", async () => {
-    const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-api", sinks: [sink] }));
-    const router = {
-      voices: os.handler(() => {
-        throw new VoiceAccountError(
-          "VOICE_OUT_OF_CREDIT",
-          "OpenAI says this account is out of credit.",
-        );
-      }),
-    };
-    const rpc = new RPCHandler(router, {
-      clientInterceptors: [onError((error, { path }) => handleRpcError(error, path))],
-    });
-
-    const { response } = await rpc.handle(
-      new Request("http://localhost/rpc/voices", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      }),
-      { prefix: "/rpc", context: {} },
-    );
-
-    expect(response?.status).toBe(402);
-    expect(await response?.json()).toMatchObject({
-      json: { code: "VOICE_OUT_OF_CREDIT", message: "OpenAI says this account is out of credit." },
-    });
-    expect(sink.events.map((event) => event.level)).toEqual(["warn"]);
   });
 
   it("sends a missing or foreign resource to the client as HTTP 404 without an error report", async () => {

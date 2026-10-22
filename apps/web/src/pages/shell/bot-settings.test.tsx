@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/rpc", () => ({
   rpc: {
-    voice: { voices: vi.fn(async () => []) },
     models: {
       credentials: vi.fn(async () => []),
       list: vi.fn(async () => []),
@@ -79,15 +78,12 @@ const bot = {
   archivedAt: null,
   unread: false,
   parentBotId: null,
-  memoryScope: null,
   threadId: "thread-1",
   preview: "",
   status: "idle",
   computerMode: "dedicated",
   updatedAt: "2026-09-01T00:00:00.000Z",
   createdAt: "2026-09-01T00:00:00.000Z",
-  voiceId: null,
-  autoSpeak: false,
   modelProvider: null,
   modelId: null,
   thinkingLevel: null,
@@ -146,7 +142,6 @@ async function renderSettings(onSave: (patch: SavePatch) => Promise<void>, curre
     root.render(
       <BotSettings
         bot={currentBot}
-        memoryProviderConfigured={false}
         onSkillsChange={() => undefined}
         onSave={onSave}
         onExport={async () => undefined}
@@ -170,11 +165,6 @@ describe("BotSettings help", () => {
       (entry) => entry.textContent === "Manage the bots it creates",
     );
     const toggle = document.getElementById(label?.htmlFor ?? "");
-    const speechToggle = container.querySelector<HTMLButtonElement>('[id$="-auto-speak"]');
-    const speechRow = speechToggle?.closest("label");
-    expect(speechRow?.htmlFor).toBe(speechToggle?.id);
-    expect(speechRow?.firstElementChild?.textContent).toBe("Read replies aloud");
-    expect(speechRow?.lastElementChild).toBe(speechToggle);
     expect(toggle?.getAttribute("aria-checked")).toBe("false");
     for (const label of ["Notifications", "Manage the bots it creates"]) {
       const help = container.querySelector(`[aria-label="About ${label}"]`);

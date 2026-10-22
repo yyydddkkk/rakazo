@@ -10,7 +10,6 @@ import {
 import {
   ACTIVE_RUN_STATUSES,
   blocksToAgentHistoryText,
-  callIdFromClientNonce,
   instructionUpdateDiff,
   isApprovalAskBlock,
   isConversationalRun,
@@ -217,7 +216,7 @@ export interface AnswerRunInput {
   messageId: string;
   answeredByUserId: string;
   answer: string;
-  /** Identifies a spoken answer as part of a live voice call. */
+  /** Idempotency key for a submitted answer. */
   clientNonce?: string;
   /** Only for a login card; `answer` carries its password. */
   username?: string;
@@ -525,7 +524,6 @@ export async function sendUserMessage(
           blocks: input.blocks,
           // Carries the call id on the live event so a spoken turn groups into the
           // call card immediately, instead of after a refetch reads the nonce.
-          callId: callIdFromClientNonce(message.clientNonce),
         },
       });
       return { message, task, run, busy, event };
@@ -793,31 +791,6 @@ async function commitAnswerRunInput(
   if (queued.count !== 1) return null;
 
   const recordedAnswer = secretAsk ? "" : (selectedChoice?.id ?? approvalAnswer);
-  const callId = callIdFromClientNonce(input.clientNonce);
-  const recordsCallUtterance = Boolean(callId && !secretAsk);
-
-  // Give spoken answers the same durable, call-scoped user utterance as other voice turns.
-  // Secret asks stay out of message history; the call UI requires those answers on screen.
-  if (recordsCallUtterance) {
-    const blocks = [{ kind: "text" as const, text: input.answer }];
-    const utterance = await createThreadMessageInTransaction(tx, {
-      threadId: input.threadId,
-      role: "user",
-      blocks,
-      botId: run.botId,
-      runId: input.runId,
-      clientNonce: input.clientNonce,
-    });
-    await appendEventInTransaction(tx, {
-      spaceId: input.spaceId,
-      threadId: input.threadId,
-      botId: run.botId,
-      type: "thread.message.created",
-      runId: input.runId,
-      payload: { messageId: utterance.id, role: "user", blocks, callId },
-    });
-  }
-
   if (approvalAsk) {
     if (pendingAsk.instructionUpdate) {
       if (editedInstructions !== undefined) {

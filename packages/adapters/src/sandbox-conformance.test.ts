@@ -1,6 +1,5 @@
 import type { ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
-import { fakeBoatProvider as fakeBoat } from "./boat-sandbox.test-support.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { assertSandboxWorkspaceContract, provisionPrepared } from "./sandbox-test-support.js";
 
@@ -22,20 +21,15 @@ async function drain(provider: SandboxProvider, computer: ComputerRef) {
 }
 
 describe("sandbox conformance", () => {
-  it("runs the same graphical command across fake and Boat", async () => {
+  it("runs a graphical command", async () => {
     const fake = new FakeSandboxProvider();
-    const boat = fakeBoat();
-    const a = await provisionPrepared(fake, { botId: "bot-a", homePath: "/tmp/a" }, ctx);
-    const b = await provisionPrepared(boat, { botId: "bot-b", homePath: "/tmp/b" }, ctx);
-    expect(await drain(fake, a)).toContain("graphical-ok");
-    expect(await drain(boat, b)).toContain("graphical-ok");
-    expect(new Set([a.id, b.id]).size).toBe(2);
-    await fake.destroy(a, ctx);
-    await boat.destroy(b, ctx);
+    const computer = await provisionPrepared(fake, { botId: "bot-a", homePath: "/tmp/a" }, ctx);
+    expect(await drain(fake, computer)).toContain("graphical-ok");
+    await fake.destroy(computer, ctx);
   });
 
   it("offers the same observation, action, and workspace contract across providers", async () => {
-    const providers: SandboxProvider[] = [new FakeSandboxProvider(), fakeBoat()];
+    const providers: SandboxProvider[] = [new FakeSandboxProvider()];
     for (const [index, provider] of providers.entries()) {
       const computer = await provisionPrepared(
         provider,
@@ -48,7 +42,7 @@ describe("sandbox conformance", () => {
   });
 
   it("explicit unsets win over inherited and request variables across providers", async () => {
-    const providers: SandboxProvider[] = [new FakeSandboxProvider(), fakeBoat()];
+    const providers: SandboxProvider[] = [new FakeSandboxProvider()];
     vi.stubEnv("RAKAZO_COMMAND_UNSET_TEST", "fake-host-value");
     try {
       for (const [index, provider] of providers.entries()) {
@@ -76,7 +70,7 @@ describe("sandbox conformance", () => {
   });
 
   it("treats a repeated destroy as success so a stale deletion retry is safe", async () => {
-    const providers: SandboxProvider[] = [new FakeSandboxProvider(), fakeBoat()];
+    const providers: SandboxProvider[] = [new FakeSandboxProvider()];
     for (const [index, provider] of providers.entries()) {
       const computer = await provisionPrepared(
         provider,

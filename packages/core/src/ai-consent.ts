@@ -37,8 +37,7 @@ export function aiDataUsesForProcedure(procedure: string, input?: unknown): AiDa
       "routines/testRun",
     ].includes(path)
   )
-    return ["model", "memory"];
-  if (["voice/prepare", "voice/speak", "voice/transcribe"].includes(path)) return ["voice"];
+    return ["model"];
   return [];
 }
 

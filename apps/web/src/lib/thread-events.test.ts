@@ -1526,28 +1526,6 @@ describe("thread event reduction", () => {
     expect(next?.messages[0]?.blocks[0]).toMatchObject({ status: "answered", answer: "Paris" });
   });
 
-  it("titles the call marker in place when the wrap-up run names it", () => {
-    const initial = snapshot([
-      { ...message("marker-1", [{ kind: "voice_call", title: "", farewell: "" }]), callId: "c-1" },
-    ]);
-    const next = reduceThreadSnapshot(
-      initial,
-      event({
-        type: "thread.message.updated",
-        seq: 8,
-        payload: {
-          messageId: "marker-1",
-          role: "bot",
-          blocks: [{ kind: "voice_call", title: "Flight booked", farewell: "Talk soon" }],
-        },
-      }),
-    );
-
-    expect(next?.messages).toHaveLength(1);
-    expect(next?.messages[0]?.blocks[0]).toMatchObject({ title: "Flight booked" });
-    expect(next?.messages[0]?.callId).toBe("c-1");
-  });
-
   it("preserves botId on durable bot messages", () => {
     const initial = snapshot([]);
     const next = reduceThreadSnapshot(

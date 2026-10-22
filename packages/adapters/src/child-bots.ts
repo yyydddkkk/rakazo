@@ -1,5 +1,4 @@
-import { lstat, realpath, rm, unlink } from "node:fs/promises";
-import path from "node:path";
+import { rm } from "node:fs/promises";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -661,7 +660,6 @@ async function sharedTeamComputer(
   return computer;
 }
 
-const REMOTE_TEAM_SANDBOX_KINDS = new Set(["e2b", "daytona", "boat", "createos"]);
 // The bot is already deleted; whatever this misses is removed when the computer next boots.
 const LIVE_CLEANUP_BUDGET_MS = 10_000;
 
@@ -681,9 +679,7 @@ async function removeTeamBrowserProfile(
   const name = teamBrowserProfileName(botId);
   if (!name) return;
   const profileContext = { ...context, botId, screenLeaseId: undefined };
-  // Only a running computer is cleaned now, since connecting can start a stopped one; others
-  // drop the profile on their next boot. Only a remote provider's stored copy is deleted on
-  // the server. See removeTeamBotWorkspace.
+  // Only a running computer is cleaned now; others drop the profile on their next boot.
   if (computer.providerRef && deps.sandbox.releaseScreen && computer.state === "running") {
     await withCleanupDeadline(profileContext, LIVE_CLEANUP_BUDGET_MS, (cleanupContext) =>
       removeComputerWorkspaceDirectories(
@@ -697,11 +693,6 @@ async function removeTeamBrowserProfile(
       getLogger().error("team browser profile cleanup", error);
     });
   }
-  if (!REMOTE_TEAM_SANDBOX_KINDS.has(computer.kind)) return;
-  const homeDir = resolveAgentHomePath(deps.home, computer.homeKey, deps.dataDir ?? "./data");
-  await removeContainedDirectory(homeDir, ".browser-profiles", name).catch((error) => {
-    getLogger().error("team browser profile cleanup", error);
-  });
 }
 
 /** A Team Computer that is not running removes the folder when it next boots. */
@@ -719,15 +710,6 @@ async function removeTeamBotWorkspace(
     },
   });
   if (!computer) return;
-  // Remote providers keep a stored copy that only the server writes, and replacement computers
-  // restore from it. Any other home may be mounted by a running computer, where a bot could
-  // swap bots/ for a symlink between the checks and rm, so it is only cleaned inside the computer.
-  if (REMOTE_TEAM_SANDBOX_KINDS.has(computer.kind)) {
-    const homeDir = resolveAgentHomePath(deps.home, computer.homeKey, deps.dataDir ?? "./data");
-    await removeContainedDirectory(homeDir, "bots", bot.id).catch((error) => {
-      getLogger().error("team bot folder cleanup", error);
-    });
-  }
   if (computer.state !== "running" || !computer.providerRef) return;
   const folderContext = { ...context, botId: bot.id, screenLeaseId: undefined };
   await withCleanupDeadline(folderContext, LIVE_CLEANUP_BUDGET_MS, (cleanupContext) =>
@@ -741,42 +723,4 @@ async function removeTeamBotWorkspace(
   ).catch((error) => {
     getLogger().error("team bot folder cleanup", error);
   });
-}
-
-/** Delete one folder in the team home. A symlinked parent is refused; a final symlink is unlinked. */
-async function removeContainedDirectory(root: string, parent: string, name: string) {
-  const target = path.join(root, parent, name);
-  const info = await lstat(target).catch((error: unknown) => {
-    if (isMissing(error)) return null;
-    throw error;
-  });
-  if (!info) return;
-  const parentInfo = await lstat(path.dirname(target)).catch((error: unknown) => {
-    if (isMissing(error)) return null;
-    throw error;
-  });
-  if (!parentInfo || parentInfo.isSymbolicLink() || !parentInfo.isDirectory()) {
-    throw new Error("folder escapes the team home");
-  }
-  if (info.isSymbolicLink()) {
-    await unlink(target);
-    return;
-  }
-  const resolvedRoot = await realpath(root);
-  const resolvedTarget = await realpath(target);
-  const relative = path.relative(resolvedRoot, resolvedTarget);
-  if (
-    path.dirname(resolvedTarget) !== path.join(resolvedRoot, parent) ||
-    path.basename(resolvedTarget) !== name ||
-    relative === "" ||
-    relative.startsWith("..") ||
-    path.isAbsolute(relative)
-  ) {
-    throw new Error("folder escapes the team home");
-  }
-  await rm(resolvedTarget, { recursive: true, force: true });
-}
-
-function isMissing(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }

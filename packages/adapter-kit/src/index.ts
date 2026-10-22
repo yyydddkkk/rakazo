@@ -8,4 +8,3 @@ export * from "./registry.js";
 export * from "./sandbox-errors.js";
 export * from "./secret-errors.js";
 export * from "./types.js";
-export * from "./voice-errors.js";

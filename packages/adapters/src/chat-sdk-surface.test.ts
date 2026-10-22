@@ -1,5 +1,3 @@
-import { createHmac } from "node:crypto";
-import { createSlackAdapter } from "@chat-adapter/slack";
 import { createMockAdapter, createTestMessage } from "@chat-adapter/tests";
 import type { AdapterContext, MessagingInboundEvent } from "@rakazo/adapter-kit";
 import type { Adapter, ChatInstance } from "chat";
@@ -10,8 +8,7 @@ import {
   type MessagingPlatform,
   providerOfThreadId,
 } from "./chat-sdk-surface.js";
-import { enrichSlackTeamRoom } from "./messaging-platforms.js";
-import { toTeamChatInbound } from "./team-chat-messaging.js";
+import { toExternalConversationInbound } from "./external-conversation-messaging.js";
 
 const context: AdapterContext = {
   operationId: "op-1",
@@ -23,7 +20,7 @@ const context: AdapterContext = {
 
 /**
  * A mock Chat SDK adapter whose webhook drives the real Chat instance. Like
- * the real Sendblue/Telegram/WhatsApp adapters, handleWebhook fires
+ * the real platform adapters, handleWebhook fires
  * processMessage without awaiting it and registers the work via waitUntil.
  * Mock thread ids are DMs when the channel segment starts with "D".
  */
@@ -110,92 +107,6 @@ function webhookRequest(payload: unknown): Request {
 }
 
 describe("ChatSdkMessagingSurface inbound", () => {
-  it.each([
-    ["UBOT", "mention"],
-    ["UOTHER", "ambient"],
-  ] as const)(
-    "classifies a plain Slack message mentioning %s as %s",
-    async (mentionedUser, kind) => {
-      const signingSecret = "test-slack-signing-secret";
-      const apiRequests: string[] = [];
-      const adapter = createSlackAdapter({
-        botToken: "xoxb-fake",
-        botUserId: "UBOT",
-        signingSecret,
-        // Stub HTTP transport so the real webhook/parser cannot reach Slack.
-        webClientOptions: {
-          adapter: async (config) => {
-            apiRequests.push(config.url ?? "");
-            return {
-              data: { ok: true, user: { name: "test-user", real_name: "Test User" } },
-              status: 200,
-              statusText: "OK",
-              headers: {},
-              config,
-              request: { path: "/api/users.info" },
-            };
-          },
-        },
-      });
-      const surface = new ChatSdkMessagingSurface([
-        {
-          provider: "slack",
-          capabilities: { direct: true, groups: true, receipt: "reaction" },
-          adapter,
-          enrichTeamRoom: enrichSlackTeamRoom,
-        },
-      ]);
-      const events: MessagingInboundEvent[] = [];
-      surface.onInbound(async (event) => {
-        events.push(event);
-      });
-      const body = JSON.stringify({
-        type: "event_callback",
-        team_id: "TTEST",
-        event_id: "EvTEST",
-        authorizations: [{ user_id: "UBOT", is_bot: true }],
-        event: {
-          type: "message",
-          channel_type: "channel",
-          channel: "CTEST",
-          user: "USENDER",
-          text: `<@${mentionedUser}> ship it?`,
-          ts: "1700000000.000001",
-        },
-      });
-      const timestamp = String(Math.floor(Date.now() / 1000));
-      const signature = createHmac("sha256", signingSecret)
-        .update(`v0:${timestamp}:${body}`)
-        .digest("hex");
-
-      try {
-        const response = await surface.handleWebhook(
-          "slack",
-          new Request("https://rakazo.test/api/v1/messaging/webhook/slack", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-slack-request-timestamp": timestamp,
-              "x-slack-signature": `v0=${signature}`,
-            },
-            body,
-          }),
-        );
-
-        expect(response?.status).toBe(200);
-        expect(events).toEqual([
-          expect.objectContaining({ type: "message", provider: "slack", isDirect: false, kind }),
-        ]);
-        expect(apiRequests).toEqual([
-          "https://slack.com/api/users.info",
-          "https://slack.com/api/users.info",
-        ]);
-      } finally {
-        await surface.shutdown();
-      }
-    },
-  );
-
   it("normalizes a DM into a provider-neutral inbound message", async () => {
     const { surface, events } = createSurface();
     const response = await surface.handleWebhook(
@@ -264,7 +175,7 @@ describe("ChatSdkMessagingSurface inbound", () => {
       );
       const event = events[0];
       if (event?.type !== "message") throw new Error("expected a message");
-      expect(toTeamChatInbound(event)).toMatchObject({
+      expect(toExternalConversationInbound(event)).toMatchObject({
         content: "see files\nhttps://cdn.example.test/public.png",
         attachments: [{ name: "private.png", fetch: expect.any(Function) }],
       });
@@ -525,29 +436,15 @@ describe("ChatSdkMessagingSurface webhook plumbing", () => {
 });
 
 describe("ChatSdkMessagingSurface outbound", () => {
-  it("posts Telegram replies as Markdown", async () => {
-    const { surface, adapter } = createSurface({ provider: "telegram" });
-    const body = "# Heading\n\n**bold** and [link](https://example.test)";
+  it.each(["lark", "fixture"])("keeps %s replies as strings", async (provider) => {
+    const { surface, adapter } = createSurface({ provider });
+    const body = "**bold** and [link](https://example.test)";
+    const threadId = `${provider}:C1:9`;
 
-    await surface.sendToThread({ threadId: "telegram:123", body }, context);
+    await surface.sendToThread({ threadId, body }, context);
 
-    expect(adapter.postMessage).toHaveBeenCalledExactlyOnceWith("telegram:123", {
-      markdown: body,
-    });
+    expect(adapter.postMessage).toHaveBeenCalledExactlyOnceWith(threadId, body);
   });
-
-  it.each(["slack", "whatsapp", "lark", "sendblue"])(
-    "keeps %s replies as strings",
-    async (provider) => {
-      const { surface, adapter } = createSurface({ provider });
-      const body = "**bold** and [link](https://example.test)";
-      const threadId = `${provider}:C1:9`;
-
-      await surface.sendToThread({ threadId, body }, context);
-
-      expect(adapter.postMessage).toHaveBeenCalledExactlyOnceWith(threadId, body);
-    },
-  );
 
   it("posts to a thread through the platform adapter and returns the handle", async () => {
     const { surface, adapter } = createSurface();
@@ -723,24 +620,23 @@ describe("ChatSdkMessagingSurface shape", () => {
     expect(providerOfThreadId("mock:C1:9")).toBe("mock");
   });
 
-  it("retries initialize after a failure and stops polling on shutdown", async () => {
+  it("retries initialization after failure and disconnects on shutdown", async () => {
     let attempts = 0;
-    const stopPolling = vi.fn(async () => undefined);
+    const disconnect = vi.fn(async () => undefined);
     const { surface, adapter } = createSurface({}, {
       initialize: vi.fn(async () => {
         attempts += 1;
-        if (attempts === 1) throw new Error("telegram unavailable");
+        if (attempts === 1) throw new Error("fixture unavailable");
       }),
-      stopPolling,
+      disconnect,
     } as Partial<Adapter>);
 
-    await expect(surface.initialize()).rejects.toThrow(/telegram unavailable/);
-    // Partial multi-adapter init can leave Telegram polling; clear it on failure.
-    expect(stopPolling).toHaveBeenCalledTimes(1);
+    await expect(surface.initialize()).rejects.toThrow(/fixture unavailable/);
     await expect(surface.initialize()).resolves.toBeUndefined();
     expect(adapter.initialize).toHaveBeenCalledTimes(2);
 
+    const beforeShutdown = disconnect.mock.calls.length;
     await surface.shutdown();
-    expect(stopPolling).toHaveBeenCalledTimes(2);
+    expect(disconnect).toHaveBeenCalledTimes(beforeShutdown + 1);
   });
 });

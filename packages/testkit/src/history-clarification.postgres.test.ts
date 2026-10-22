@@ -84,7 +84,7 @@ describe.skipIf(!enabled)("product history clarification eval boundary", () => {
               contextStrategy: "snapshots",
               wakeupDriver: "memory",
 
-              composio,
+              connectors: [composio],
               encryptionKey: "synthetic-clarification-encryption-key",
             }),
         });

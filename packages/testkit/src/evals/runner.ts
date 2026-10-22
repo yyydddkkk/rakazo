@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { AgentRuntime, JobPublisher, NotificationProvider } from "@rakazo/adapter-kit";
 import { runJobKey } from "@rakazo/adapter-kit";
-import { CapturingNotificationProvider, MessagingTeamChatEmulator } from "@rakazo/adapters";
+import { CapturingNotificationProvider } from "@rakazo/adapters";
 import type { ModelConnectInput, RunStatus } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, isTerminal } from "@rakazo/core";
 import type { createDb } from "@rakazo/db";
 import { discardBotIntroRun } from "../discard-bot-intro.js";
+import { FakeMessagingSurface } from "../fake-messaging.js";
 import { clearFixtureDatabase, fixtureAccountResponse } from "../fixture-account.js";
 import { sessionCookieHeader } from "../index.js";
 import { asSystem } from "../system-db.js";
@@ -54,7 +55,7 @@ export type TrialOptions = {
   maxToolCalls: number;
   createApp: (
     services: EvalServices,
-    messaging: MessagingTeamChatEmulator,
+    messaging: FakeMessagingSurface,
     witnesses: { notifications: CapturingNotificationProvider; realtime: SilenceObserver },
   ) => Promise<EvalApp>;
 };
@@ -77,10 +78,7 @@ export async function runTrial(
   const started = Date.now();
   const deadline = started + options.timeoutMs;
   const services = new EvalServices();
-  const messaging = new MessagingTeamChatEmulator({
-    provider: "slack",
-    capabilities: { groups: false },
-  });
+  const messaging = new FakeMessagingSurface();
   scenario.configure?.(services);
   const notifications = new CapturingNotificationProvider();
   const realtime = new SilenceObserver();
@@ -365,7 +363,7 @@ export async function runTrial(
         runId = (
           await rpc<{ runId: string }>(app, cookie, "threads/send", { botId, text: step.ask })
         ).runId;
-      } else if ("slack" in step) {
+      } else if ("messaging" in step) {
         if (!messagingLinked) {
           const link = await rpc<{ code: string }>(app, cookie, "messaging/link/start", { botId });
           await messaging.emitInbound({
@@ -382,7 +380,7 @@ export async function runTrial(
           isDirect: true,
           from: messagingAddress,
           fromLabel: "Teammate",
-          content: step.slack,
+          content: step.messaging,
         });
         messagingOriginThreadId = inbound.threadId;
         runId = await poll(
@@ -451,7 +449,7 @@ export async function runTrial(
       if (
         scenario.steps
           .slice(stepIndex + 1)
-          .some((next) => "ask" in next || "slack" in next || "wakeRoutine" in next)
+          .some((next) => "ask" in next || "messaging" in next || "wakeRoutine" in next)
       )
         setupRunIds.add(runId);
       const requestStarted = (
@@ -526,7 +524,7 @@ export async function runTrial(
             : "product";
         throw new EvalFailure(category, error);
       }
-      if ("slack" in step && terminal.status === "completed") {
+      if ("messaging" in step && terminal.status === "completed") {
         await waitForMessagingDelivery(prisma, runId, deadline);
       }
       // Completion is committed before notification delivery. Drain the executor before observing.

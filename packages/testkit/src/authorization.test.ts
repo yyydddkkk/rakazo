@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  ComposioConnector,
   ExpoPushProvider,
   FakeComposioClient,
+  FakeConnectorProvider,
   loadPushToken,
 } from "@rakazo/adapters";
 import type { appContract, SpaceNavigation } from "@rakazo/contracts";
@@ -51,7 +51,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       sandboxProvider: "fake",
       agentRuntime: "scripted",
       wakeupDriver: "memory",
-      composio: new ComposioConnector({ client: new FakeComposioClient() }),
+      connectors: [new FakeConnectorProvider({ client: new FakeComposioClient() })],
     });
     app = handles.app;
     db = asSystem(handles.prisma);
@@ -189,14 +189,6 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["export/bot", { botId: "missing-bot" }],
       ["notifications/registerPush", { token: "ExponentPushToken[not-real]" }],
       ["search/query", { q: "anything" }],
-      ["voice/catalog"],
-      ["voice/status"],
-      ["voice/credentials"],
-      ["voice/connect", { provider: "elevenlabs", apiKey: "not-a-real-key" }],
-      ["voice/disconnect", { provider: "elevenlabs" }],
-      ["voice/setVoice", { voiceId: "missing-voice" }],
-      ["voice/voices", {}],
-      ["voice/prepare", { text: "Nope" }],
     ]);
 
     const results = await Promise.all(
@@ -364,7 +356,6 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ],
       ["artifacts/get", { botId: ownerBot.id, artifactId: ownerArtifact.id }],
       ["export/bot", { botId: ownerBot.id }],
-      ["voice/prepare", { text: "stolen speech", botId: ownerBot.id }],
     ];
     await Promise.all(
       botIdCalls.map(([procedure, input]) => expectDenied(app, intruder, procedure, input)),
@@ -1193,7 +1184,7 @@ function capabilityInput(name: string) {
 }
 
 function connectionInput(displayName: string) {
-  return { provider: "SLACK", displayName };
+  return { connectorId: "composio", provider: "SLACK", displayName };
 }
 
 async function signup(_app: App, email: string, name: string) {

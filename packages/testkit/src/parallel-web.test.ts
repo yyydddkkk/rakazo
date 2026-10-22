@@ -94,7 +94,6 @@ function executorFixture(
     web: createWebProvider(undefined, peer.network),
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
     memory: { read: async () => ({ documents: [] }) },
-    memoryProviders: { resolve: async () => null },
     events: { append: async () => undefined, claimSteering: async () => [], finalizeRun },
     jobs: { enqueue: async () => undefined },
     secrets: [],

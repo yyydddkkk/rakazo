@@ -382,6 +382,7 @@ model UserModelCredential {
   @@map("user_model_credentials")
 }
 
+/// Unused since slim/web-only; drop in a later migration.
 model UserVoiceCredential {
   id          String                 @id @default(cuid())
   userId      String
@@ -430,6 +431,7 @@ model SpaceBackupModel {
   @@map("space_backup_models")
 }
 
+/// Unused since slim/web-only; drop in a later migration.
 model SpaceVoicePreference {
   id           String              @id @default(cuid())
   spaceId      String
@@ -1192,6 +1194,7 @@ model NotificationPreference {
   @@map("notification_preferences")
 }
 
+/// Unused since slim/web-only; drop in a later migration.
 model SpaceMemoryConfig {
   id                 String   @id @default(cuid())
   spaceId            String   @unique
