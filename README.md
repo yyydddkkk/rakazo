@@ -77,9 +77,9 @@ For deployment, provider selection, backups, and upgrades, see the
 
 ## Single-user deployment
 
-The instance uses one administrator account and one Space. Configure
+The instance uses one administrator account and one Organization, with any number of Spaces the administrator creates. Configure
 `RAKAZO_ADMIN_EMAIL` and `RAKAZO_ADMIN_PASSWORD` for initial setup; use placeholder values
-only in tracked examples. Existing Space and Organization data structures remain in place.
+only in tracked examples. A first start creates one default Space; each Space keeps its own bots, chats, computers, memory, models, app connections, and approval rules.
 Use a browser to connect to the instance and put HTTPS in front of a public deployment.
 See [self-hosting](./docs/self-host.md) for deployment, backups, and configuration.
 

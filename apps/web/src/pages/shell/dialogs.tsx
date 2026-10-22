@@ -34,6 +34,79 @@ function closeUnlessBusy(busy: boolean, onCancel: () => void) {
   };
 }
 
+/** Names a new space, or renames `space` when given. */
+export function SpaceNameDialog({
+  space,
+  onCancel,
+  onConfirm,
+}: {
+  space?: { name: string };
+  onCancel: () => void;
+  onConfirm: (name: string) => Promise<void>;
+}) {
+  const { t } = useLingui();
+  const nameId = useId();
+  const [name, setName] = useState(space?.name ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const trimmed = name.trim();
+  const unchanged = trimmed === space?.name;
+
+  return (
+    <Dialog open onOpenChange={closeUnlessBusy(saving, onCancel)}>
+      <DialogContent showCloseButton={false} aria-describedby={undefined}>
+        <form
+          className="contents"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!trimmed || saving || unchanged) return;
+            setSaving(true);
+            setError(null);
+            void onConfirm(trimmed).catch((err: unknown) => {
+              setError(
+                errorText(err, space ? t`Could not rename space` : t`Could not create space`),
+              );
+              setSaving(false);
+            });
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {space ? <Trans>Rename space</Trans> : <Trans>New space</Trans>}
+            </DialogTitle>
+          </DialogHeader>
+          <label htmlFor={nameId} className="block text-[13.5px] text-foreground/75">
+            <Trans>Name</Trans>
+            <Input
+              id={nameId}
+              maxLength={60}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-2"
+              autoFocus
+            />
+          </label>
+          {error ? <p className="text-[13.5px] text-destructive">{error}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={saving} onClick={onCancel}>
+              <Trans>Cancel</Trans>
+            </Button>
+            <Button type="submit" disabled={saving || !trimmed || unchanged}>
+              {saving ? (
+                <Trans>Saving…</Trans>
+              ) : space ? (
+                <Trans>Save</Trans>
+              ) : (
+                <Trans>Create</Trans>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function PickerInfoDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog
@@ -343,7 +416,7 @@ export function DeleteItemDialog({
   onConfirm,
 }: {
   item: { name: string };
-  noun: "group" | "routine" | "section";
+  noun: "group" | "routine" | "section" | "space";
   description?: React.ReactNode;
   onCancel: () => void;
   onConfirm: () => Promise<void>;
@@ -380,9 +453,11 @@ export function DeleteItemDialog({
                     err,
                     noun === "group"
                       ? t`Could not delete group`
-                      : noun === "section"
-                        ? t`Could not delete section`
-                        : t`Could not delete routine`,
+                      : noun === "space"
+                        ? t`Could not delete space`
+                        : noun === "section"
+                          ? t`Could not delete section`
+                          : t`Could not delete routine`,
                   ),
                 );
                 setDeleting(false);

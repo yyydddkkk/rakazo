@@ -19,16 +19,14 @@ function fixture({ existing = false } = {}) {
     },
     space: {
       findMany: vi.fn(async () =>
-        existing ? [{ id: "space", organizationId: "organization" }] : [],
+        existing ? [{ id: "space", organizationId: "organization", isDefault: true }] : [],
       ),
     },
     organization: { findMany: vi.fn(async () => (existing ? [{ id: "organization" }] : [])) },
     spaceMember: {
-      findFirst: vi.fn(async () => ({
-        spaceId: "space",
-        organizationId: "organization",
-        role: "owner",
-      })),
+      findMany: vi.fn(async () => [
+        { spaceId: "space", organizationId: "organization", role: "owner" },
+      ]),
     },
     deploymentSettings: {
       findUnique: vi.fn(async () => ({
@@ -101,7 +99,7 @@ describe("private administrator bootstrap", () => {
     expect(f.tx.account.create).not.toHaveBeenCalled();
     expect(bootstrapUserSpace).not.toHaveBeenCalled();
   });
-  it.each(["user", "space", "organization"] as const)(
+  it.each(["user", "organization"] as const)(
     "refuses multiple %s records without mutation",
     async (model) => {
       const f = fixture({ existing: true });
@@ -113,6 +111,61 @@ describe("private administrator bootstrap", () => {
       expect(bootstrapUserSpace).not.toHaveBeenCalled();
     },
   );
+  it("accepts several spaces in the one organization when the user owns each", async () => {
+    const f = fixture({ existing: true });
+    f.tx.space.findMany.mockResolvedValue([
+      { id: "older", organizationId: "organization", isDefault: false },
+      { id: "space", organizationId: "organization", isDefault: true },
+    ]);
+    f.tx.spaceMember.findMany.mockResolvedValue([
+      { spaceId: "older", organizationId: "organization", role: "owner" },
+      { spaceId: "space", organizationId: "organization", role: "owner" },
+    ]);
+    await expect(bootstrapAdmin(f.prisma)).resolves.toEqual({
+      userId: "admin",
+      spaceId: "space",
+      created: false,
+    });
+    expect(bootstrapUserSpace).not.toHaveBeenCalled();
+  });
+  it.each([
+    {
+      name: "a space the user does not own",
+      memberships: [{ spaceId: "space", organizationId: "organization", role: "owner" }],
+      spaces: [
+        { id: "space", organizationId: "organization", isDefault: true },
+        { id: "other", organizationId: "organization", isDefault: false },
+      ],
+    },
+    {
+      name: "a non-owner membership",
+      memberships: [
+        { spaceId: "space", organizationId: "organization", role: "owner" },
+        { spaceId: "other", organizationId: "organization", role: "member" },
+      ],
+      spaces: [
+        { id: "space", organizationId: "organization", isDefault: true },
+        { id: "other", organizationId: "organization", isDefault: false },
+      ],
+    },
+    {
+      name: "a space outside the organization",
+      memberships: [
+        { spaceId: "space", organizationId: "organization", role: "owner" },
+        { spaceId: "other", organizationId: "elsewhere", role: "owner" },
+      ],
+      spaces: [
+        { id: "space", organizationId: "organization", isDefault: true },
+        { id: "other", organizationId: "elsewhere", isDefault: false },
+      ],
+    },
+  ])("refuses $name", async ({ memberships, spaces }) => {
+    const f = fixture({ existing: true });
+    f.tx.space.findMany.mockResolvedValue(spaces);
+    f.tx.spaceMember.findMany.mockResolvedValue(memberships);
+    await expect(bootstrapAdmin(f.prisma)).rejects.toThrow("setup is incomplete");
+    expect(bootstrapUserSpace).not.toHaveBeenCalled();
+  });
   it("refuses an existing user without a credential instead of creating one", async () => {
     const f = fixture({ existing: true });
     f.tx.account.findMany.mockResolvedValue([]);
@@ -152,7 +205,9 @@ describe("private administrator bootstrap", () => {
     f.tx.deploymentSettings.findUnique.mockResolvedValue({ ownerUserId: "someone-else" });
     await expect(bootstrapAdmin(f.prisma, credentials)).rejects.toThrow("setup is incomplete");
     const empty = fixture();
-    empty.tx.space.findMany.mockResolvedValue([{ id: "orphan", organizationId: "organization" }]);
+    empty.tx.space.findMany.mockResolvedValue([
+      { id: "orphan", organizationId: "organization", isDefault: true },
+    ]);
     await expect(bootstrapAdmin(empty.prisma, credentials)).rejects.toThrow("no administrator");
     expect(empty.tx.user.create).not.toHaveBeenCalled();
   });

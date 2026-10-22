@@ -7,7 +7,7 @@ import {
 } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
-import { IsolationError, type Prisma } from "@rakazo/db";
+import { IsolationError, type Prisma, runAsSystemInTransaction } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { RouterContext } from "./shared.js";
 import { authed } from "./shared.js";
@@ -137,8 +137,36 @@ async function lockProviderConnectionScope(
   provider: string,
 ): Promise<void> {
   // Avoid NUL separators in the lock key; text params may truncate at a zero byte and break begin.
-  const scope = `space:${owner.spaceId}|user:${owner.userId}|connector:${connectorId}|provider:${provider}`;
+  // Not per Space: the provider's accounts belong to the user, so Spaces serialize together.
+  const scope = `user:${owner.userId}|connector:${connectorId}|provider:${provider}`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('connection-provider'), hashtext(${scope}))`;
+}
+
+/**
+ * Account refs the user's rows in other Spaces hold for one provider. The provider's
+ * accounts belong to the user, so cleanup and account matching in one Space must not
+ * touch an account another Space connected.
+ */
+async function otherSpaceRefs(
+  tx: Prisma.TransactionClient,
+  owner: Pick<Actor, "spaceId" | "userId">,
+  connectorId: string,
+  provider: string,
+  statuses: string[] = ["connected", "pending", "error"],
+): Promise<Array<string | null>> {
+  const rows = await runAsSystemInTransaction(tx, "the account's connections in other Spaces", () =>
+    tx.connection.findMany({
+      where: {
+        userId: owner.userId,
+        spaceId: { not: owner.spaceId },
+        connectorId,
+        provider,
+        status: { in: statuses },
+      },
+      select: { providerRef: true },
+    }),
+  );
+  return rows.map((row) => row.providerRef);
 }
 
 function connectionContext(
@@ -375,7 +403,15 @@ export function connectionsRouter(ctx: RouterContext) {
                         select: { providerRef: true },
                       });
                       const { keepIds, canRevokeUnreferenced } = concreteKeepAccountIds(
-                        kept.map((entry) => entry.providerRef),
+                        [
+                          ...kept.map((entry) => entry.providerRef),
+                          ...(await otherSpaceRefs(
+                            tx,
+                            context.actor,
+                            input.connectorId,
+                            input.provider,
+                          )),
+                        ],
                         input.provider,
                       );
                       // Skip while any sibling still lacks a concrete account id —
@@ -533,7 +569,15 @@ export function connectionsRouter(ctx: RouterContext) {
                         select: { providerRef: true },
                       });
                       const { keepIds, canRevokeUnreferenced } = concreteKeepAccountIds(
-                        kept.map((entry) => entry.providerRef),
+                        [
+                          ...kept.map((entry) => entry.providerRef),
+                          ...(await otherSpaceRefs(
+                            tx,
+                            context.actor,
+                            existing.connectorId,
+                            existing.provider,
+                          )),
+                        ],
                         existing.provider,
                       );
                       if (canRevokeUnreferenced) {
@@ -648,6 +692,15 @@ export function connectionsRouter(ctx: RouterContext) {
                   } else {
                     excludeIds.push(ref);
                   }
+                }
+                // Another Space's accounts are never this row's, whatever their state.
+                for (const ref of await otherSpaceRefs(
+                  tx,
+                  context.actor,
+                  existing.connectorId,
+                  existing.provider,
+                )) {
+                  if (ref?.trim() && ref !== existing.provider) excludeIds.push(ref.trim());
                 }
                 if (unresolvedSibling) {
                   return current;
@@ -837,15 +890,23 @@ export function connectionsRouter(ctx: RouterContext) {
               };
             }
 
-            const remaining = await tx.connection.count({
-              where: {
-                spaceId: context.actor.spaceId,
-                userId: context.actor.userId,
-                connectorId: row.connectorId,
-                provider: row.provider,
-                status: { in: ["connected", "pending"] },
-              },
-            });
+            // A live row in another Space counts: a provider-wide delete would take its account.
+            const remaining =
+              (await tx.connection.count({
+                where: {
+                  spaceId: context.actor.spaceId,
+                  userId: context.actor.userId,
+                  connectorId: row.connectorId,
+                  provider: row.provider,
+                  status: { in: ["connected", "pending"] },
+                },
+              })) +
+              (
+                await otherSpaceRefs(tx, context.actor, row.connectorId, row.provider, [
+                  "connected",
+                  "pending",
+                ])
+              ).length;
             const connectionRef = row.providerRef || row.provider;
             const accountSpecific = Boolean(row.providerRef && row.providerRef !== row.provider);
             // Account-scoped refs can disconnect one remote authorization while

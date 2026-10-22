@@ -1947,6 +1947,8 @@ export function ShellPage() {
         ticketBoardEnabled={bootstrapMe?.ticketBoardEnabled}
         setPluginsOpen={setPluginsOpen}
         openSettings={openSettings}
+        spaces={spaces}
+        currentSpaceId={bootstrapMe?.spaceId}
         sidebarGroups={sidebarGroups}
         collapsedSidebarSections={collapsedSidebarSections}
         collapsedRosterParents={collapsedRosterParents}

@@ -1310,6 +1310,10 @@ msgstr "无法创建群组"
 msgid "Could not create section"
 msgstr "无法创建分组"
 
+#: src/pages/shell/dialogs.tsx
+msgid "Could not create space"
+msgstr "无法创建工作区"
+
 #: src/pages/Onboarding.tsx
 msgid "Could not create your bot"
 msgstr "无法创建你的 Bot"
@@ -1337,6 +1341,10 @@ msgstr "无法删除分组"
 #: src/pages/KnowledgeSection.tsx
 msgid "Could not delete skill"
 msgstr "无法删除技能"
+
+#: src/pages/shell/dialogs.tsx
+msgid "Could not delete space"
+msgstr "无法删除工作区"
 
 #: src/pages/Artifacts.tsx
 msgid "Could not delete this artifact."
@@ -1476,6 +1484,10 @@ msgstr "无法重命名连接"
 #: src/pages/shell/dialogs.tsx
 msgid "Could not rename section"
 msgstr "无法重命名分组"
+
+#: src/pages/shell/dialogs.tsx
+msgid "Could not rename space"
+msgstr "无法重命名工作区"
 
 #: src/pages/shell/message-cards.tsx
 msgid "Could not render chart"
@@ -1765,6 +1777,10 @@ msgstr "同时删除记忆"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Delete section"
 msgstr "删除分组"
+
+#: src/pages/shell/space-switcher.tsx
+msgid "Delete space"
+msgstr "删除工作区"
 
 #: src/pages/shell/message-view.tsx
 msgid "deleted"
@@ -2759,6 +2775,11 @@ msgstr "新建分组"
 msgid "New skill"
 msgstr "新建技能"
 
+#: src/pages/shell/dialogs.tsx
+#: src/pages/shell/space-switcher.tsx
+msgid "New space"
+msgstr "新建工作区"
+
 #: src/pages/Board.tsx
 msgid "New ticket"
 msgstr "新建工单"
@@ -3375,6 +3396,11 @@ msgstr "正在移除…"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Rename section"
 msgstr "重命名分组"
+
+#: src/pages/shell/dialogs.tsx
+#: src/pages/shell/space-switcher.tsx
+msgid "Rename space"
+msgstr "重命名工作区"
 
 #: src/pages/ScratchpadSection.tsx
 msgid "Reopen"

@@ -75,6 +75,7 @@ import {
   ScratchpadItemStatusSchema,
   SkillPlaybookSchema,
   SpaceNavigationSchema,
+  SpaceSchema,
   TaughtSkillSchema,
   TeachRecordingEventSchema,
   ThinkingLevelSchema,
@@ -120,6 +121,8 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("routine"), id: Id }),
   z.object({ kind: z.literal("connector"), id: Id }),
 ]);
+
+const spaceName = z.string().trim().min(1).max(60);
 
 const threadSendInput = threadTarget
   .safeExtend({
@@ -174,6 +177,13 @@ export const appContract = {
   },
   spaces: {
     list: oc.output(SpaceNavigationSchema),
+    create: oc.input(z.object({ name: spaceName })).output(SpaceSchema),
+    rename: oc
+      .input(z.object({ spaceId: Id, name: spaceName }))
+      .output(z.object({ id: Id, name: z.string() })),
+    remove: oc
+      .input(z.object({ spaceId: Id }))
+      .output(z.object({ ok: z.literal(true), activeSpaceId: Id })),
   },
   bootstrap: oc.input(z.object({ botId: Id.optional() })).output(AppBootstrapSchema),
   deployment: {

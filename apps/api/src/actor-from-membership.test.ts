@@ -16,16 +16,14 @@ function prisma(options: {
 }) {
   return {
     spaceMember: {
-      findMany: vi.fn(async () =>
+      findFirst: vi.fn(async () =>
         options.membership
-          ? [
-              {
-                userId: actor.userId,
-                spaceId: actor.spaceId,
-                member: { user: { email: actor.email } },
-              },
-            ]
-          : [],
+          ? {
+              userId: actor.userId,
+              spaceId: actor.spaceId,
+              member: { user: { email: actor.email } },
+            }
+          : null,
       ),
     },
     deploymentSettings: {

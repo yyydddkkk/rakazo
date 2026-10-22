@@ -2150,7 +2150,11 @@ describe("connections.complete", () => {
         },
       ),
     };
-    const client = { connection, $executeRaw: vi.fn(async () => undefined) };
+    const client = {
+      connection,
+      $executeRaw: vi.fn(async () => undefined),
+      $queryRaw: vi.fn(async () => []),
+    };
     const prisma = {
       ...client,
       $transaction: vi.fn(async (fn: (tx: typeof client) => Promise<unknown>) => fn(client)),

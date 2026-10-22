@@ -22,6 +22,21 @@ export function selectedSpaceId(): string | null {
   }
 }
 
+/** Persists the space later requests act on; false when the browser refuses storage. */
+export function selectSpace(id: string): boolean {
+  try {
+    window.localStorage.setItem(SPACE_STORAGE_KEY, id);
+    return true;
+  } catch {
+    try {
+      // Write failed but the desired selection is already durable — treat as success.
+      return window.localStorage.getItem(SPACE_STORAGE_KEY) === id;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export function clearSpaceSelection(): void {
   try {
     window.localStorage.removeItem(SPACE_STORAGE_KEY);

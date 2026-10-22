@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot, Group, SearchHit } from "@rakazo/contracts";
+import type { Bot, Group, SearchHit, Space } from "@rakazo/contracts";
 import {
   Button,
   InputGroup,
@@ -25,6 +25,7 @@ import { SpaceSearchResults } from "../SpaceSearch";
 import { ArchivedChats } from "./archived-chats";
 import { SidebarHeader } from "./sidebar-header";
 import { SidebarRoster } from "./sidebar-roster";
+import { SpaceSwitcher } from "./space-switcher";
 
 type RosterProps = Omit<ComponentProps<typeof SidebarRoster>, "mini" | "botsSidebarDensity">;
 
@@ -68,8 +69,12 @@ export function ShellSidebar({
   ticketBoardEnabled,
   setPluginsOpen,
   openSettings,
+  spaces,
+  currentSpaceId,
   ...rosterProps
 }: RosterProps & {
+  spaces: Space[];
+  currentSpaceId: string | undefined;
   rpc: ReturnType<typeof createSpaceRpc>;
   isMobileSidebar: boolean;
   mobileSidebarOpen: boolean;
@@ -157,6 +162,16 @@ export function ShellSidebar({
           setPanel={setPanel}
           navigate={navigate}
           setPickerInfoTopic={setPickerInfoTopic}
+          spaceSwitcher={
+            currentSpaceId ? (
+              <SpaceSwitcher
+                rpc={rpc}
+                spaces={spaces}
+                currentSpaceId={currentSpaceId}
+                refresh={() => refreshBots()}
+              />
+            ) : null
+          }
         />
         {miniSidebar ? (
           <IconTooltip label={t`Search`}>

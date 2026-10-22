@@ -21,19 +21,15 @@ export async function requireMembership(
   userId: string,
   requestedSpaceId?: string | null,
 ): Promise<Actor> {
-  const memberships = await prisma.spaceMember.findMany({
-    where: {
-      userId,
-    },
-    take: 2,
+  // A requested Space only opens when the user belongs to it, so a client-supplied
+  // id never reaches another Space's rows on its own. Without one, the default
+  // (else oldest) Space opens.
+  const membership = await prisma.spaceMember.findFirst({
+    where: { userId, ...(requestedSpaceId ? { spaceId: requestedSpaceId } : {}) },
+    orderBy: [{ space: { isDefault: "desc" } }, { createdAt: "asc" }, { id: "asc" }],
     include: { member: { include: { user: true } } },
   });
-  const membership = memberships[0];
-  if (
-    memberships.length !== 1 ||
-    !membership ||
-    (requestedSpaceId && requestedSpaceId !== membership.spaceId)
-  ) {
+  if (!membership) {
     throw new IsolationError("No personal space");
   }
   const settings = await prisma.deploymentSettings.findUnique({

@@ -198,6 +198,39 @@ describeWithDatabase("Composio catalog reconciliation", () => {
     ).resolves.toContainEqual(expect.objectContaining({ slug: "GMAIL", connected: false }));
   });
 
+  it("keeps another space's account when revoking a slug-only connection", async () => {
+    const cookie = await signup(app, `two-spaces-${stamp}@rakazo.test`, "Two Spaces");
+    const second = await rpc<{ id: string }>(app, cookie, "spaces/create", { name: "Second" });
+    const gmail = { connectorId: "composio", provider: "GMAIL", displayName: "Mailbox" };
+    // The other space's account is created first, so a provider-wide delete would pick it.
+    const other = await rpc<{ connectionId: string }>(
+      app,
+      cookie,
+      "connections/begin",
+      gmail,
+      second.id,
+    );
+    const first = await rpc<{ connectionId: string }>(app, cookie, "connections/begin", gmail);
+    const db = asSystem(handles.prisma);
+    const otherRow = await db.connection.findUniqueOrThrow({ where: { id: other.connectionId } });
+    expect(otherRow.spaceId).toBe(second.id);
+    // A legacy row that only knows the app slug, not a concrete account.
+    await db.connection.update({
+      where: { id: first.connectionId },
+      data: { providerRef: "GMAIL" },
+    });
+
+    await rpc(app, cookie, "connections/revoke", { connectionId: first.connectionId });
+
+    expect(fake.accounts.map((account) => account.id)).toContain(otherRow.providerRef);
+    await expect(
+      db.connection.findUniqueOrThrow({ where: { id: other.connectionId } }),
+    ).resolves.toMatchObject({ status: "connected" });
+    // Each space still revokes its own account.
+    await rpc(app, cookie, "connections/revoke", { connectionId: other.connectionId }, second.id);
+    expect(fake.accounts.map((account) => account.id)).not.toContain(otherRow.providerRef);
+  });
+
   it("marks a connected account Composio reports dead as needing reconnect", async () => {
     const cookie = await signup(app, `reconnect-${stamp}@rakazo.test`, "Reconnect");
     const work = await rpc<{ connectionId: string }>(app, cookie, "connections/begin", {
@@ -570,12 +603,19 @@ async function signup(_app: App, email: string, name: string) {
   return sessionCookieHeader(response);
 }
 
-async function rpc<T>(app: App, cookie: string, procedure: string, body: unknown = {}): Promise<T> {
+async function rpc<T>(
+  app: App,
+  cookie: string,
+  procedure: string,
+  body: unknown = {},
+  spaceId?: string,
+): Promise<T> {
   const response = await app.request(`/rpc/${procedure}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       cookie,
+      ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
       origin: "http://127.0.0.1:5173",
     },
     body: JSON.stringify({ json: body }),

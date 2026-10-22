@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioConnector, FakeComposioClient } from "@rakazo/adapters";
-import type { appContract, SpaceNavigation } from "@rakazo/contracts";
+import type { appContract, Space, SpaceNavigation } from "@rakazo/contracts";
 import { runAsSystem } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -80,6 +80,9 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["models/cancelOAuth", { loginId: "missing-login" }],
       ["models/setDefault", { provider: "test", modelId: "test/model" }],
       ["spaces/list"],
+      ["spaces/create", { name: "Nope" }],
+      ["spaces/rename", { spaceId: "missing-space", name: "Nope" }],
+      ["spaces/remove", { spaceId: "missing-space" }],
       ["bots/list"],
       ["bots/listArchived"],
       ["bots/get", { botId: "missing-bot" }],
@@ -681,7 +684,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       expect.objectContaining({
         id: actor.spaceId,
         bots: [expect.objectContaining({ id: originalBot.id, notifyOnFinish: false })],
-        canRename: false,
+        canRename: true,
         canDelete: false,
       }),
     ]);
@@ -694,6 +697,177 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(storedOriginal?.spaceId).toBe(actor.spaceId);
     expect(storedOther?.spaceId).toBe(otherActor.spaceId);
     expect(storedOriginal?.computerId).not.toBe(storedOther?.computerId);
+  });
+
+  it("keeps one owner's spaces isolated and manages their lifecycle", async () => {
+    const cookie = await signup(app, `multi-space-${stamp}@rakazo.test`, "Space Owner");
+    const original = await rpc<Actor>(app, cookie, "me");
+    const originalBot = await rpc<Bot>(app, cookie, "bots/create", botInput("Open source"));
+    const originalConnection = await rpc<{ connectionId: string }>(
+      app,
+      cookie,
+      "connections/begin",
+      connectionInput("Original connection"),
+    );
+    const support = await rpc<Space>(app, cookie, "spaces/create", { name: "  Customer support " });
+    expect(support.name).toBe("Customer support");
+    const stored = await db.space.findMany({
+      where: { id: { in: [original.spaceId, support.id] } },
+      select: { id: true, organizationId: true, isDefault: true },
+    });
+    expect(new Set(stored.map((space) => space.organizationId)).size).toBe(1);
+    expect(stored.find((space) => space.id === support.id)?.isDefault).toBe(false);
+
+    expect((await rpc<Actor>(app, cookie, "me", {}, support.id)).spaceId).toBe(support.id);
+    const supportBot = await rpc<Bot>(app, cookie, "bots/create", botInput("Support"), support.id);
+    const supportConnection = await rpc<{ connectionId: string }>(
+      app,
+      cookie,
+      "connections/begin",
+      connectionInput("Support connection"),
+      support.id,
+    );
+    const supportMemory = await db.memoryDocument.create({
+      data: {
+        spaceId: support.id,
+        userId: original.userId,
+        botId: supportBot.id,
+        scope: "bot",
+        path: "SUPPORT.md",
+        content: "support-only-memory",
+      },
+    });
+
+    expect(await rpc<Array<{ id: string }>>(app, cookie, "bots/list")).toEqual([
+      expect.objectContaining({ id: originalBot.id }),
+    ]);
+    expect(await rpc<Array<{ id: string }>>(app, cookie, "bots/list", {}, support.id)).toEqual([
+      expect.objectContaining({ id: supportBot.id }),
+    ]);
+    await expectDenied(app, cookie, "bots/get", { botId: supportBot.id });
+    await expectDenied(app, cookie, "bots/get", { botId: originalBot.id }, support.id);
+    await expectDenied(app, cookie, "memory/update", {
+      documentId: supportMemory.id,
+      content: "crossed",
+    });
+    expect(
+      (await rpc<Array<{ id: string }>>(app, cookie, "connections/list")).map((c) => c.id),
+    ).toEqual([originalConnection.connectionId]);
+    expect(
+      (await rpc<Array<{ id: string }>>(app, cookie, "connections/list", {}, support.id)).map(
+        (c) => c.id,
+      ),
+    ).toEqual([supportConnection.connectionId]);
+    // Revoking a connection that is not in the current space changes nothing.
+    await raw(app, cookie, "connections/revoke", { connectionId: supportConnection.connectionId });
+    expect(
+      (await rpc<Array<{ id: string }>>(app, cookie, "connections/list", {}, support.id)).map(
+        (c) => c.id,
+      ),
+    ).toEqual([supportConnection.connectionId]);
+    expect(
+      await rpc<Array<{ id: string }>>(app, cookie, "memory/list", { botId: supportBot.id }),
+    ).toEqual([]);
+
+    const navigation = await rpc<SpaceNavigation>(app, cookie, "spaces/list");
+    expect(navigation.current.id).toBe(original.spaceId);
+    expect(navigation.spaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: original.spaceId, canDelete: false }),
+        expect.objectContaining({
+          id: support.id,
+          name: "Customer support",
+          canRename: true,
+          canDelete: false,
+          bots: [expect.objectContaining({ id: supportBot.id })],
+        }),
+      ]),
+    );
+    const storedBots = await db.bot.findMany({
+      where: { id: { in: [originalBot.id, supportBot.id] } },
+      select: { id: true, spaceId: true, computerId: true },
+    });
+    const [storedOriginal, storedSupport] = [originalBot.id, supportBot.id].map((id) =>
+      storedBots.find((bot) => bot.id === id),
+    );
+    expect(storedOriginal?.spaceId).toBe(original.spaceId);
+    expect(storedSupport?.spaceId).toBe(support.id);
+    expect(storedOriginal?.computerId).not.toBe(storedSupport?.computerId);
+
+    // Another account can neither enter nor change the space.
+    const intruder = await signup(app, `multi-space-intruder-${stamp}@rakazo.test`, "Intruder");
+    await expectDenied(app, intruder, "bots/list", {}, support.id);
+    const denied = await raw(app, intruder, "spaces/rename", {
+      spaceId: support.id,
+      name: "Stolen",
+    });
+    expect(denied.status).toBeGreaterThanOrEqual(400);
+
+    await rpc(app, cookie, "spaces/rename", { spaceId: support.id, name: "Support desk" });
+    await expect(
+      db.space.findUniqueOrThrow({ where: { id: support.id }, select: { name: true } }),
+    ).resolves.toEqual({ name: "Support desk" });
+
+    // A space with bots, the default space and the only space all stay.
+    expect(
+      (await raw(app, cookie, "spaces/remove", { spaceId: support.id }, support.id)).status,
+    ).toBe(400);
+    expect((await raw(app, cookie, "spaces/remove", { spaceId: original.spaceId })).status).toBe(
+      400,
+    );
+
+    await rpc(app, cookie, "bots/remove", { botId: supportBot.id }, support.id);
+    const removed = await rpc<{ activeSpaceId: string }>(
+      app,
+      cookie,
+      "spaces/remove",
+      { spaceId: support.id },
+      support.id,
+    );
+    expect(removed.activeSpaceId).toBe(original.spaceId);
+    await expect(db.space.findUnique({ where: { id: support.id } })).resolves.toBeNull();
+    await expectDenied(app, cookie, "bots/list", {}, support.id);
+    expect(await rpc<Array<{ id: string }>>(app, cookie, "bots/list")).toEqual([
+      expect.objectContaining({ id: originalBot.id }),
+    ]);
+  });
+
+  it("enforces the space limit across concurrent creation requests", async () => {
+    const cookie = await signup(app, `space-limit-${stamp}@rakazo.test`, "Space Limit");
+    const actor = await rpc<Actor>(app, cookie, "me");
+    const currentSpace = await db.space.findUniqueOrThrow({
+      where: { id: actor.spaceId },
+      select: { organizationId: true },
+    });
+    const extraSpaces = Array.from({ length: 30 }, (_, index) => ({
+      id: `limit-space-${stamp}-${index}`,
+      organizationId: currentSpace.organizationId,
+      name: `Limit space ${index}`,
+      createdAt: new Date(),
+    }));
+    await db.space.createMany({ data: extraSpaces });
+    await db.spaceMember.createMany({
+      data: extraSpaces.map((space, index) => ({
+        id: `limit-member-${stamp}-${index}`,
+        spaceId: space.id,
+        organizationId: space.organizationId,
+        userId: actor.userId,
+        createdAt: space.createdAt,
+      })),
+    });
+
+    const results = await Promise.allSettled([
+      rpc<Space>(app, cookie, "spaces/create", { name: "Concurrent A" }),
+      rpc<Space>(app, cookie, "spaces/create", { name: "Concurrent B" }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    await expect(
+      db.spaceMember.count({
+        where: { userId: actor.userId, organizationId: currentSpace.organizationId },
+      }),
+    ).resolves.toBe(32);
   });
 
   it("rotates model credentials and keeps defaults private to the account", async () => {

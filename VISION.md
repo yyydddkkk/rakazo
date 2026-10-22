@@ -20,9 +20,9 @@ Bot state remains inspectable, exportable, recoverable, and portable across prov
 
 ## One user, one web interface
 
-The operator signs in with an email and password and uses one Space through the web UI.
+The operator signs in with an email and password and works in one or more Spaces through the web UI.
 Shared behavior, orchestration, contracts, and reusable interface logic live in shared packages.
-Space and Organization remain data and authorization boundaries without multi-user management.
+Space and Organization remain data and authorization boundaries; the operator owns every Space in the one Organization, without multi-user management.
 Lark exposes the same bots and durable state through shared product contracts.
 
 ## Computers are durable places

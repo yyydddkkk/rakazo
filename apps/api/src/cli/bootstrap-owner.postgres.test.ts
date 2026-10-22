@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { createAuth } from "@rakazo/auth";
-import { createDb, createPool } from "@rakazo/db";
+import { asSystem, createDb, createPool, createSpaceForMember } from "@rakazo/db";
 import { expect, it } from "vitest";
 
 const run = promisify(execFile);
@@ -49,9 +49,20 @@ it.skipIf(!testDatabase)(
       ).toMatchObject({ ownerUserId: owner.id, signupsEnabled: false });
       expect(await prisma.session.count()).toBe(0);
       const memberships = await prisma.spaceMember.count({ where: { userId: owner.id } });
-      expect(memberships).toBeGreaterThan(0);
+      expect(memberships).toBe(1);
+      expect(await prisma.space.count()).toBe(1);
       await boot("a-different-password-on-restart");
       expect(await prisma.user.count()).toBe(1);
+      // The owner may keep several spaces; a restart neither fails nor adds one.
+      const first = await prisma.space.findFirstOrThrow({ select: { id: true } });
+      await createSpaceForMember(asSystem(prisma), {
+        currentSpaceId: first.id,
+        userId: owner.id,
+        name: "Second space",
+      });
+      await boot("a-different-password-on-restart");
+      expect(await prisma.space.count()).toBe(2);
+      expect(await prisma.organization.count()).toBe(1);
       const auth = createAuth(prisma, {
         secret: env.BETTER_AUTH_SECRET,
         baseURL: env.BETTER_AUTH_URL,

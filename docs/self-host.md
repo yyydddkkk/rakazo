@@ -1,6 +1,6 @@
 # Self-hosting Rakazo
 
-Rakazo is a single-user web application with one Space. The API, worker, Postgres, and web UI run on your infrastructure. Docker computers are optional; models, Cursor, Lark, search services, and remote tools are optional connections.
+Rakazo is a single-user web application. The administrator can keep several Spaces, each isolated from the others. The API, worker, Postgres, and web UI run on your infrastructure. Docker computers are optional; models, Cursor, Lark, search services, and remote tools are optional connections.
 
 ## Source checkout
 

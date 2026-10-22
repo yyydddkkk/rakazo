@@ -2,44 +2,57 @@ import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "./client.js";
 import { IsolationError, requireMembership } from "./scope.js";
 
-function prismaForMembership(count = 1) {
+function prismaForMembership(found: boolean) {
   return {
     spaceMember: {
-      findMany: vi.fn(async () =>
-        Array.from({ length: count }, (_, index) => ({
-          userId: "user-1",
-          spaceId: `space-${index}`,
-          member: { user: { email: "owner@example.test" } },
-        })),
+      findFirst: vi.fn(async ({ where }: { where: { userId: string; spaceId?: string } }) =>
+        found
+          ? {
+              userId: where.userId,
+              spaceId: where.spaceId ?? "space-default",
+              member: { user: { email: "owner@example.test" } },
+            }
+          : null,
       ),
     },
-    deploymentSettings: { findUnique: vi.fn(async () => ({ ownerUserId: "user-1" })) },
+    deploymentSettings: {
+      findUnique: vi.fn(async () => ({ ownerUserId: "user-1" })),
+    },
   } as unknown as PrismaClient;
 }
 
 describe("requireMembership", () => {
-  it("uses the sole Space membership with or without the matching header", async () => {
-    const prisma = prismaForMembership();
-    const expected = {
+  it("scopes the actor to an explicitly requested space", async () => {
+    const prisma = prismaForMembership(true);
+
+    await expect(requireMembership(prisma, "user-1", "space-support")).resolves.toEqual({
       userId: "user-1",
-      spaceId: "space-0",
+      spaceId: "space-support",
       email: "owner@example.test",
       isDeploymentOwner: true,
-    };
-    await expect(requireMembership(prisma, "user-1")).resolves.toEqual(expected);
-    await expect(requireMembership(prisma, "user-1", "space-0")).resolves.toEqual(expected);
-    expect(prisma.spaceMember.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "user-1" }, take: 2 }),
+    });
+    expect(prisma.spaceMember.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "user-1", spaceId: "space-support" },
+      }),
     );
   });
-  it("rejects a conflicting requested space even when a personal membership exists", async () => {
+
+  it("rejects a requested space the user does not belong to", async () => {
     await expect(
-      requireMembership(prismaForMembership(), "user-1", "space-foreign"),
+      requireMembership(prismaForMembership(false), "user-1", "space-foreign"),
     ).rejects.toBeInstanceOf(IsolationError);
   });
-  it.each([0, 2])("rejects %s memberships instead of choosing one", async (count) => {
-    await expect(requireMembership(prismaForMembership(count), "user-1")).rejects.toBeInstanceOf(
-      IsolationError,
+
+  it("selects the explicit default Space before older non-default memberships", async () => {
+    const prisma = prismaForMembership(true);
+
+    await requireMembership(prisma, "user-1");
+
+    expect(prisma.spaceMember.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ space: { isDefault: "desc" } }, { createdAt: "asc" }, { id: "asc" }],
+      }),
     );
   });
 });

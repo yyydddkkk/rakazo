@@ -12,7 +12,10 @@ export interface BootstrapAdminCredentials {
 
 const ADMIN_BOOTSTRAP_LOCK = 872014;
 
-/** Private, atomic bootstrap. Existing credentials are never changed by environment values. */
+/**
+ * Private, atomic bootstrap. Existing credentials are never changed by environment values.
+ * One user and one organization own any number of spaces; an empty database gets one default space.
+ */
 export async function bootstrapAdmin(
   prisma: PrismaClient,
   credentials: BootstrapAdminCredentials = {},
@@ -22,27 +25,30 @@ export async function bootstrapAdmin(
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ADMIN_BOOTSTRAP_LOCK})`;
       const [users, spaces, organizations, settings] = await Promise.all([
         tx.user.findMany({ select: { id: true }, take: 2 }),
-        tx.space.findMany({ select: { id: true, organizationId: true }, take: 2 }),
+        tx.space.findMany({
+          select: { id: true, organizationId: true, isDefault: true },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        }),
         tx.organization.findMany({ select: { id: true }, take: 2 }),
         tx.deploymentSettings.findUnique({
           where: { id: "default" },
           select: { ownerUserId: true },
         }),
       ]);
-      if (users.length > 1 || spaces.length > 1 || organizations.length > 1) {
+      if (users.length > 1 || organizations.length > 1) {
         throw new Error(
-          "Single-user setup requires exactly one user, organization and space; reconcile existing data before starting",
+          "Single-user setup requires exactly one user and organization; reconcile existing data before starting",
         );
       }
       const user = users[0];
       if (user) {
-        const [credentials, membership] = await Promise.all([
+        const [credentials, memberships] = await Promise.all([
           tx.account.findMany({
             where: { userId: user.id, providerId: "credential" },
             select: { accountId: true, password: true },
             take: 2,
           }),
-          tx.spaceMember.findFirst({
+          tx.spaceMember.findMany({
             where: { userId: user.id },
             select: { spaceId: true, organizationId: true, role: true },
           }),
@@ -57,13 +63,20 @@ export async function bootstrapAdmin(
             "Existing administrator credential setup is incomplete; reconcile credentials before starting",
           );
         }
-        const space = spaces[0];
+        // Any number of spaces, all in the one organization and all owned by the user.
+        const space = spaces.find((item) => item.isDefault) ?? spaces[0];
+        const ownsEverySpace = spaces.every((item) =>
+          memberships.some(
+            (membership) =>
+              membership.spaceId === item.id &&
+              membership.organizationId === item.organizationId &&
+              membership.role === "owner",
+          ),
+        );
         if (
           !space ||
-          organizations[0]?.id !== space.organizationId ||
-          membership?.spaceId !== space.id ||
-          membership.organizationId !== space.organizationId ||
-          membership.role !== "owner" ||
+          !ownsEverySpace ||
+          spaces.some((item) => item.organizationId !== organizations[0]?.id) ||
           settings?.ownerUserId !== user.id
         ) {
           throw new Error(
