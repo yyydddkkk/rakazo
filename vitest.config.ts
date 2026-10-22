@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -24,6 +24,9 @@ export default defineConfig({
       "apps/api/src/**/*.test.ts",
       "apps/worker/src/**/*.test.ts",
     ],
+    // Host-dependent tests (real process table, Docker, desktop tooling) run through
+    // `pnpm test:host` (vitest.host.config.ts), which CI also runs.
+    exclude: [...configDefaults.exclude, "**/*.host.test.ts", "**/*.docker.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },
