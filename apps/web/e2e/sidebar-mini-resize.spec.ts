@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, rpc, setupAdmin } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  openUserSettings,
+  rpc,
+  setupAdmin,
+} from "./helpers";
 
 test("sidebar rail keeps chats interactive and remembers a dragged width", async ({
   page,
@@ -52,10 +58,9 @@ test("sidebar rail keeps chats interactive and remembers a dragged width", async
   await expect(row).toHaveAttribute("aria-current", "page");
   await expect(sidebar.locator("[data-roster-preview]")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "sidebar-mini-avatar-rail");
-  await page.getByTestId("user-menu-trigger").click();
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await openUserSettings(page);
   await expect(page.getByTestId("account-menu-header")).toBeHidden();
-  await page.getByRole("button", { name: "Close integrations", exact: true }).click();
+  await page.getByRole("button", { name: "Close user settings" }).click();
   await page.reload();
   await expect(sidebar).toHaveCSS("width", "80px");
   await page.getByTestId("restore-bots-sidebar").click();

@@ -32,12 +32,24 @@ export async function connectApp(
       }),
     )
   ).flat();
+  // The provider reports the user's accounts; only a row in this Space makes the app usable here.
+  const rows = await deps.prisma.connection.findMany({
+    where: { spaceId: target.spaceId, userId: context.userId, status: "connected" },
+    select: { connectorId: true, provider: true },
+  });
+  const inSpace = (item: { connectorId: string; slug: string }) =>
+    rows.some(
+      (row) =>
+        row.connectorId === item.connectorId &&
+        row.provider.trim().toLowerCase() === item.slug.trim().toLowerCase(),
+    );
   // An app connected through any provider counts, even if another provider lists it first.
+  const scoped = catalog.map((item) => ({ ...item, connected: inSpace(item) }));
   const entry =
     matchAppCatalog(
-      catalog.filter((item) => item.connected),
+      scoped.filter((item) => item.connected),
       app,
-    ) ?? matchAppCatalog(catalog, app);
+    ) ?? matchAppCatalog(scoped, app);
   if (!entry) return { error: "No such app is available in the connector catalog." };
   if (entry.connected)
     return {

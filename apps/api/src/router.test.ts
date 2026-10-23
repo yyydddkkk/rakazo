@@ -6551,3 +6551,105 @@ describe("API-key live model catalog", () => {
     },
   );
 });
+
+describe("connections across Spaces", () => {
+  type Row = {
+    id: string;
+    spaceId: string;
+    userId: string;
+    connectorId: string;
+    provider: string;
+    displayName: string;
+    status: string;
+    providerRef: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+
+  function twoSpaces() {
+    const rows: Row[] = [];
+    const matches = (row: Row, where: Record<string, unknown> = {}) =>
+      Object.entries(where).every(([key, value]) => {
+        const actual = row[key as keyof Row];
+        if (value && typeof value === "object") {
+          const filter = value as { in?: unknown[]; not?: unknown };
+          if (filter.in) return filter.in.includes(actual);
+          if ("not" in filter) return actual !== filter.not;
+        }
+        return actual === value;
+      });
+    const connection = {
+      findMany: vi.fn(async ({ where }: { where?: Record<string, unknown> }) =>
+        rows.filter((row) => matches(row, where)),
+      ),
+      create: vi.fn(async ({ data }: { data: Partial<Row> }) => {
+        const row = {
+          id: `conn-${rows.length + 1}`,
+          providerRef: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...data,
+        } as Row;
+        rows.push(row);
+        return row;
+      }),
+      update: vi.fn(),
+      updateMany: vi.fn(
+        async ({ where, data }: { where: Record<string, unknown>; data: Partial<Row> }) => {
+          const hit = rows.filter((row) => matches(row, where));
+          for (const row of hit) Object.assign(row, data);
+          return { count: hit.length };
+        },
+      ),
+    };
+    const tx = { connection, $executeRaw: vi.fn() };
+    const prisma = {
+      connection,
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx)),
+    } as unknown as PrismaClient;
+    const composio = new adapters.ComposioConnector({ client: new adapters.FakeComposioClient() });
+    const router = createRouter({
+      prisma,
+      connectors: { managed: () => composio, managedProviders: () => [composio] },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+    } as unknown as RouterDeps);
+    const inSpace = (spaceId: string) =>
+      createRouterClient(router, {
+        context: {
+          actor: { spaceId, userId: "user-1", email: "user@rakazo.test", isDeploymentOwner: true },
+        } as never,
+      });
+    return { rows, inSpace };
+  }
+
+  const repo = (items: Array<{ slug: string; connected: boolean }>) =>
+    items.find((item) => item.slug === "GITHUB");
+
+  it("reports an app as added only in the Space that holds its row", async () => {
+    const { rows, inSpace } = twoSpaces();
+    const a = inSpace("space-a");
+    const b = inSpace("space-b");
+    expect(repo(await a.connections.catalog({}))?.connected).toBe(false);
+
+    await a.connections.begin({ connectorId: "composio", provider: "GITHUB", displayName: "Repo" });
+    // The provider account now belongs to the user, in every Space.
+    expect(repo(await a.connections.catalog({}))?.connected).toBe(true);
+    expect(repo(await b.connections.catalog({}))?.connected).toBe(false);
+
+    await b.connections.begin({ connectorId: "composio", provider: "GITHUB", displayName: "Repo" });
+    expect(repo(await a.connections.catalog({}))?.connected).toBe(true);
+    expect(repo(await b.connections.catalog({}))?.connected).toBe(true);
+    expect(
+      rows
+        .filter((row) => row.status === "connected")
+        .map((row) => row.spaceId)
+        .sort(),
+    ).toEqual(["space-a", "space-b"]);
+  });
+});

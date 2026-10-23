@@ -1,6 +1,5 @@
 import type { Bot, Routine } from "@rakazo/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { connectedAppMarks } from "../../lib/connected-apps";
 import type { createSpaceRpc } from "../../lib/rpc";
 
 export function useMentionSources(
@@ -9,7 +8,6 @@ export function useMentionSources(
   initialBotsLoaded: boolean,
 ) {
   const [mentionRoutines, setMentionRoutines] = useState<Array<Routine & { botName?: string }>>([]);
-  const [footerLogos, setFooterLogos] = useState<Array<{ name: string; logo: string | null }>>([]);
   const [mentionConnectors, setMentionConnectors] = useState<
     Array<{
       id: string;
@@ -57,7 +55,6 @@ export function useMentionSources(
     ]).then(([connections, catalog]) => {
       if (cancelled) return;
       const connected = connections?.filter((row) => row.status === "connected") ?? [];
-      if (catalog && connections) setFooterLogos(connectedAppMarks(catalog, connections));
       const options: Array<{
         id: string;
         name: string;
@@ -93,5 +90,5 @@ export function useMentionSources(
     };
   }, [initialBotsLoaded, mentionBotsKey]);
 
-  return { mentionRoutines, mentionConnectors, footerLogos, setFooterLogos };
+  return { mentionRoutines, mentionConnectors };
 }

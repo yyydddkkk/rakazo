@@ -1,34 +1,24 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import {
-  AppMarkStack,
-  Button,
-  buttonVariants,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@rakazo/ui-web";
+import { Button, buttonVariants, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
 import {
   BookOpen,
   FolderOpen,
   Gauge,
   LogOut,
-  Plug,
   Settings,
   SquareKanban,
   UserRound,
 } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 type Props = {
   mini?: boolean;
   name: string;
   initials: string | null;
   image?: string | null;
-  logos?: Array<{ name: string; logo?: string | null }>;
   email?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onIntegrations: () => void;
   onBoard?: () => void;
   onArtifacts: () => void;
   onSettings: () => void;
@@ -38,21 +28,14 @@ type Props = {
   logOutError: string | null;
 };
 
-// Marks are 24px wide, overlap by 2px, and need 2px for the outer ring.
-export function sidebarMarkCount(availableWidth: number) {
-  return Math.max(0, Math.min(3, Math.floor((availableWidth - 26) / 22) + 1));
-}
-
 export function SidebarFooter({
   mini = false,
   name,
   initials,
   image,
-  logos = [],
   email,
   open,
   onOpenChange,
-  onIntegrations,
   onBoard,
   onArtifacts,
   onSettings,
@@ -63,29 +46,6 @@ export function SidebarFooter({
 }: Props) {
   const { t } = useLingui();
   const [failedImage, setFailedImage] = useState<string | null>(null);
-  const pillRef = useRef<HTMLButtonElement>(null);
-  const labelRef = useRef<HTMLSpanElement>(null);
-  const [markCount, setMarkCount] = useState(3);
-  useLayoutEffect(() => {
-    const pill = pillRef.current;
-    const label = labelRef.current;
-    if (!pill || !label || typeof ResizeObserver === "undefined") return;
-    const measure = () => {
-      const style = getComputedStyle(pill);
-      const available =
-        pill.clientWidth -
-        Number.parseFloat(style.paddingLeft) -
-        Number.parseFloat(style.paddingRight) -
-        label.scrollWidth -
-        Number.parseFloat(style.columnGap);
-      setMarkCount(sidebarMarkCount(available));
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(pill);
-    observer.observe(label);
-    measure();
-    return () => observer.disconnect();
-  }, [mini]);
   return (
     <div
       data-testid="sidebar-footer"
@@ -126,16 +86,6 @@ export function SidebarFooter({
                 <p className="truncate text-xs text-muted-foreground">{email}</p>
               ) : null}
             </div>
-            {mini ? (
-              <Button
-                variant="ghost"
-                className="h-9 w-full justify-start gap-2.5 font-normal"
-                onClick={onIntegrations}
-              >
-                <Plug className="text-muted-foreground" strokeWidth={1.75} />
-                <Trans>Connect apps</Trans>
-              </Button>
-            ) : null}
             <Button
               variant="ghost"
               className="h-9 w-full justify-start gap-2.5 font-normal"
@@ -198,19 +148,6 @@ export function SidebarFooter({
           </PopoverContent>
         ) : null}
       </Popover>
-      {!mini ? (
-        <Button
-          variant="outline"
-          ref={pillRef}
-          onClick={onIntegrations}
-          className="h-9 min-w-0 flex-1 justify-between rounded-full bg-sidebar-accent hover:border-foreground/30 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
-        >
-          <span ref={labelRef} className="min-w-0 truncate">
-            <Trans>Connect apps</Trans>
-          </span>
-          <AppMarkStack marks={logos.slice(0, markCount)} ringClassName="ring-sidebar-accent" />
-        </Button>
-      ) : null}
     </div>
   );
 }

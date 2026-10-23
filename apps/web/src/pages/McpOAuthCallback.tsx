@@ -2,8 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Button } from "@rakazo/ui-web";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MCP_OAUTH_CHANNEL } from "../lib/mcp-connect";
-import { rpc } from "../lib/rpc";
+import { MCP_OAUTH_CHANNEL, mcpOAuthCallbackRpc } from "../lib/mcp-connect";
 import { errorText } from "../lib/user-error";
 
 // The window.open name set by the OAuth popup flow. Providers whose login
@@ -27,8 +26,8 @@ export function McpOAuthCallbackPage() {
     }
     if (handledState.current === state) return;
     handledState.current = state;
-    void rpc.mcp.oauth
-      .complete({ sessionId: state, code, state })
+    void mcpOAuthCallbackRpc()
+      .mcp.oauth.complete({ sessionId: state, code, state })
       .then(() => {
         const channel = new BroadcastChannel(POPUP_NAME);
         channel.postMessage({ type: "mcp-oauth-complete" });

@@ -60,13 +60,11 @@ export function ShellSidebar({
   refreshBots,
   setDeleteTarget,
   setDeleteGroupTarget,
-  footerLogos,
   userName,
   initials,
   userImage,
   userEmail,
   ticketBoardEnabled,
-  setPluginsOpen,
   openSettings,
   setNewSpaceOpen,
   ...rosterProps
@@ -103,13 +101,11 @@ export function ShellSidebar({
   refreshBots: (includeArchived?: boolean) => Promise<void>;
   setDeleteTarget: (bot: Bot) => void;
   setDeleteGroupTarget: (group: Group) => void;
-  footerLogos: Array<{ name: string; logo: string | null }>;
   userName: string;
   initials: string | null;
   userImage: string | null | undefined;
   userEmail: string | undefined;
   ticketBoardEnabled: boolean | undefined;
-  setPluginsOpen: (open: boolean) => void;
   openSettings: (section?: SettingsSection) => void;
 }) {
   const { t } = useLingui();
@@ -270,7 +266,6 @@ export function ShellSidebar({
         <div className={miniSidebar ? "hidden" : "contents"}></div>
         <SidebarFooter
           mini={miniSidebar}
-          logos={footerLogos}
           name={userName}
           initials={initials}
           image={userImage}
@@ -279,10 +274,6 @@ export function ShellSidebar({
           onOpenChange={(open) => {
             setMenuOpen(open);
             if (!open) setLogOutError(null);
-          }}
-          onIntegrations={() => {
-            setMenuOpen(false);
-            setPluginsOpen(true);
           }}
           onBoard={
             ticketBoardEnabled

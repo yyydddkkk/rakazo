@@ -15,6 +15,7 @@ import {
   Cpu,
   Gauge,
   Monitor,
+  Plug,
   Settings,
   ShieldCheck,
   XIcon,
@@ -29,6 +30,7 @@ import {
   GeneralSettingsPanels,
   UsageSettingsPanel,
 } from "./AccountSettingsOverlay";
+import { IntegrationsPanel } from "./IntegrationsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
 
@@ -37,11 +39,17 @@ export type SettingsSection =
   | "models"
   | "memory"
   | "confirmations"
+  | "integrations"
   | "usage"
   | "computer";
 
 /** Sections whose settings belong to a space; only these show the space picker. */
-const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set(["models", "memory", "confirmations"]);
+const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set([
+  "models",
+  "memory",
+  "confirmations",
+  "integrations",
+]);
 
 type NavItem = {
   id: SettingsSection;
@@ -67,6 +75,8 @@ export function SettingsOverlay({
   onSandboxProviderChange,
   messagingEnabled = false,
   onOpenMessaging,
+  activeBotId,
+  onOpenMcp,
   onClose,
 }: {
   /** The space the per-space sections act on; it need not be the selected space. */
@@ -92,6 +102,9 @@ export function SettingsOverlay({
   onSandboxProviderChange?: (sandboxProvider: string) => void;
   messagingEnabled?: boolean;
   onOpenMessaging?: () => void;
+  /** A bot of the settings' space, told when an app connects. */
+  activeBotId?: string;
+  onOpenMcp?: () => void;
   onClose: () => void;
 }) {
   const { t, i18n } = useLingui();
@@ -145,6 +158,7 @@ export function SettingsOverlay({
     { id: "models", label: t`Models`, icon: Cpu },
     { id: "memory", label: t`Memory`, icon: Brain },
     { id: "confirmations", label: t`Confirmations`, icon: ShieldCheck },
+    { id: "integrations", label: t`Integrations`, icon: Plug },
     { id: "usage", label: t`Usage`, icon: Gauge },
     ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
   ];
@@ -326,6 +340,9 @@ export function SettingsOverlay({
                   />
                 ) : null}
                 {section === "confirmations" ? <ApprovalRulesSettings /> : null}
+                {section === "integrations" ? (
+                  <IntegrationsPanel activeBotId={activeBotId} onOpenMcp={onOpenMcp} />
+                ) : null}
                 {section === "usage" ? (
                   <UsageSettingsPanel usage={usage} panelRef={usageRef} />
                 ) : null}

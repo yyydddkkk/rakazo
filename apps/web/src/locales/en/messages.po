@@ -258,7 +258,7 @@ msgstr "{summary} Resets {date}."
 msgid "{title}, {label}"
 msgstr "{title}, {label}"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr "{toolCount, plural, one {# tool} other {# tools}}"
 
@@ -311,7 +311,7 @@ msgstr "Access token (optional)"
 msgid "Account"
 msgstr "Account"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Account label"
 msgstr "Account label"
 
@@ -343,8 +343,8 @@ msgstr "Active model"
 msgid "Activity"
 msgstr "Activity"
 
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/McpServersOverlay.tsx
-#: src/pages/PluginsOverlay.tsx
 #: src/pages/ScratchpadSection.tsx
 msgid "Add"
 msgstr "Add"
@@ -387,7 +387,7 @@ msgstr "Add a trigger to run this routine."
 msgid "Add an HTTPS server URL."
 msgstr "Add an HTTPS server URL."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Add another"
 msgstr "Add another"
 
@@ -399,7 +399,7 @@ msgstr "Add backup model"
 msgid "Add credential"
 msgstr "Add credential"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Add Executor"
 msgstr "Add Executor"
 
@@ -408,15 +408,15 @@ msgid "Add item"
 msgstr "Add item"
 
 #: src/components/integrations/IntegrationSetup.tsx
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Add MCP server"
 msgstr "Add MCP server"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Add OpenAPI"
 msgstr "Add OpenAPI"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Add remote MCP server"
 msgstr "Add remote MCP server"
 
@@ -432,7 +432,7 @@ msgstr "Add server URL"
 msgid "Add to routine"
 msgstr "Add to routine"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Add Treg"
 msgstr "Add Treg"
 
@@ -440,21 +440,21 @@ msgstr "Add Treg"
 msgid "Add trigger"
 msgstr "Add trigger"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Added"
 msgstr "Added"
 
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/McpServersOverlay.tsx
-#: src/pages/PluginsOverlay.tsx
 msgid "Adding…"
 msgstr "Adding…"
 
 #: src/pages/AccountSettingsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/McpServersOverlay.tsx
 #: src/pages/model-settings/catalog-model-fields.tsx
 #: src/pages/model-settings/compatible-model-fields.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/PluginsOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/RoutineSchedule.tsx
 #: src/pages/shell/bot-panel.tsx
@@ -576,7 +576,7 @@ msgstr "Answered: {answer}"
 msgid "API key"
 msgstr "API key"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "API key header"
 msgstr "API key header"
 
@@ -729,7 +729,7 @@ msgid "Avatars"
 msgstr "Avatars"
 
 #: src/pages/Board.tsx
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/RoutineEditor.tsx
 msgid "Back"
 msgstr "Back"
@@ -750,7 +750,7 @@ msgstr "Basic auth"
 msgid "Basic auth ({username})"
 msgstr "Basic auth ({username})"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/shell/bot-credentials.tsx
 msgid "Bearer token"
 msgstr "Bearer token"
@@ -810,7 +810,7 @@ msgstr "Bots"
 msgid "Bots are working"
 msgstr "Bots are working"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Browse MCP servers"
 msgstr "Browse MCP servers"
 
@@ -832,11 +832,11 @@ msgstr "Can't read images"
 #: src/components/markdown-link-prompt.tsx
 #: src/components/teach/TeachComputerOverlay.tsx
 #: src/pages/Artifacts.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/model-settings/connection-controls.tsx
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/PluginsOverlay.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
 msgid "Cancel"
@@ -999,10 +999,6 @@ msgstr "Close computer"
 msgid "Close image preview"
 msgstr "Close image preview"
 
-#: src/pages/PluginsOverlay.tsx
-msgid "Close integrations"
-msgstr "Close integrations"
-
 #: src/pages/McpServersOverlay.tsx
 msgid "Close MCP servers"
 msgstr "Close MCP servers"
@@ -1121,7 +1117,7 @@ msgstr "Computers are available. Reload or open a bot to continue."
 msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, then recreate the stack after changing .env."
 msgstr "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, then recreate the stack after changing .env."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Configure a plugin catalog on the server to connect apps."
 msgstr "Configure a plugin catalog on the server to connect apps."
 
@@ -1163,11 +1159,7 @@ msgstr "Connect a model"
 msgid "Connect API key"
 msgstr "Connect API key"
 
-#: src/components/SidebarFooter.tsx
-msgid "Connect apps"
-msgstr "Connect apps"
-
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Connect Executor"
 msgstr "Connect Executor"
 
@@ -1179,7 +1171,7 @@ msgstr "Connect MCP server “{name}”"
 msgid "Connect OAuth"
 msgstr "Connect OAuth"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Connect Treg"
 msgstr "Connect Treg"
 
@@ -1205,7 +1197,7 @@ msgid "Connection test failed."
 msgstr "Connection test failed."
 
 #. placeholder {0}: item.name
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "Connection to {0} is still pending. You can close this and check again."
 
@@ -1288,7 +1280,7 @@ msgid "Could not complete OAuth"
 msgstr "Could not complete OAuth"
 
 #: src/components/integrations/IntegrationSetup.tsx
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Could not connect"
 msgstr "Could not connect"
 
@@ -1384,7 +1376,7 @@ msgstr "Could not download {0}. Try again."
 msgid "Could not download {name}. Try again."
 msgstr "Could not download {name}. Try again."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Could not install connector"
 msgstr "Could not install connector"
 
@@ -1417,7 +1409,7 @@ msgstr "Could not load bots. Reload to try again."
 msgid "Could not load credentials."
 msgstr "Could not load credentials."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Could not load integrations"
 msgstr "Could not load integrations"
 
@@ -1474,7 +1466,7 @@ msgstr "Could not reach the server"
 msgid "Could not remove"
 msgstr "Could not remove"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Could not remove connector"
 msgstr "Could not remove connector"
 
@@ -1486,7 +1478,7 @@ msgstr "Could not remove rule"
 msgid "Could not remove the credential"
 msgstr "Could not remove the credential"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Could not rename connection"
 msgstr "Could not rename connection"
 
@@ -1506,7 +1498,7 @@ msgstr "Could not render chart"
 msgid "Could not reset password"
 msgstr "Could not reset password"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Could not revoke connection"
 msgstr "Could not revoke connection"
 
@@ -1557,7 +1549,7 @@ msgstr "Could not save the credential"
 msgid "Could not save this choice"
 msgstr "Could not save this choice"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Could not search catalog"
 msgstr "Could not search catalog"
 
@@ -1669,12 +1661,12 @@ msgstr "Created"
 msgid "Creating…"
 msgstr "Creating…"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Credential"
 msgstr "Credential"
 
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/McpServersOverlay.tsx
-#: src/pages/PluginsOverlay.tsx
 msgid "credential saved"
 msgstr "credential saved"
 
@@ -1682,7 +1674,7 @@ msgstr "credential saved"
 msgid "Credentials"
 msgstr "Credentials"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Credentials are encrypted and never sent to the model."
 msgstr "Credentials are encrypted and never sent to the model."
 
@@ -1876,7 +1868,7 @@ msgstr "Dismissed"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Dismissed. Reconnect anytime from MCP settings."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Display name"
 msgstr "Display name"
 
@@ -2032,7 +2024,7 @@ msgstr "Every month"
 msgid "Every week"
 msgstr "Every week"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Executor token"
 msgstr "Executor token"
 
@@ -2236,8 +2228,8 @@ msgstr "header"
 msgid "Header \"{header}\""
 msgstr "Header \"{header}\""
 
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/McpServersOverlay.tsx
-#: src/pages/PluginsOverlay.tsx
 #: src/pages/shell/bot-credentials.tsx
 msgid "Header name"
 msgstr "Header name"
@@ -2290,7 +2282,7 @@ msgstr "Ignore"
 msgid "Image upload area"
 msgstr "Image upload area"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Import OpenAPI JSON"
 msgstr "Import OpenAPI JSON"
 
@@ -2331,11 +2323,11 @@ msgstr "Instructions"
 msgid "Instructions updated"
 msgstr "Instructions updated"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Integration domain"
 msgstr "Integration domain"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/SettingsOverlay.tsx
 msgid "Integrations"
 msgstr "Integrations"
 
@@ -2446,7 +2438,7 @@ msgstr "Load web images automatically"
 msgid "Loading activity…"
 msgstr "Loading activity…"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Loading integrations…"
 msgstr "Loading integrations…"
 
@@ -2496,7 +2488,7 @@ msgstr "Lowercase letters, numbers, hyphens and underscores, starting with a let
 msgid "Make sure nothing is still running on this computer."
 msgstr "Make sure nothing is still running on this computer."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Manage MCP servers"
 msgstr "Manage MCP servers"
 
@@ -2508,11 +2500,11 @@ msgstr "Manage messaging settings"
 msgid "Manage the bots it creates"
 msgstr "Manage the bots it creates"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Manual"
 msgstr "Manual"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Manual setup required"
 msgstr "Manual setup required"
 
@@ -2809,7 +2801,7 @@ msgstr "Next settings sections"
 msgid "No agent connections yet."
 msgstr "No agent connections yet."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "No apps match your search."
 msgstr "No apps match your search."
 
@@ -2817,11 +2809,11 @@ msgstr "No apps match your search."
 msgid "No artifacts found."
 msgstr "No artifacts found."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "no auth"
 msgstr "no auth"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "No authentication"
 msgstr "No authentication"
 
@@ -2846,7 +2838,7 @@ msgstr "No credentials saved for this bot."
 msgid "No longer active"
 msgstr "No longer active"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "No managed app catalog is configured on this deployment."
 msgstr "No managed app catalog is configured on this deployment."
 
@@ -2859,7 +2851,7 @@ msgstr "No matching artifacts on this page."
 msgid "No matching models"
 msgstr "No matching models"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "No MCP or API tool sources installed yet."
 msgstr "No MCP or API tool sources installed yet."
 
@@ -2891,7 +2883,7 @@ msgstr "No providers found."
 msgid "No remote MCP servers found"
 msgstr "No remote MCP servers found"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/SpaceSearch.tsx
 msgid "No results"
 msgstr "No results"
@@ -2932,7 +2924,7 @@ msgstr "Not checked yet"
 msgid "Not connected"
 msgstr "Not connected"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Not in the plugin catalog"
 msgstr "Not in the plugin catalog"
 
@@ -3354,8 +3346,8 @@ msgid "Reload"
 msgstr "Reload"
 
 #: src/components/ApprovalRulesSettings.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/McpServersOverlay.tsx
-#: src/pages/PluginsOverlay.tsx
 #: src/pages/ScratchpadSection.tsx
 #: src/pages/shell/bot-credentials.tsx
 msgid "Remove"
@@ -3417,7 +3409,7 @@ msgstr "Removed with chat, computer, and memory."
 msgid "Removed, but list refresh failed"
 msgstr "Removed, but list refresh failed"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Removing…"
 msgstr "Removing…"
 
@@ -3521,8 +3513,8 @@ msgstr "Restoring your workspace"
 
 #: src/components/AccountAccess.tsx
 #: src/pages/Auth.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/ModelBackupsSettings.tsx
-#: src/pages/PluginsOverlay.tsx
 msgid "Retry"
 msgstr "Retry"
 
@@ -3672,8 +3664,8 @@ msgstr "Saving…"
 msgid "Scopes (optional)"
 msgstr "Scopes (optional)"
 
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/model-settings/model-picker.tsx
-#: src/pages/PluginsOverlay.tsx
 #: src/pages/shell/bot-picker.tsx
 #: src/pages/shell/chat-model-picker.tsx
 #: src/pages/shell/command-palette.tsx
@@ -3682,7 +3674,7 @@ msgid "Search"
 msgstr "Search"
 
 #: src/components/integrations/IntegrationSetup.tsx
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Search apps"
 msgstr "Search apps"
 
@@ -3694,7 +3686,7 @@ msgstr "Search artifacts…"
 msgid "Search bots and switch conversations"
 msgstr "Search bots and switch conversations"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Search by domain"
 msgstr "Search by domain"
 
@@ -3720,7 +3712,7 @@ msgstr "Search runs"
 msgid "Search: {0}"
 msgstr "Search: {0}"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 #: src/pages/SpaceSearch.tsx
 msgid "Searching…"
 msgstr "Searching…"
@@ -3820,7 +3812,7 @@ msgstr "Show computer"
 msgid "Show list"
 msgstr "Show list"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Show more"
 msgstr "Show more"
 
@@ -4185,11 +4177,11 @@ msgstr "Tool arguments must be JSON"
 msgid "Tool name"
 msgstr "Tool name"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Tool sources"
 msgstr "Tool sources"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Tools"
 msgstr "Tools"
 
@@ -4197,7 +4189,7 @@ msgstr "Tools"
 msgid "Treat like a person"
 msgstr "Treat like a person"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Treg token"
 msgstr "Treg token"
 
@@ -4235,7 +4227,7 @@ msgstr "Unassigned"
 msgid "Undo"
 msgstr "Undo"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Uninstall"
 msgstr "Uninstall"
 
@@ -4364,11 +4356,11 @@ msgstr "Value"
 msgid "Values are encrypted and never shown again."
 msgstr "Values are encrypted and never shown again."
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Verify and add"
 msgstr "Verify and add"
 
-#: src/pages/PluginsOverlay.tsx
+#: src/pages/IntegrationsPanel.tsx
 msgid "Verifying…"
 msgstr "Verifying…"
 

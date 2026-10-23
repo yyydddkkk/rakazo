@@ -4,6 +4,7 @@ import {
   captureScreenshot,
   completeOnboarding,
   expandAdvancedSection,
+  openUserSettings,
   rpc,
   setupAdmin,
   showPasswordForm,
@@ -154,7 +155,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
     await catalogGate;
     await route.continue();
   });
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await openUserSettings(page, "integrations");
   const catalogSpinner = page.getByRole("status", { name: "Loading integrations…" });
   const featured = page.getByTestId("featured-connectors");
   try {
@@ -215,8 +216,8 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await expect(detail.getByText("Send email", { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "11a3-plugin-tools");
 
-  await page.getByRole("button", { name: "Close integrations" }).click();
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await page.getByRole("button", { name: "Close user settings" }).click();
+  await openUserSettings(page, "integrations");
   await expect(page.getByPlaceholder("Search apps")).toBeVisible();
   const gmailTileAgain = page.getByTestId("connection-tile-gmail");
   await expect(gmailTileAgain.getByRole("button", { name: "Added", exact: true })).toBeVisible();
@@ -333,7 +334,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   ).toBeVisible();
   await captureScreenshot(page, testInfo, "11d-provider-emulators");
 
-  await page.getByRole("button", { name: "Close integrations" }).click();
+  await page.getByRole("button", { name: "Close user settings" }).click();
 
   await page.getByText("Chief").first().click();
   const gear = page.getByRole("button", { name: "Show settings" });

@@ -19,9 +19,6 @@ import {
 const MessagingSettingsOverlay = lazyOverlay(() =>
   import("../MessagingSettingsOverlay").then((module) => module.MessagingSettingsOverlay),
 );
-const PluginsOverlay = lazyOverlay(() =>
-  import("../PluginsOverlay").then((module) => module.PluginsOverlay),
-);
 const McpServersOverlay = lazyOverlay(() =>
   import("../McpServersOverlay").then((module) => module.McpServersOverlay),
 );
@@ -50,10 +47,6 @@ export function ShellDialogs({
   setClearTarget,
   confirmClear,
   deleteRoutineDialogProps,
-  pluginsOpen,
-  setPluginsOpen,
-  setFooterLogos,
-  activeBotId,
   mcpOpen,
   setMcpOpen,
   messagingSettingsOpen,
@@ -82,10 +75,6 @@ export function ShellDialogs({
   setClearTarget: (target: ChatTarget | null) => void;
   confirmClear: (target: ChatTarget) => Promise<void>;
   deleteRoutineDialogProps: ComponentProps<typeof DeleteItemDialog> | null | undefined;
-  pluginsOpen: boolean;
-  setPluginsOpen: (open: boolean) => void;
-  setFooterLogos: ComponentProps<typeof PluginsOverlay>["onConnectedAppsChange"];
-  activeBotId: string | undefined;
   mcpOpen: boolean;
   setMcpOpen: (open: boolean) => void;
   messagingSettingsOpen: boolean;
@@ -192,17 +181,6 @@ export function ShellDialogs({
 
       {deleteRoutineDialogProps ? <DeleteItemDialog {...deleteRoutineDialogProps} /> : null}
 
-      {pluginsOpen ? (
-        <PluginsOverlay
-          onConnectedAppsChange={setFooterLogos}
-          activeBotId={activeBotId}
-          onClose={() => setPluginsOpen(false)}
-          onOpenMcp={() => {
-            setPluginsOpen(false);
-            setMcpOpen(true);
-          }}
-        />
-      ) : null}
       {mcpOpen ? <McpServersOverlay onClose={() => setMcpOpen(false)} /> : null}
       {messagingSettingsOpen ? (
         <MessagingSettingsOverlay onClose={() => setMessagingSettingsOpen(false)} />

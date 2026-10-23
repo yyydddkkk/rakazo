@@ -100,31 +100,19 @@ test("account settings appearance control switches to light mode", async ({ page
   await captureSidebarSearchSelected(page, testInfo, "sidebar-search-selected-dark");
 });
 
-test("sidebar footer opens integrations and the account menu", async ({ page }, testInfo) => {
+test("sidebar footer opens the account menu", async ({ page }, testInfo) => {
   await setupAdmin(page, `footer-web-${Date.now()}@rakazo.test`, "password12", "Footer Demo");
   await completeOnboarding(page);
   const footer = page.getByTestId("sidebar-footer");
   await expect(footer).toBeVisible();
   const searchBox = await page.getByTestId("sidebar-search").boundingBox();
   const avatarBox = await page.getByTestId("user-menu-trigger").boundingBox();
-  const pillBox = await footer
-    .getByRole("button", { name: "Connect apps", exact: true })
-    .boundingBox();
   expect(searchBox).toBeTruthy();
   expect(avatarBox).toBeTruthy();
-  expect(pillBox).toBeTruthy();
-  if (searchBox && avatarBox && pillBox) {
-    expect(avatarBox.x).toBe(searchBox.x);
-    expect(pillBox.x + pillBox.width).toBe(searchBox.x + searchBox.width);
-    expect(pillBox.height).toBe(avatarBox.height);
-  }
-  await footer.getByRole("button", { name: "Connect apps", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Close integrations", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Close integrations", exact: true }).click();
+  if (searchBox && avatarBox) expect(avatarBox.x).toBe(searchBox.x);
   await page.getByTestId("user-menu-trigger").click();
   await expect(page.getByRole("link", { name: "Docs", exact: true })).toBeVisible();
-  await expect(footer.locator('span[aria-hidden="true"] > span')).toHaveCount(3);
-  if (avatarBox && pillBox) {
+  if (avatarBox) {
     await expect
       .poll(async () => {
         const menuBox = await page.locator('[data-slot="popover-content"]').boundingBox();
@@ -136,7 +124,7 @@ test("sidebar footer opens integrations and the account menu", async ({ page }, 
           }
         );
       })
-      .toEqual({ x: avatarBox.x, width: pillBox.x + pillBox.width - avatarBox.x, gap: 8 });
+      .toMatchObject({ x: avatarBox.x, gap: 8 });
   }
   await captureScreenshot(page, testInfo, "sidebar-footer-menu");
   await page.keyboard.press("Escape");
@@ -163,73 +151,12 @@ test("sidebar footer keeps the account identity readable", async ({ page }, test
   await expect(header).toHaveText(`${session.user.name}${email}`);
   await expect(page.getByText("New update available", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Install", exact: true })).toHaveCount(0);
-  await expect(footer.locator('span[aria-hidden="true"] > span')).toHaveCount(3);
   await captureScreenshot(page, testInfo, "sidebar-footer-menu");
   await page.keyboard.press("Escape");
 
   await page.setViewportSize({ width: 320, height: 900 });
   await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   await expect(avatar).toBeInViewport();
-  // Font metrics can change the count at this viewport; exact bands are covered below.
-  await expect(footer.locator('span[aria-hidden="true"] > span:visible').first()).toBeVisible();
-  const pill = footer.getByRole("button", { name: "Connect apps", exact: true });
-  const label = pill.locator("span").first();
-  expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  const controls = [avatar, pill];
-  const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
-  expect(boxes.every((box) => box?.height === 36 && box.y === boxes[0]?.y)).toBe(true);
-  expect(await footer.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  // Width changes must drop marks before taking space from the label or padding.
-  // Measure the fixed controls and label, then target the middle of each band.
-  // Marks need 26px initially and 22px per additional mark, leaving 11px margin.
-  const fixedWidth = await pill.evaluate((el) => {
-    const style = getComputedStyle(el);
-    return (
-      el.parentElement!.getBoundingClientRect().width -
-      el.clientWidth +
-      Number.parseFloat(style.paddingLeft) +
-      Number.parseFloat(style.paddingRight) +
-      el.querySelector("span")!.scrollWidth +
-      Number.parseFloat(style.columnGap)
-    );
-  });
-  for (const [availableWidth, count] of [
-    [17, 0],
-    [37, 1],
-    [59, 2],
-    [81, 3],
-  ]) {
-    const width = fixedWidth + availableWidth!;
-    await footer.evaluate((el, width) => {
-      el.style.width = `${width}px`;
-    }, width);
-    const marks = footer.locator('span[aria-hidden="true"] > span');
-    await expect(marks).toHaveCount(count!);
-    expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-    if (count) {
-      const rightInset = await pill.evaluate((el) => {
-        const marks = el.querySelector('span[aria-hidden="true"]')!;
-        return el.getBoundingClientRect().right - marks.getBoundingClientRect().right;
-      });
-      expect(rightInset).toBeGreaterThanOrEqual(11);
-    }
-  }
-  await footer.evaluate((el) => el.style.removeProperty("width"));
-  // A translation wider than the pill must still leave room for the update control.
-  await label.evaluate((el) => {
-    el.textContent = "Connecter des applications";
-  });
-  await expect(footer.locator('span[aria-hidden="true"] > span')).toHaveCount(0);
-  const translatedPill = footer.getByRole("button", {
-    name: "Connecter des applications",
-    exact: true,
-  });
-  const translatedLabel = translatedPill.locator("span").first();
-  expect(await translatedLabel.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
-  await expect(translatedLabel).toHaveCSS("text-overflow", "ellipsis");
-  const labelBox = await translatedLabel.boundingBox();
-  const pillBox = await translatedPill.boundingBox();
-  expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(pillBox!.x + pillBox!.width - 11);
   expect(await footer.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 
   await page.setViewportSize({ width: 740, height: 320 });
@@ -250,101 +177,6 @@ test("sidebar footer keeps the account identity readable", async ({ page }, test
   await captureScreenshot(page, testInfo, "sidebar-footer-short-screen");
   await menu.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByTestId("user-settings")).toBeVisible();
-});
-
-test("footer app marks follow the integrations overlay", async ({ page }) => {
-  await setupAdmin(page, `footer-apps-${Date.now()}@rakazo.test`, "password12", "Footer Demo");
-  await completeOnboarding(page);
-  let connected = true;
-  let listed = true;
-  let failCatalog = false;
-  let failConnections = false;
-  const logo =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ctext x='5' y='15'%3ES%3C/text%3E%3C/svg%3E";
-  await page.route("**/rpc/connections/list", async (route) => {
-    if (failConnections) {
-      await route.fulfill({ status: 503, json: { message: "Demo connections unavailable" } });
-      return;
-    }
-    await route.continue();
-  });
-  await page.route("**/rpc/connections/catalog", async (route) => {
-    if (failCatalog) {
-      await route.fulfill({ status: 503, json: { message: "Demo catalog unavailable" } });
-      return;
-    }
-    await route.fulfill({
-      json: {
-        json:
-          listed && !failConnections
-            ? [
-                {
-                  connectorId: "demo",
-                  slug: "slack",
-                  name: "Slack",
-                  logo,
-                  connected,
-                  noAuth: false,
-                },
-              ]
-            : [],
-      },
-    });
-  });
-  const footer = page.getByTestId("sidebar-footer");
-  await footer.getByRole("button", { name: "Connect apps", exact: true }).click();
-  await expect(footer.locator("img")).toHaveAttribute("src", logo);
-  await page.getByRole("button", { name: "Close integrations", exact: true }).click();
-  await expect(footer.locator("img")).toHaveAttribute("src", logo);
-  failCatalog = true;
-  await footer.getByRole("button", { name: "Connect apps", exact: true }).click();
-  await expect(page.getByText("Could not reach the server", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Close integrations", exact: true }).click();
-  await expect(footer.locator("img")).toHaveAttribute("src", logo);
-  failCatalog = false;
-  connected = false;
-  await footer.getByRole("button", { name: "Connect apps", exact: true }).click();
-  // Disconnected catalog entries remain available as suggestions.
-  await expect(footer.locator("img")).toHaveAttribute("src", logo);
-  await page.getByRole("button", { name: "Close integrations", exact: true }).click();
-  await expect(footer.getByRole("button", { name: "Connect apps", exact: true })).toBeVisible();
-  failCatalog = true;
-  const failedRefresh = page.waitForResponse(
-    (response) => response.url().includes("connections/catalog") && response.status() === 503,
-  );
-  await page
-    .getByRole("button", { name: /^Chief/ })
-    .first()
-    .click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
-  await expect(page.getByRole("button", { name: /^Chief copy/ }).first()).toBeVisible();
-  await failedRefresh;
-  await expect(footer.locator("img")).toHaveAttribute("src", logo);
-  failCatalog = false;
-  failConnections = true;
-  const failedConnections = page.waitForResponse(
-    (response) => response.url().includes("connections/list") && response.status() === 503,
-  );
-  await page
-    .getByRole("button", { name: /^Chief copy/ })
-    .first()
-    .click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
-  await expect(page.getByRole("button", { name: /^Chief copy copy/ }).first()).toBeVisible();
-  await failedConnections;
-  await expect(footer.locator("img")).toHaveAttribute("src", logo);
-  failConnections = false;
-  for (const name of [/^Chief copy copy/, /^Chief copy/, /^Chief/]) {
-    const bot = page.getByRole("button", { name }).first();
-    await bot.click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
-    await expect(bot).toBeHidden();
-  }
-  await page.reload();
-  await expect(footer.locator("img")).toHaveAttribute("src", logo);
-  listed = false;
-  await footer.getByRole("button", { name: "Connect apps", exact: true }).click();
-  await expect(footer.locator("img")).toHaveCount(0);
 });
 
 test("sidebar list fades above the transparent footer and keeps the last row reachable", async ({

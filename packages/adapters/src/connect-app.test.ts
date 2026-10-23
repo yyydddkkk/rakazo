@@ -21,7 +21,7 @@ const entry: ConnectionCatalogItem = {
   connected: false,
   noAuth: false,
 };
-function fixture(items = [entry]) {
+function fixture(items = [entry], rows: { connectorId: string; provider: string }[] = []) {
   const tx = {
     $executeRaw: vi.fn(),
     message: {
@@ -33,7 +33,10 @@ function fixture(items = [entry]) {
     },
   };
   const deps = {
-    prisma: { $transaction: vi.fn(async (fn) => fn(tx)) },
+    prisma: {
+      $transaction: vi.fn(async (fn) => fn(tx)),
+      connection: { findMany: vi.fn(async () => rows) },
+    },
     events: { notify: vi.fn() },
   } as unknown as Parameters<typeof connectApp>[0];
   const catalog = vi.fn(async () => items);
@@ -97,9 +100,14 @@ describe("connect_app execution", () => {
     expect(stored).toHaveLength(0);
   });
   it("returns connected state without posting", async () => {
-    const f = fixture([{ ...entry, connected: true }]);
+    const f = fixture([entry], [{ connectorId: "fake", provider: "GMAIL" }]);
     expect(await f.call()).toMatchObject({ status: "connected" });
     expect(stored).toHaveLength(0);
+  });
+  it("posts a card when only the provider reports the user's account as connected", async () => {
+    const f = fixture([{ ...entry, connected: true }]);
+    expect(await f.call()).toMatchObject({ status: "pending" });
+    expect(stored).toHaveLength(1);
   });
   it("dedupes replay even after the original card connects", async () => {
     const f = fixture();
@@ -131,12 +139,12 @@ it("falls back to the catalog when search does not recognize a featured alias", 
 });
 
 it("treats an app connected through a later provider as connected", async () => {
-  const f = fixture();
+  const f = fixture([entry], [{ connectorId: "other", provider: "gmail" }]);
   const providers = [
     { describe: () => ({ id: "fake" }), catalog: async () => [entry] },
     {
       describe: () => ({ id: "other" }),
-      catalog: async () => [{ ...entry, connectorId: "other", connected: true }],
+      catalog: async () => [{ ...entry, connectorId: "other" }],
     },
   ] as unknown as ManagedConnectorProvider[];
   const result = await connectApp(f.deps, providers, f.context, f.target, "Gmail", "effect");

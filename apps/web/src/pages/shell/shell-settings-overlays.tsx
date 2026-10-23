@@ -20,6 +20,9 @@ export function ShellSettingsOverlays({
   settingsSection,
   setSettingsSection,
   setMessagingSettingsOpen,
+  setMcpOpen,
+  currentSpaceId,
+  currentBotId,
   space,
   spaces,
   onSpaceChange,
@@ -41,6 +44,9 @@ export function ShellSettingsOverlays({
   settingsSection: SettingsSection;
   setSettingsSection: (section: SettingsSection) => void;
   setMessagingSettingsOpen: (open: boolean) => void;
+  setMcpOpen: (open: boolean) => void;
+  currentSpaceId: string | null;
+  currentBotId: string | undefined;
   space: Space | null;
   spaces: Space[];
   onSpaceChange: (spaceId: string) => void;
@@ -79,6 +85,16 @@ export function ShellSettingsOverlays({
             setSettingsOpen(false);
             setMessagingSettingsOpen(true);
           }}
+          activeBotId={space?.id === currentSpaceId ? currentBotId : undefined}
+          onOpenMcp={
+            // The MCP servers dialog follows the space the app is showing.
+            space?.id === currentSpaceId
+              ? () => {
+                  setSettingsOpen(false);
+                  setMcpOpen(true);
+                }
+              : undefined
+          }
           onAvatarStyleChange={async (avatarStyle) => {
             const nextMe = await rpc.preferences.update({ avatarStyle });
             // Merge only the saved field: a concurrent save's response must not be undone.

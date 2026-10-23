@@ -163,7 +163,7 @@ export async function createBotFromPicker(
 /** Open the user Settings overlay, optionally switching to a sidebar section. */
 export async function openUserSettings(
   page: Page,
-  section?: "general" | "models" | "memory" | "usage" | "computer",
+  section?: "general" | "models" | "memory" | "integrations" | "usage" | "computer",
 ) {
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();

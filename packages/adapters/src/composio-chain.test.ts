@@ -27,7 +27,10 @@ const context: AdapterContext = {
 };
 const target = { id: "run", spaceId: "space", botId: "bot", threadId: "chat" };
 
-function cardDeps() {
+type Row = { spaceId: string; connectorId: string; provider: string; status: string };
+
+/** Connection rows are per Space; the fake client below reports accounts per user. */
+function cardDeps(rows: Row[] = []) {
   const tx = {
     $executeRaw: vi.fn(),
     message: {
@@ -39,7 +42,14 @@ function cardDeps() {
     },
   };
   return {
-    prisma: { $transaction: vi.fn(async (fn) => fn(tx)) },
+    prisma: {
+      $transaction: vi.fn(async (fn) => fn(tx)),
+      connection: {
+        findMany: vi.fn(async ({ where }: { where: { spaceId: string; status: string } }) =>
+          rows.filter((row) => row.spaceId === where.spaceId && row.status === where.status),
+        ),
+      },
+    },
     events: { notify: vi.fn() },
   } as unknown as Parameters<typeof connectApp>[0];
 }
@@ -96,7 +106,8 @@ describe("with a Composio connector over the fake client", () => {
     expect(catalog).toEqual([expect.objectContaining({ slug: "GMAIL", connected: false })]);
 
     // connect_app posts a card built from the catalog entry.
-    const deps = cardDeps();
+    const rows: Row[] = [];
+    const deps = cardDeps(rows);
     const pending = await connectApp(
       deps,
       connector.managedProviders(),
@@ -123,6 +134,7 @@ describe("with a Composio connector over the fake client", () => {
     await composio.complete({ state: started.state, code: "" }, context);
     await expect(composio.connectionReady(context, provider)).resolves.toBe(true);
     await expect(composio.listConnectedExternalIds(context)).resolves.toEqual(["GMAIL"]);
+    rows.push({ spaceId: "space", connectorId: "composio", provider, status: "connected" });
 
     // Once connected, connect_app reports it instead of posting another card.
     await expect(
@@ -154,5 +166,50 @@ describe("with a Composio connector over the fake client", () => {
       ),
     );
     expect(events.at(-1)).toMatchObject({ type: "result" });
+  });
+});
+
+describe("one user across two Spaces", () => {
+  it("shows the connect card in a Space that has no row for an account the user already holds", async () => {
+    const composio = new ComposioConnector({ client: new FakeComposioClient() });
+    const providers = createConnectorStack([composio]).connector.managedProviders();
+    const spaceB = { ...context, spaceId: "space-b" };
+    const targetB = { ...target, spaceId: "space-b", threadId: "chat-b" };
+    const rows: Row[] = [];
+    const deps = cardDeps(rows);
+
+    // The user connects GitHub from Space A: the provider account is the user's.
+    const started = await composio.begin(
+      { provider: "GITHUB", redirectUrl: "https://rakazo.example.test/app" },
+      context,
+    );
+    await composio.complete({ state: started.state, code: "" }, context);
+    rows.push({
+      spaceId: "space",
+      connectorId: "composio",
+      provider: "GITHUB",
+      status: "connected",
+    });
+    expect((await composio.catalog(spaceB, "github"))[0]).toMatchObject({ connected: true });
+
+    await expect(
+      connectApp(deps, providers, context, target, "github", "a"),
+    ).resolves.toMatchObject({ status: "connected" });
+    await expect(
+      connectApp(deps, providers, spaceB, targetB, "github", "b"),
+    ).resolves.toMatchObject({ status: "pending" });
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.blocks[0]).toMatchObject({ provider: "GITHUB", status: "pending" });
+
+    // Connecting in Space B adds its own row; both Spaces now report connected.
+    rows.push({
+      spaceId: "space-b",
+      connectorId: "composio",
+      provider: "GITHUB",
+      status: "connected",
+    });
+    await expect(
+      connectApp(deps, providers, spaceB, targetB, "github", "c"),
+    ).resolves.toMatchObject({ status: "connected" });
   });
 });

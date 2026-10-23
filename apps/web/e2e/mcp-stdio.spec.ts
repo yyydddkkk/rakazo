@@ -4,6 +4,7 @@ import {
   captureScreenshot,
   completeOnboarding,
   expandAdvancedSection,
+  openUserSettings,
   setupAdmin,
 } from "./helpers";
 
@@ -102,7 +103,7 @@ test("adds a stdio MCP server with encrypted environment variables", async ({ pa
     });
   });
 
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await openUserSettings(page, "integrations");
   await expandAdvancedSection(page.getByTestId("integrations-advanced"));
   await page.getByRole("button", { name: "Manage MCP servers", exact: true }).click();
   await expect(page.getByRole("heading", { name: "MCP servers" })).toBeVisible();
@@ -236,7 +237,7 @@ test("shows MCP server health, error details, and tests the connection on demand
     });
   });
 
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await openUserSettings(page, "integrations");
   await expandAdvancedSection(page.getByTestId("integrations-advanced"));
   await page.getByRole("button", { name: "Manage MCP servers", exact: true }).click();
   await expect(page.getByRole("heading", { name: "MCP servers" })).toBeVisible();
@@ -300,7 +301,7 @@ test("polls the server list while a stdio package is installing", async ({ page 
     });
   });
 
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await openUserSettings(page, "integrations");
   await expandAdvancedSection(page.getByTestId("integrations-advanced"));
   await page.getByRole("button", { name: "Manage MCP servers", exact: true }).click();
 

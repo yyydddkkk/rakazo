@@ -1,5 +1,6 @@
 import { MCP_OAUTH_CHANNEL } from "./mcp-oauth-channel";
-import { rpc } from "./rpc";
+import type { RpcClient } from "./rpc";
+import { rpc, rpcForSpace } from "./rpc";
 
 export { MCP_OAUTH_CHANNEL } from "./mcp-oauth-channel";
 
@@ -22,9 +23,36 @@ export function mcpOAuthRedirectUri(): string {
   return `${window.location.origin}/mcp/oauth/callback`;
 }
 
-export async function connectMcpOauth(serverId: string): Promise<McpOauthResult> {
-  const started = await rpc.mcp.oauth.begin({ serverId, redirectUri: mcpOAuthRedirectUri() });
+const MCP_OAUTH_SPACE_KEY = "rakazo:mcp-oauth-space";
+
+/** The rpc client the callback page completes with: the space the flow began in. */
+export function mcpOAuthCallbackRpc(): RpcClient {
+  try {
+    const spaceId = window.localStorage.getItem(MCP_OAUTH_SPACE_KEY);
+    window.localStorage.removeItem(MCP_OAUTH_SPACE_KEY);
+    if (spaceId) return rpcForSpace(spaceId);
+  } catch {
+    // Storage is unavailable: complete in the selected space.
+  }
+  return rpc;
+}
+
+/** `space` binds the flow to a space other than the selected one, callback included. */
+export async function connectMcpOauth(
+  serverId: string,
+  space?: { client: RpcClient; spaceId: string | null },
+): Promise<McpOauthResult> {
+  const started = await (space?.client ?? rpc).mcp.oauth.begin({
+    serverId,
+    redirectUri: mcpOAuthRedirectUri(),
+  });
   if (started.status !== "authorization_required") return started.status;
+  try {
+    if (space?.spaceId) window.localStorage.setItem(MCP_OAUTH_SPACE_KEY, space.spaceId);
+    else window.localStorage.removeItem(MCP_OAUTH_SPACE_KEY);
+  } catch {
+    // Storage is unavailable: the callback completes in the selected space.
+  }
   const popup = window.open(
     started.authorizationUrl,
     MCP_OAUTH_CHANNEL,

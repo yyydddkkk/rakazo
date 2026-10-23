@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, setupAdmin } from "./helpers";
+import { captureScreenshot, completeOnboarding, openUserSettings, setupAdmin } from "./helpers";
 
 test("a failed overlay chunk keeps the shell and the draft, and Refresh loads it", async ({
   page,
@@ -11,9 +11,10 @@ test("a failed overlay chunk keeps the shell and the draft, and Refresh loads it
   const composer = page.getByRole("combobox", { name: "Message Chief" });
   await composer.fill("Keep this draft");
 
-  const pluginsChunk = /\/pages\/PluginsOverlay\.tsx/;
-  await page.route(pluginsChunk, (route) => route.fulfill({ status: 404 }));
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  const settingsChunk = /\/pages\/SettingsOverlay\.tsx/;
+  await page.route(settingsChunk, (route) => route.fulfill({ status: 404 }));
+  await page.getByTestId("user-menu-trigger").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
 
   const failed = page.getByRole("alertdialog", { name: "Could not load" });
   await expect(failed).toBeVisible();
@@ -23,11 +24,11 @@ test("a failed overlay chunk keeps the shell and the draft, and Refresh loads it
   await expect(failed).toHaveCount(0);
   await expect(composer).toHaveValue("Keep this draft");
 
-  await page.unroute(pluginsChunk);
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await page.unroute(settingsChunk);
+  await page.getByTestId("user-menu-trigger").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await failed.getByRole("button", { name: "Refresh", exact: true }).click();
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
-  await expect(page.getByPlaceholder("Search apps")).toBeVisible();
+  await expect(page.getByTestId("user-settings")).toBeVisible();
 });
 
 test("a failed page chunk shows Refresh instead of a blank app", async ({ page }, testInfo) => {
@@ -77,53 +78,39 @@ for (const [failing, intact] of [
   });
 }
 
-for (const overlay of ["settings", "integrations"] as const) {
-  test(`preload recovery reopens ${overlay} once after an automatic reload`, async ({
+test("preload recovery reopens settings once after an automatic reload", async ({
+  page,
+}, testInfo) => {
+  await setupAdmin(
     page,
-  }, testInfo) => {
-    await setupAdmin(
-      page,
-      `preload-${overlay}-${Date.now()}@rakazo.test`,
-      "password12",
-      "Preload Recovery",
-    );
-    await completeOnboarding(page);
-    const chunk =
-      overlay === "settings" ? /\/pages\/SettingsOverlay\.tsx/ : /\/pages\/PluginsOverlay\.tsx/;
-    const opened =
-      overlay === "settings"
-        ? page.getByTestId("user-settings")
-        : page.getByPlaceholder("Search apps");
-    const originalUrl = page.url();
-    await page.route(
-      chunk,
-      async (route) => {
-        await route.fulfill({ status: 404 });
-        await page
-          .evaluate(() =>
-            window.dispatchEvent(new Event("vite:preloadError", { cancelable: true })),
-          )
-          .catch(() => undefined);
-      },
-      { times: 1 },
-    );
-    const reloaded = page.waitForEvent("load");
-    if (overlay === "settings") await page.getByTestId("user-menu-trigger").click();
-    await page
-      .getByRole("button", {
-        name: overlay === "settings" ? "Settings" : "Connect apps",
-        exact: true,
-      })
-      .click();
-    await reloaded;
-    await expect(opened).toBeVisible();
-    await expect(page).toHaveURL(originalUrl);
-    await captureScreenshot(page, testInfo, `preload-recovered-${overlay}`);
-    await page.reload();
-    await expect(page.locator('[data-rakazo-app-state="ready"]')).toBeVisible();
-    await expect(opened).toHaveCount(0);
-  });
-}
+    `preload-settings-${Date.now()}@rakazo.test`,
+    "password12",
+    "Preload Recovery",
+  );
+  await completeOnboarding(page);
+  const opened = page.getByTestId("user-settings");
+  const originalUrl = page.url();
+  await page.route(
+    /\/pages\/SettingsOverlay\.tsx/,
+    async (route) => {
+      await route.fulfill({ status: 404 });
+      await page
+        .evaluate(() => window.dispatchEvent(new Event("vite:preloadError", { cancelable: true })))
+        .catch(() => undefined);
+    },
+    { times: 1 },
+  );
+  const reloaded = page.waitForEvent("load");
+  await page.getByTestId("user-menu-trigger").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await reloaded;
+  await expect(opened).toBeVisible();
+  await expect(page).toHaveURL(originalUrl);
+  await captureScreenshot(page, testInfo, "preload-recovered-settings");
+  await page.reload();
+  await expect(page.locator('[data-rakazo-app-state="ready"]')).toBeVisible();
+  await expect(opened).toHaveCount(0);
+});
 
 test("a failed integrations load offers Retry instead of an empty catalog", async ({
   page,
@@ -153,7 +140,7 @@ test("a failed integrations load offers Retry instead of an empty catalog", asyn
       },
     });
   });
-  await page.getByRole("button", { name: "Connect apps", exact: true }).click();
+  await openUserSettings(page, "integrations");
 
   const retry = page.getByRole("button", { name: "Retry", exact: true });
   await expect(retry).toBeVisible();

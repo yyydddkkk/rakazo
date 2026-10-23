@@ -317,7 +317,6 @@ function SpaceShell() {
   function updateSnapshot(update: (prev: ThreadSnapshot | null) => ThreadSnapshot | null) {
     commitSnapshot(update(snapshotRef.current));
   }
-  const [pluginsOpen, setPluginsOpen] = usePreloadRecoveryState("integrations", false);
   const [mcpOpen, setMcpOpen] = usePreloadRecoveryState("mcp", false);
   const [settingsOpen, setSettingsOpen] = usePreloadRecoveryState("settings", false);
   const [settingsSection, setSettingsSection] = usePreloadRecoveryState<SettingsSection>(
@@ -1390,11 +1389,7 @@ function SpaceShell() {
   const jumpToMessageRef = useRef(jumpToMessage);
   jumpToMessageRef.current = jumpToMessage;
 
-  const { mentionRoutines, mentionConnectors, footerLogos, setFooterLogos } = useMentionSources(
-    rpc,
-    bots,
-    initialBotsLoaded,
-  );
+  const { mentionRoutines, mentionConnectors } = useMentionSources(rpc, bots, initialBotsLoaded);
 
   const composerMentionTargets = useMemo(
     () =>
@@ -2049,13 +2044,11 @@ function SpaceShell() {
         refreshBots={refreshBots}
         setDeleteTarget={setDeleteTarget}
         setDeleteGroupTarget={setDeleteGroupTarget}
-        footerLogos={footerLogos}
         userName={userName}
         initials={initials}
         userImage={session.data?.user.image}
         userEmail={session.data?.user.email}
         ticketBoardEnabled={bootstrapMe?.ticketBoardEnabled}
-        setPluginsOpen={setPluginsOpen}
         openSettings={openSettings}
         spaces={spaces}
         setNewSpaceOpen={setNewSpaceOpen}
@@ -2280,10 +2273,6 @@ function SpaceShell() {
         setClearTarget={setClearTarget}
         confirmClear={confirmClear}
         deleteRoutineDialogProps={deleteRoutineDialogProps}
-        pluginsOpen={pluginsOpen}
-        setPluginsOpen={setPluginsOpen}
-        setFooterLogos={setFooterLogos}
-        activeBotId={activeBotId.current}
         mcpOpen={mcpOpen}
         setMcpOpen={setMcpOpen}
         messagingSettingsOpen={messagingSettingsOpen}
@@ -2316,6 +2305,9 @@ function SpaceShell() {
         settingsSection={settingsSection}
         setSettingsSection={setSettingsSection}
         setMessagingSettingsOpen={setMessagingSettingsOpen}
+        setMcpOpen={setMcpOpen}
+        currentSpaceId={currentSpaceId}
+        currentBotId={activeBotId.current}
         space={settingsSpace}
         spaces={spaces}
         onSpaceChange={setSettingsSpaceId}

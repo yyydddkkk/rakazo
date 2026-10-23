@@ -220,7 +220,21 @@ export function connectionsRouter(ctx: RouterContext) {
                   );
                 });
               }
-              return items;
+              // The provider's flag is the user's; an app is added only where this Space has a row.
+              const connected = await deps.prisma.connection.findMany({
+                where: {
+                  spaceId: context.actor.spaceId,
+                  userId: context.actor.userId,
+                  connectorId: provider.describe().id,
+                  status: "connected",
+                },
+                select: { provider: true },
+              });
+              const added = new Set(connected.map((row) => row.provider.trim().toLowerCase()));
+              return items.map((item) => ({
+                ...item,
+                connected: added.has(item.slug.trim().toLowerCase()),
+              }));
             } catch {
               return [];
             }
