@@ -48,6 +48,14 @@ function reposFor(memoryScope: string | null) {
 }
 
 describe("createRepos.listBots", () => {
+  it.each([null, "pi", "omp"] as const)("serializes runtime override %s", async (runtime) => {
+    const repos = createRepos({
+      bot: { findMany: vi.fn(async () => [{ ...baseBot, runtime }]) },
+      $queryRaw: vi.fn(async () => []),
+    } as unknown as PrismaClient);
+    expect((await repos.listBots(actor))[0]?.runtime).toBe(runtime);
+  });
+
   it("surfaces a failed foreground run and clears the signal after recovery", async () => {
     const findMany = vi.fn(async () => [
       {

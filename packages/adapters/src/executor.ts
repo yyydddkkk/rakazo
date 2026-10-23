@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type {
   AdapterContext,
   AgentRunRequest,
@@ -336,6 +337,9 @@ import {
   MODEL_CANNOT_SEE_MESSAGE,
   modelAcceptsImageInput,
 } from "./model-vision.js";
+import { selectOmpHostTools } from "./omp-runtime.js";
+import { ompWorkspaceDirectory } from "./omp-transport.js";
+import { materializeOmpAttachments, readOmpAttachment } from "./omp-workspace.js";
 import { isRetiredModelCredentialError } from "./pi-oauth.js";
 import type { PlotSpec } from "./plot-tool.js";
 import {
@@ -833,6 +837,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             userId: routine.userId,
             status: "queued",
             trigger: "routine",
+            runtime: bot.runtime ?? deps.runtime.describe().id,
             routineId: routine.id,
             ...routineRunModelPin(currentModel),
           },
@@ -1021,6 +1026,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               trigger: "routine",
               routineId: failed.routineId,
               retryOfRunId: failed.id,
+              runtime: failed.runtime ?? null,
               ...(failed.modelPinned
                 ? {
                     modelProvider: failed.modelProvider,
@@ -1283,6 +1289,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }),
           loadBotCommandEnvironment(deps.prisma, deps.secretStore, run),
         ]);
+        const runtime = deps.runtimeFor?.(run.runtime ?? bot.runtime) ?? deps.runtime;
+        const omp = runtime.describe().id === "omp";
+        if (run.runtime == null) {
+          // Legacy/direct enqueues freeze their runtime once the first attempt starts.
+          const pinned = await deps.prisma.run.updateMany({
+            where: { id: runId, leaseOwner: workerId, leaseFence: fence, runtime: null },
+            data: { runtime: runtime.describe().id },
+          });
+          if (pinned.count !== 1) return;
+        }
+        const ompWorkspace = omp
+          ? ompWorkspaceDirectory(
+              path.resolve(deps.dataDir ?? "./data", "omp-workspaces"),
+              run.spaceId,
+              bot.id,
+            )
+          : undefined;
         const historySearchBeforeSeq =
           contextStrategy !== "current" && run.sourceMessageId
             ? (messages.find((message) => message.id === run.sourceMessageId)?.seq ??
@@ -1450,7 +1473,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
         }
         const runDeployment = deps.deploymentModelConfigured ? resolveDeploymentModel() : null;
-        const runtimeFallback = runtimeFallbackModel(deps.runtime);
+        const runtimeFallback = runtimeFallbackModel(runtime);
         const pinError = run.modelPinned
           ? pinnedModelCredentialError(modelChoice, overrideCredential)
           : undefined;
@@ -1597,20 +1620,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let recentThreadFiles: Awaited<ReturnType<typeof listRecentThreadFiles>> = [];
         try {
           if (artifacts) {
-            currentTurnFiles = await listCurrentTurnFiles(deps, turnBlocks, context);
-            recentThreadFiles = await listRecentThreadFiles(
-              deps,
-              history,
-              historyMessages,
-              recentFilesInput,
-            );
+            currentTurnFiles = ompWorkspace
+              ? await materializeOmpAttachments(
+                  { ...deps, artifacts },
+                  turnBlocks,
+                  context,
+                  ompWorkspace,
+                )
+              : await listCurrentTurnFiles(deps, turnBlocks, context);
+            recentThreadFiles = ompWorkspace
+              ? []
+              : await listRecentThreadFiles(deps, history, historyMessages, recentFilesInput);
           }
         } catch (error) {
           await workspaceCheckpoint.flush().catch(() => undefined);
           throw error;
         }
         const attachedFilesPrompt = [
-          currentTurnFilesInstruction(currentTurnFiles),
+          ompWorkspace && currentTurnFiles.length
+            ? `Files attached to this turn are in your working directory:\n${currentTurnFiles.map((file) => `- ${file.path}`).join("\n")}`
+            : currentTurnFilesInstruction(currentTurnFiles),
           recentThreadFilesInstruction(recentThreadFiles),
         ]
           .filter(Boolean)
@@ -1624,7 +1653,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           runModelId,
           resolved.acceptsImages,
         );
-        const acceptsImages = deps.runtime.describe().capabilities.scripted || modelSeesImages;
+        const acceptsImages = runtime.describe().capabilities.scripted || modelSeesImages;
         const groupContext = thread.groupId
           ? await loadGroupContext(deps.prisma, thread.groupId, {
               id: bot.id,
@@ -1664,8 +1693,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const graphicalToolsAllowed = graphical && acceptsImages && !heldForTakeover;
         const pageBrowserAllowed =
           graphical && browser.describe().capabilities.page && !heldForTakeover;
-        const disabledBuiltinTools = disabledBuiltinToolSet(bot.disabledBuiltinTools);
-        const builtins = [
+        const disabledBuiltinTools = disabledBuiltinToolSet(
+          omp
+            ? [
+                ...(bot.disabledBuiltinTools ?? []),
+                ...builtinAgentTools
+                  .filter((tool) => !selectOmpHostTools([tool]).length)
+                  .map((tool) => tool.name),
+              ]
+            : bot.disabledBuiltinTools,
+        );
+        const availableBuiltins = [
           ...selectBuiltinToolsForRun({
             ticketBoardEnabled: deps.ticketBoardEnabled,
             historyRetrievalEnabled: contextStrategy !== "current",
@@ -1686,6 +1724,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ? agentConnectionTools.filter((tool) => !disabledBuiltinTools.has(tool.name))
             : []),
         ];
+        const builtins = omp ? selectOmpHostTools(availableBuiltins) : availableBuiltins;
         const exposedConnectorTools = discovered.filter(
           (tool) => !builtinAgentTools.some((builtin) => builtin.name === tool.name),
         );
@@ -1844,14 +1883,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
           computerKind,
           disabledBuiltinTools,
         );
-        const computerInstruction = [
-          "Use the computer only when the task needs files, commands, a browser, or an installed application. Answer directly from the conversation when sufficient; use connected tools for app data. Do not inspect the computer just to prepare for an unrelated task.",
-          dockerToolInstruction
-            ? `${baseComputerInstruction} ${dockerToolInstruction}`
-            : baseComputerInstruction,
-        ].join(" ");
-        const workspaceInstruction =
-          computerMode === "team"
+        const computerInstruction = omp
+          ? "Use your native execution tools for files, commands, search, browser work, and subagents. Rakazo product tools are registered separately."
+          : [
+              "Use the computer only when the task needs files, commands, a browser, or an installed application. Answer directly from the conversation when sufficient; use connected tools for app data. Do not inspect the computer just to prepare for an unrelated task.",
+              dockerToolInstruction
+                ? `${baseComputerInstruction} ${dockerToolInstruction}`
+                : baseComputerInstruction,
+            ].join(" ");
+        const workspaceInstruction = omp
+          ? `Your persistent working directory is ${ompWorkspace}. Relative paths start there. Use attach_file to share files from this directory.`
+          : computerMode === "team"
             ? `Your Team Computer home is ${teamBotWorkspaceDirectory(bot.id)}. Relative file paths and shell working directories start there. Put intentionally shared work under shared/. Other bots' folders are visible under bots/; treat them as their working areas.`
             : "This entire computer workspace is your private home. Relative file paths and shell working directories start at its root.";
 
@@ -1934,7 +1976,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let approvalPausePending = false;
         let handedOff = false;
         let progressRedactor = createStreamingRedactor(runSecrets);
-        const scripted = deps.runtime.describe().capabilities.scripted;
+        const scripted = runtime.describe().capabilities.scripted;
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
         const flushProgress = async () => {
           // Routines may finish silently. Do not leak narration or a partial silence
@@ -2537,7 +2579,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                           operationId: `auto-review:${runId}`,
                           operationKind: "setup",
                         }),
-                      runtime: deps.runtime,
+                      // The JSON approval judge must not acquire omp's native execution tools.
+                      runtime: deps.runtimeFor?.("pi") ?? deps.runtime,
                       checker: checker!,
                       apiKey: judgeKey.oauth ? undefined : judgeKey.apiKey,
                       baseUrl: judgeKey.baseUrl,
@@ -3161,14 +3204,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
             let bytes: Uint8Array;
             try {
-              bytes = await deps.sandbox.readFile(
-                await getRunComputer("tool", name),
-                storedPath,
-                context,
-                {
-                  maxBytes: deps.maxUploadSizeBytes ?? ATTACHMENT_MAX_BYTES,
-                },
-              );
+              bytes = ompWorkspace
+                ? await readOmpAttachment(
+                    ompWorkspace,
+                    filePath,
+                    deps.maxUploadSizeBytes ?? ATTACHMENT_MAX_BYTES,
+                  )
+                : await deps.sandbox.readFile(
+                    await getRunComputer("tool", name),
+                    storedPath,
+                    context,
+                    { maxBytes: deps.maxUploadSizeBytes ?? ATTACHMENT_MAX_BYTES },
+                  );
             } catch {
               return failAttach("file not found or unreadable");
             }
@@ -4791,7 +4838,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         );
 
         try {
-          const runtimeEvents = deps.runtime.run(
+          const runtimeEvents = runtime.run(
             {
               botId: bot.id,
               threadId: thread.id,
@@ -4828,11 +4875,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 hasHistoricalContext: historicalContext.length > 0,
                 historyRetrievalEnabled: contextStrategy !== "current",
                 computerInstruction,
-                pageBrowserAllowed,
+                pageBrowserAllowed: omp ? false : pageBrowserAllowed,
                 taskCatalogInstruction,
                 workspaceInstruction,
-                agentEnvironmentInstruction,
-                botDirectory,
+                agentEnvironmentInstruction: omp ? undefined : agentEnvironmentInstruction,
+                botDirectory: omp ? undefined : botDirectory,
                 pluginLine,
                 agentSkillsLine,
                 taughtSkillsLine,

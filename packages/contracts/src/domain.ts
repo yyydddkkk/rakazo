@@ -72,6 +72,9 @@ export const InstructionVersionSchema = z.object({
   createdAt: z.string(),
 });
 
+export const AgentRuntimeSchema = z.enum(["pi", "omp"]);
+export type AgentRuntimeChoice = z.infer<typeof AgentRuntimeSchema>;
+
 export const BotSchema = z.object({
   id: Id,
   spaceId: Id,
@@ -95,6 +98,7 @@ export const BotSchema = z.object({
   computerMode: ComputerModeSchema,
   updatedAt: z.string(),
   createdAt: z.string(),
+  runtime: AgentRuntimeSchema.nullable().optional(),
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
   thinkingLevel: ThinkingLevelSchema.nullable(),
@@ -337,6 +341,7 @@ export const BOT_DESCRIPTION_MAX_LENGTH = 4000;
 export const BOT_INSTRUCTIONS_MAX_LENGTH = 20000;
 
 export const CreateBotInput = z.object({
+  runtime: AgentRuntimeSchema.nullable().optional(),
   name: z.string().trim().min(1).max(BOT_NAME_MAX_LENGTH),
   title: z.string().max(BOT_TITLE_MAX_LENGTH).default(""),
   description: z.string().max(BOT_DESCRIPTION_MAX_LENGTH).default(""),
@@ -375,6 +380,7 @@ export const UpdateBotInput = z
     color: BotAvatarValueSchema.optional(),
     pinned: z.boolean().optional(),
     sectionId: Id.nullable().optional(),
+    runtime: AgentRuntimeSchema.nullable().optional(),
     modelProvider: z.string().trim().min(1).max(80).nullable().optional(),
     modelId: z.string().trim().min(1).max(200).nullable().optional(),
     thinkingLevel: ThinkingLevelSchema.nullable().optional(),
@@ -1013,7 +1019,10 @@ export const MessagingAgentConnectionSchema = z.object({
 });
 export type MessagingAgentConnection = z.infer<typeof MessagingAgentConnectionSchema>;
 
+export const RunRuntimeSchema = z.enum(["pi", "omp", "scripted"]);
+
 export const RunSchema = z.object({
+  runtime: RunRuntimeSchema.nullable().optional(),
   id: Id,
   userId: Id.optional(),
   botId: Id,

@@ -173,7 +173,10 @@ describe("finalizeRun", () => {
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       message: { findFirst: vi.fn(async () => null) },
-      bot: { update: vi.fn(async () => ({})) },
+      bot: {
+        findUniqueOrThrow: vi.fn(async () => ({ runtime: null })),
+        update: vi.fn(async () => ({})),
+      },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
@@ -242,7 +245,10 @@ describe("finalizeRun", () => {
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       message: { findFirst: vi.fn(async () => null) },
-      bot: { update: vi.fn(async () => ({})) },
+      bot: {
+        findUniqueOrThrow: vi.fn(async () => ({ runtime: null })),
+        update: vi.fn(async () => ({})),
+      },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
@@ -333,7 +339,10 @@ describe("finalizeRun", () => {
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       message: { findFirst: vi.fn(async () => null) },
-      bot: { update: vi.fn(async () => ({})) },
+      bot: {
+        findUniqueOrThrow: vi.fn(async () => ({ runtime: null })),
+        update: vi.fn(async () => ({})),
+      },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
@@ -836,6 +845,7 @@ describe("pauseRunForInput", () => {
       const fanout = new TestFanout();
       const publish = vi.spyOn(fanout, "publish");
       const tx = {
+        bot: { findUniqueOrThrow: vi.fn(async () => ({ runtime: null })) },
         $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
         run: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -2634,6 +2644,7 @@ describe("queue admission beside pending cards", () => {
     "admits a %s wake beside waiting_input",
     async (trigger) => {
       const tx = {
+        bot: { findUniqueOrThrow: vi.fn(async () => ({ runtime: null })) },
         thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 3, nextEventSeq: 4 }) },
         message: {
           create: vi.fn().mockResolvedValue({ id: "message-new", seq: 2 }),
@@ -2673,6 +2684,7 @@ describe("queue admission beside pending cards", () => {
 
   it("creates a pending steering continuation without attaching it to a paused run", async () => {
     const tx = {
+      bot: { findUniqueOrThrow: vi.fn(async () => ({ runtime: null })) },
       run: {
         findFirst: vi.fn(async ({ where }: { where: { status: { in: string[] } } }) =>
           where.status.in.includes("waiting_input") ? { id: "paused" } : null,
@@ -2699,6 +2711,11 @@ describe("queue admission beside pending cards", () => {
         botId: "bot-1",
       }),
     ).resolves.toBe("continuation");
+    expect(tx.run.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ runtime: null }),
+      }),
+    );
     expect(tx.steeringMessage.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ["steering-1"] }, runId: null },
       data: { runId: "continuation", claimedAt: null },
@@ -2707,45 +2724,100 @@ describe("queue admission beside pending cards", () => {
 });
 
 describe("sendUserMessage", () => {
-  it("creates the message, run, and event in one transaction and publishes once", async () => {
-    const createdAt = new Date("2026-01-01T00:00:00Z");
-    const fanout = new TestFanout();
-    const publish = vi.spyOn(fanout, "publish");
-    const tx = {
-      thread: {
-        update: vi
-          .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 5 })
-          .mockResolvedValueOnce({ nextEventSeq: 9 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({ id: "message-1", seq: 4, createdAt }),
-        update: vi.fn(),
-      },
-      task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      run: {
-        create: vi.fn().mockResolvedValue({ id: "run-1" }),
-        findMany: vi.fn().mockResolvedValue([]),
-        findUnique: vi.fn().mockResolvedValue({ status: "queued" }),
-      },
-      event: {
-        create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
-          ...event(data.seq),
-          type: data.type,
-          runId: "run-1",
-        })),
-      },
-    };
-    const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
-      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => {
-        const result = await callback(tx);
-        return result;
-      }),
-    } as unknown as PrismaClient;
+  it.each([
+    { botRuntime: null, defaultRuntime: "pi", expected: "pi" },
+    { botRuntime: null, defaultRuntime: "omp", expected: "omp" },
+    { botRuntime: "omp", defaultRuntime: "pi", expected: "omp" },
+    { botRuntime: "pi", defaultRuntime: "omp", expected: "pi" },
+  ])(
+    "atomically snapshots $expected for bot $botRuntime and default $defaultRuntime",
+    async ({ botRuntime, defaultRuntime, expected }) => {
+      const bot = { runtime: botRuntime };
+      const createdAt = new Date("2026-01-01T00:00:00Z");
+      const fanout = new TestFanout();
+      const publish = vi.spyOn(fanout, "publish");
+      const tx = {
+        bot: { findUniqueOrThrow: vi.fn(async () => bot) },
+        thread: {
+          update: vi
+            .fn()
+            .mockResolvedValueOnce({ nextMessageSeq: 5 })
+            .mockResolvedValueOnce({ nextEventSeq: 9 }),
+        },
+        message: {
+          create: vi.fn().mockResolvedValue({ id: "message-1", seq: 4, createdAt }),
+          update: vi.fn(),
+        },
+        task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
+        run: {
+          create: vi.fn().mockResolvedValue({ id: "run-1" }),
+          findMany: vi.fn().mockResolvedValue([]),
+          findUnique: vi.fn().mockResolvedValue({ status: "queued" }),
+        },
+        event: {
+          create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
+            ...event(data.seq),
+            type: data.type,
+            runId: "run-1",
+          })),
+        },
+      };
+      const prisma = {
+        message: { findUnique: vi.fn().mockResolvedValue(null) },
+        $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => {
+          const result = await callback(tx);
+          return result;
+        }),
+      } as unknown as PrismaClient;
 
-    await expect(
-      sendUserMessage(
+      await expect(
+        sendUserMessage(
+          prisma,
+          {
+            spaceId: "workspace-1",
+            threadId: "thread-1",
+            botId: "bot-1",
+            userId: "user-1",
+            blocks: [{ kind: "text", text: "hello" }],
+            prompt: "hello",
+            trigger: "user",
+            clientNonce: "nonce-1",
+            linkMessageToRun: true,
+          },
+          fanout,
+          defaultRuntime,
+        ),
+      ).resolves.toEqual({ messageId: "message-1", seq: 4, taskId: "task-1", runId: "run-1" });
+
+      // A subsequent settings change cannot mutate this queued run's scalar snapshot.
+      bot.runtime = expected === "omp" ? "pi" : "omp";
+      expect(tx.run.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            trigger: "user",
+            runtime: expected,
+            clientNonce: "send:message-1",
+            sourceMessageId: "message-1",
+          }),
+        }),
+      );
+      expect(tx.message.update).toHaveBeenCalledWith({
+        where: { id: "message-1" },
+        data: { runId: "run-1" },
+      });
+      expect(tx.event.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: "thread.message.created", runId: "run-1" }),
+        }),
+      );
+      expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 8 }));
+      vi.mocked(prisma.message.findUnique).mockResolvedValue({
+        id: "message-1",
+        seq: 4,
+        createdAt,
+        sourceRuns: [{ id: "run-1", taskId: "task-1" }],
+      } as never);
+      await sendUserMessage(
         prisma,
         {
           spaceId: "workspace-1",
@@ -2759,54 +2831,14 @@ describe("sendUserMessage", () => {
           linkMessageToRun: true,
         },
         fanout,
-      ),
-    ).resolves.toEqual({ messageId: "message-1", seq: 4, taskId: "task-1", runId: "run-1" });
-
-    expect(tx.run.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          trigger: "user",
-          clientNonce: "send:message-1",
-          sourceMessageId: "message-1",
-        }),
-      }),
-    );
-    expect(tx.message.update).toHaveBeenCalledWith({
-      where: { id: "message-1" },
-      data: { runId: "run-1" },
-    });
-    expect(tx.event.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ type: "thread.message.created", runId: "run-1" }),
-      }),
-    );
-    expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 8 }));
-    vi.mocked(prisma.message.findUnique).mockResolvedValue({
-      id: "message-1",
-      seq: 4,
-      createdAt,
-      sourceRuns: [{ id: "run-1", taskId: "task-1" }],
-    } as never);
-    await sendUserMessage(
-      prisma,
-      {
-        spaceId: "workspace-1",
-        threadId: "thread-1",
-        botId: "bot-1",
-        userId: "user-1",
-        blocks: [{ kind: "text", text: "hello" }],
-        prompt: "hello",
-        trigger: "user",
-        clientNonce: "nonce-1",
-        linkMessageToRun: true,
-      },
-      fanout,
-    );
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-  });
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("pins an agreed inbound model onto the run it creates", async () => {
     const tx = {
+      bot: { findUniqueOrThrow: vi.fn(async () => ({ runtime: null })) },
       thread: {
         update: vi
           .fn()

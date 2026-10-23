@@ -1,5 +1,17 @@
-import type { Actor, Bot, BotSection, MessageBlock, SpaceBot } from "@rakazo/contracts";
-import { BOT_COLORS, canonicalPiProviderId, InstructionVersionSchema } from "@rakazo/contracts";
+import type {
+  Actor,
+  AgentRuntimeChoice,
+  Bot,
+  BotSection,
+  MessageBlock,
+  SpaceBot,
+} from "@rakazo/contracts";
+import {
+  AgentRuntimeSchema,
+  BOT_COLORS,
+  canonicalPiProviderId,
+  InstructionVersionSchema,
+} from "@rakazo/contracts";
 import {
   BACKGROUND_RUN_TRIGGERS,
   displayName,
@@ -71,6 +83,7 @@ function mapBot(
     updatedAt: Date;
     thread: { id: string; unread: boolean } | null;
     computer: { scope: string } | null;
+    runtime?: string | null;
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: string | null;
@@ -112,6 +125,7 @@ function mapBot(
     computerMode: bot.computer ? parseComputerMode(bot.computer.scope) : "team",
     createdAt: bot.createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
+    runtime: AgentRuntimeSchema.nullable().parse(bot.runtime ?? null),
     modelProvider: bot.modelProvider ? canonicalPiProviderId(bot.modelProvider) : null,
     modelId: bot.modelId ?? null,
     thinkingLevel: (bot.thinkingLevel as Bot["thinkingLevel"]) ?? null,
@@ -456,6 +470,7 @@ export function createRepos(prisma: PrismaClient) {
         parentBotId?: string | null;
         computerMode?: ComputerMode;
         spawnKey?: string;
+        runtime?: AgentRuntimeChoice | null;
         modelProvider?: string | null;
         modelId?: string | null;
         thinkingLevel?: string | null;
@@ -528,6 +543,7 @@ export function createRepos(prisma: PrismaClient) {
               parentBotId: input.parentBotId ?? null,
               computerId: teamComputer.id,
               spawnKey: input.spawnKey,
+              runtime: input.runtime ?? null,
               modelProvider,
               modelId,
               thinkingLevel,

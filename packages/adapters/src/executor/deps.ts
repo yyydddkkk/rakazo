@@ -27,6 +27,8 @@ export interface ExecutorDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
   runtime: AgentRuntime;
+  /** Resolve a bot or pinned run override; absent keeps injected test runtimes. */
+  runtimeFor?: (name: string | null | undefined) => AgentRuntime;
   sandbox: SandboxProvider;
   memory: MemoryStore;
   home: AgentHomeStore;

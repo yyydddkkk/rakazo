@@ -1715,6 +1715,7 @@ msgstr "Decline"
 #: src/pages/model-settings/compatible-model-fields.tsx
 #: src/pages/Onboarding.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
+#: src/pages/shell/bot-panel.tsx
 msgid "Default"
 msgstr "Default"
 
@@ -3575,6 +3576,10 @@ msgstr "Running…"
 #: src/pages/RoutineEditor.tsx
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr "Runs when this bot receives a verified message from this provider."
+
+#: src/pages/shell/bot-panel.tsx
+msgid "Runtime"
+msgstr "Runtime"
 
 #: src/components/AskCard.tsx
 #: src/components/teach/SkillDraftCard.tsx

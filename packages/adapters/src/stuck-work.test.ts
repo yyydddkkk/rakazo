@@ -487,6 +487,7 @@ function noticePrisma(run: ReturnType<typeof candidate>, stamps: NoticeStamp[]) 
 
 function expireClient(run: ReturnType<typeof candidate>, options?: { cancelled?: number }) {
   const client = {
+    bot: { findUniqueOrThrow: vi.fn(async () => ({ runtime: null })) },
     run: {
       findMany: vi.fn(async () => [run]),
       updateMany: vi.fn(async () => ({ count: options?.cancelled ?? 1 })),

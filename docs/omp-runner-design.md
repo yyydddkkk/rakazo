@@ -1,6 +1,22 @@
-# Oh My Pi 可选执行器设计（第一阶段）
+# Oh My Pi 可选执行器设计与 2a 骨架
 
-状态：待设计确认；本阶段只新增本文，不实现 runtime、不修改 AGENTS.md 或 VISION.md。
+状态：第一阶段设计已确认；第二阶段按确认后的 **2a 骨架**实现，到 2a 停止，不进入 2b。AGENTS.md 和 VISION.md 保持不变。本文原有调研章节保留完整设计依据；涉及分片、恢复等超出 2a 的内容以下列范围为准。
+
+## 当前 2a 范围与后续边界
+
+- 本机每 run 启动 omp、每 bot 独立目录、每轮重放文本历史；API/worker 共用 runtime selector，Pi 仍是部署默认。`Bot.runtime` 和 `Run.runtime` 仅新增可空列；设置中以 Default / Pi / Oh My Pi 切换。
+- 使用 v1 JSONL，支持文本、turn、工具观察、宿主往返、abort 和基本 usage；`prompt_result` 后继续等显式的 `session_settled`（包括前者已标记 sessionSettled:true 的 agent 调用），不是 `agent_end` 就完成。后台子 agent 事件通过现有 Web 子任务卡片呈现，真实 omp 的事件形状仍需手动核验。
+- 宿主注册只包括 `message_user`、`ask_user`、`remember`、`save_shared_memory`、`search_history`、`read_history`、`schedule_create/list/cancel`、`skill_read`、`attach_file` 及本 run 已授权的应用连接工具。fleet 和其他 Rakazo 工具不注册，fleet 是 2a 后的第一个扩展项。
+- 2b 后置：v2 `rpc_chunk` 重组/校验、`onUsage` 失败补偿与持久去重、TERM/KILL 升级、更多乱序和竞态覆盖。2a 的进程组终止没有 KILL 升级；不能把未完成的生产加固视为现有保证。
+- 第三阶段才处理原生持久 session、服务重启后的接续；容器传输与插件/工作流全套验证也未包含在 2a。
+- 普通消息/continuation 和 intro 入队时记录 runtime；部分内部直接创建 run 的路径仍可能留下 null，executor 在首次取得租约时填入有效 runtime。此类待领取 run 在领取前可能受 bot 或部署默认变更影响，尚未做到所有入口在入队瞬间固定。
+- 当前轮授权附件会复制到本机 omp 工作目录；之前轮次的附件不会从文本历史自动重新物化，不能假设换执行器后旧附件路径仍存在。当前验收以文本为主；图像、OAuth 和特殊网关能力不在本轮真实兼容性承诺中。
+
+## 部署注意
+
+omp 在 worker 本机运行时，原生 bash、文件编辑等能力使用 worker 的系统权限，可访问整台主机上该用户能访问的文件和命令。每 bot 的 cwd 是工作目录分隔，不是文件系统隔离；Rakazo 的工具审批也不会约束 omp 原生工具。
+
+部署到服务器前，至少让 worker 以专用低权限用户运行，只给必要目录和服务访问权，或先接通容器内的双向 stdio 通道再部署。API 和 worker 若都可能执行 run，须访问同一份 DATA_DIR/omp-workspaces；此目录目前独立于电脑容器的 workspace checkpoint/备份，迁移和备份需显式包含它。worker 所在宿主机的进程不受 bot 电脑 Docker 的 CPU/内存限制约束。凭据仍只经进程环境交接，不能放 argv、明文配置、日志或事件。
 
 ## 结论与版本基线
 
@@ -8,7 +24,7 @@
 
 建议第二阶段采用：**每 run 一个本机子进程、每 bot 独立工作目录、Rakazo 每轮重放文本历史、等待整个会话 settled 后结束 run**。保留 Pi 默认值，增加 bot 可选覆盖；容器传输、跨崩溃继续执行和插件管理 UI 后置。后台子 agent 在同一个 run 内运行并显示，首轮回答完成时不提前回收进程。
 
-调研日期：2026-10-22。上游 main 的取样提交为 [`0b5c27ab24719c86a5986b95ee55f4e75bc1aaa0`](https://github.com/can1357/oh-my-pi/tree/0b5c27ab24719c86a5986b95ee55f4e75bc1aaa0)，该提交 coding-agent 包版本为 `18.12.6`。后续实现须锁定已验证版本并维护协议夹具，不能假设任意版本的 `omp` 兼容。此报告为静态源码调研，尚未安装或运行真实 omp、模型、插件或容器。
+调研日期：2026-10-22。上游 main 的取样提交为 [`0b5c27ab24719c86a5986b95ee55f4e75bc1aaa0`](https://github.com/can1357/oh-my-pi/tree/0b5c27ab24719c86a5986b95ee55f4e75bc1aaa0)，该提交 coding-agent 包版本为 `18.12.6`。后续实现须锁定已验证版本并维护协议夹具，不能假设任意版本的 `omp` 兼容。上游核对采用静态源码调研；2a 尚未安装或运行真实 omp、模型或插件。容器仅用于下述 fixture Web E2E，未验证 omp 容器传输。
 
 Rakazo 基线：`fbd707c5a29b4f4473f8ead64767bae3dba10f91`。关键本地证据：
 
@@ -275,15 +291,15 @@ Rakazo Agent Skills 保持原有事实源和 `skill_*` 产品工具。原型继�
 | 所有连接与旧 Pi 行为不等价 | 第一版 API-key/无 key OpenAI-compatible、OpenRouter；OAuth/特殊 gateway/fallback 预检拒绝；验收报告标明连接种类。 |
 | 自动恢复导致重复外部效果 | 原型不自动恢复原生未知效果；后续单独设计 durable process/session owner。 |
 
-### 第二阶段建议改动范围（须确认后才开始）
+### 第一阶段提出的完整第二阶段范围（2a 采用的子集见文首）
 
 1. 在 `packages/adapters` 实现 `OmpRpcRuntime`、JSONL 协议状态机、本机 OmpTransport 和宿主桥；继续依赖共享 AgentRuntime，默认 Pi 行为不变。必要代码才拆文件，不引入通用插件平台。
 2. 工具选择和 instructions 按 runtime 能力生成；保留产品工具，复用脱敏、暂停、审计和用量。工作目录/附件/home checkpoint 对齐实际执行位置。
 3. `AGENT_RUNTIME=pi` 保持默认，增加 omp 并拒绝未知配置。为满足“一个 bot 切换”增加可空 `Bot.runtime`（pi/omp，null 继承部署默认）及可空 `Run.runtime` 快照；只加列，旧 release 可读写。run 创建时固定有效 runtime，恢复/重试不能因部署默认或 bot 修改而换执行器。API/worker 都用同一个 selector；既有 runtimeOverride 测试注入仍优先。scripted 保留测试用途，不开放为普通 bot 选项。
-4. 最小 bot 设置选项随现有设置表单呈现，避免额外说明区；共享 schema/API 校验和序列化覆盖新增字段。若有 UI 文案，未来 PR 描述按 AGENTS.md 引用并解释其必要性；增加打开该设置/对话屏幕的 Web 测试并链接 CI E2E 截图。本阶段不新增界面或 PR。
+4. 最小 bot 设置选项随现有设置表单呈现，避免额外说明区；共享 schema/API 校验和序列化覆盖新增字段。若有 UI 文案，未来 PR 描述按 AGENTS.md 引用并解释其必要性；增加打开该设置/对话屏幕的 Web 测试并链接 CI E2E 截图。第一阶段未新增界面或 PR；2a 的最小设置项见文首与验证记录。
 5. 只实现本机每 run 进程，不新增 supervisor 通道、镜像依赖、完整持久 session、OAuth broker、跨 run 后台任务、插件市场/UI 或复杂父子 agent 树。提供受控 pinned workflow mount 的手动验证办法即可，不把 pstack 全流程列为首版通过条件。
 
-### 离线确定性测试
+### 完整后续测试清单（2a 主路径与 2b 加固分开推进）
 
 假的 omp RPC 进程使用仓库 Node 脚本读取 stdin、按输入状态回放 JSONL；不依赖 Bun、真实 omp、网络、模型或计时碰巧排序。至少覆盖：
 
@@ -297,9 +313,34 @@ Rakazo Agent Skills 保持原有事实源和 `skill_*` 产品工具。原型继�
 
 不以关键词评分自然语言是否“像成功”。fixture 只断言结构、顺序、文件/回调等可观察效果；需要语义判断时按仓库规则另用 opt-in provider-neutral judge。每次提交前运行 `pnpm check`、`pnpm lint`、`pnpm test`；host 依赖测试单独 `pnpm test:host`，不混入默认测试。只在改变或失败影响所及处扩大检查。
 
-### 手动验收协议（第二阶段执行）
+### 手动验收协议（2a 可执行，真实模型结果待填）
 
-文档或脚本从已配置的 Rakazo 连接/交互环境读取 key，不打印或写入 key，不在命令行参数传 key。使用相同连接/模型、相同工作区起始文件、相同 bot 指令/上下文，在 Pi 和 omp 各执行一次：“在工作目录写一个输出 hello 的小脚本并运行；用 Rakazo 记忆工具记录完成；启动一个简单后台子 agent 并汇报结果。”两种 runtime 各自有干净起点；不要拿已有记忆命中当首次调用成功。
+真实验收通过 Web 的产品路径执行，不用假的记忆回调代替数据库持久化。两次使用同一连接/模型、相同初始文件、相同 bot 指令、两个干净 bot；分别在 Advanced → Runtime 选 Pi 和 Oh My Pi。Pi 使用电脑中的工作目录，omp 使用 worker 本机的 bot 目录，不把两个位置混为同一个物理目录。
+
+1. 在隔离的本地开发环境准备支持版本的 Bun（至少 1.3.14）和固定版本的 omp（本设计基线 `@oh-my-pi/pi-coding-agent@18.12.6`）；先人工检查 `bun --version`、`omp --version`。本轮环境未提供 `omp` 可执行文件，未为验收安装或调用真实模型。
+2. 保持 `AGENT_RUNTIME=pi` 启动开发环境，在 Web 配置可用的 OpenAI-compatible 连接。key 使用正常的凭据输入流程，或以环境变量提供给下述代理；不要写脚本、key 文件、命令行参数、shell 历史或提交内容。代理不读取 `.env`。不要为验收复制真实生产数据。
+3. 单独运行手动流量计 [scripts/verify-omp-runner.ts](../scripts/verify-omp-runner.ts)。在当前 shell 设置 `MODEL_BASE_URL` 为同一连接真正的上游 base URL；`MODEL_API_KEY` 可选，存在时代理替换上游 bearer header，否则透传 Rakazo 发来的 authorization。运行：
+
+   ```sh
+   mkdir -p verify-report
+   pnpm exec tsx scripts/verify-omp-runner.ts > verify-report/omp-model-metrics.jsonl
+   ```
+
+   代理只监听 loopback，默认地址 `http://127.0.0.1:8789/v1`（可用 `MODEL_PROXY_PORT` 调整）。将 Web 中用于比较的临时 OpenAI-compatible 连接 base URL 指向该地址，选定同一个 model id；两种 runtime 都使用此连接。连接访问 loopback 须使用部署所有者已有的私有 endpoint 权限。若 key 在代理环境注入，也应让 Rakazo 连接持有同一 key，使现有脱敏边界知道该值。删除临时连接/停止代理后恢复原 base URL。这个代理使用同机 loopback 明文 HTTP，只用于本地验收；不会将服务绑定到公共或局域网地址，不能通过改成公开监听来转发真实 key。worker、代理和上游入口不在同一机器时，先使用可信的端口转发或带鉴权的 TLS 通道。这个代理不是正式部署组件。
+4. Pi 的第一轮之前在另一个终端标记流量；每次切换前等上一个 run 和后台任务完全结束，以免混入并发流量：
+
+   ```sh
+   curl --fail -X POST --data pi http://127.0.0.1:8789/__verification/runtime
+   ```
+
+   omp 验收前将 `pi` 换为 `omp`。同一时间只让一个验收 bot 使用该代理，避免其他会话/重试的归属混淆。
+5. 对两个 bot 分别发送同一任务：**“在工作目录创建 hello.js，内容为 console.log('hello')，运行它；用 Rakazo 的 remember 记住『验收脚本输出 hello』，最后汇报结果。”** 观察真实 `remember` 工具调用，打开 bot 的 Memory 文档确认保存；再发 **“读出之前记住的验收脚本结果。”**，确认下一轮上下文加载了持久记忆。清空当前聊天不能替代检查 Memory 文档；仅凭模型声称已记住不算通过。Pi 和 omp 的文件产物分别从实际工作目录核验。
+6. 对两种模式再发同一子 agent 任务，例如 **“启动一个后台子 agent 计算 2+3，先汇报已启动，等它完成再汇报结果。”** 观察 Web 是否出现 running 和终态卡片，根文本是否继续流出，以及根回答后 run 是否保持活动直到 settled。某版本/配置不产生后台事件时填“未通过/不支持”，不能用根文本的自述替代子事件证据。
+7. 另起可持续工作的任务，点停止，确认 run 取消且相关进程组停止。记录文本是否连续、是否重复、工具显示顺序、首个可见文本耗时和整个 run 耗时。代理的首个 HTTP chunk 时间只反映模型传输，不能当作 Web 首个可见文本或 session settled 时间。
+
+代理输出只有固定 JSONL 元数据：`model_call` 给出每一次实际模型 HTTP 请求的 `runtime`、`callId`、`toolCount`、`toolDefinitionCharacters`；后者是请求 `tools` 数组中每个定义以紧凑 JSON 序列化后的字符数之和，按 JavaScript UTF-16 字符单位计算，不是 token 或字节。逐次记录所有模型调用，工具返回后的后续模型轮、重试和子 agent 调用各有一行，不把整个 run 的平均数冒充每轮值。`model_call_end` 记录 HTTP 状态、首 chunk 和传输耗时；错误只记录固定错误类型。代理不输出请求/响应内容、headers、key 或真实上游 URL，不解析/保存模型的原始输出。
+
+该脚本是流量计，**不会自动启动 bot、执行任务、判断语义、验证记忆、控制 UI 或统计完整 run 的 token**；这些均通过上述 Web 步骤与 Rakazo 用量记录核验。它测量的是两种产品路径实际发送的工具，而不是两个最小 SDK harness 人为缩减后的工具清单。2a 兼容性对比先用 OpenAI-compatible 连接；其他 API 协议和绕过此 base URL 的插件调用不属于此代理的覆盖范围。
 
 记录表（尚未执行，不填写推测结果）：
 
@@ -307,6 +348,7 @@ Rakazo Agent Skills 保持原有事实源和 `skill_*` 产品工具。原型继�
 | --- | --- | --- |
 | 文件写入、运行输出及最终结果 | 待验证 | 待验证 |
 | input/output/cache/total token 与未知项 | 待验证 | 待验证 |
+| 每一模型调用的工具数、定义总字符数（JSONL callId） | 待验证 | 待验证 |
 | 费用来源/估算或 unknown | 待验证 | 待验证 |
 | 首个可见输出与 run settled 总耗时 | 待验证 | 待验证 |
 | 流式连续性、重复/停顿、工具先后顺序观感 | 待验证 | 待验证 |
@@ -314,9 +356,16 @@ Rakazo Agent Skills 保持原有事实源和 `skill_*` 产品工具。原型继�
 | 后台子 agent 在 Web 的 running/终态/结果 | 待验证 | 待验证 |
 | abort 后后台是否停止、日志是否脱敏 | 待验证 | 待验证 |
 
-没有可用真实 key/本机 omp 时，离线测试仍可通过，但真实对比必须标记未执行，不能用 fake 结果代替。验收记录只含技术测量和虚构任务产物，不含密钥、个人/机器标识或私有 endpoint。第一阶段在本文单独提交后停止，等待设计确认。
+没有明确配置本次验收的真实 key/本机 omp 时，离线测试仍可通过，但真实对比必须标记未执行，不能用 fake 结果代替。当前真实模型、真实记忆对比及真实后台子 agent 验收均未执行；不从私人配置中读取 key。验收记录只含技术测量和虚构任务产物，不含密钥、个人/机器标识或私有 endpoint。2a 完成后停止汇报，等待后续确认再做 2b。
 
-## 第一阶段验证记录
+## 2a 验证记录
+
+- 当前完整改动的 `pnpm check`、`pnpm lint`、`pnpm test` 最终全部通过。默认测试包含假 Node JSONL 进程的文本/turn、宿主往返、显式 settled 完成、abort、基本 usage 去重和脱敏验证；运行时选择、快照、记忆工具暴露、API/设置也通过定向与全量测试。新增快照查询影响到的旧测试夹具已补齐；恢复路径保留空快照以便首次领取时选择，不强行写成 Pi。lint 仅有既存信息提示。未运行 `pnpm test:host`。
+- 目标 Web E2E 通过：bot 创建/修改/删除，以及 Runtime 切至 omp、API 保存确认和恢复 Default；生成 `27d-bot-runtime-omp` 截图并目视确认控件可见。仅使用 scripted fixture，不能作为真实 omp 对话通过的证据。
+- 手动流量计的 `--help`、独立 TypeScript 检查和离线本地 HTTP stub 验证通过：路径/请求体/鉴权转发、增量 SSE、runtime 标记、工具数量和定义字符数均核对；日志不含虚构 key、提示、模型输出或上游路径。
+- 真实 Pi/omp 模型对比、用量/耗时/工具测量、真实产品记忆写入和下轮读取、真实后台子 agent Web 展示仍未执行。上方验收表保留待验证，不填写推测结果。
+
+## 第一阶段验证记录（历史）
 
 本次仅新增本文。`pnpm check`、`pnpm lint`、`pnpm test` 最终均通过；lint 有既存信息提示，无错误。首次全量测试与 Prisma 重新生成并行而发生生成文件读取竞态，待生成完成后，定向和全量复跑均通过。未运行 host 测试、真实模型、omp 进程或 UI 验收；没有据此宣称第二阶段已完成。已检查本地引用、证据引用、空白差异及只包含本文的提交范围。
 

@@ -10,7 +10,11 @@ import type {
   ReplyPreview,
   ThreadSnapshot,
 } from "@rakazo/contracts";
-import { GROUP_MEMBER_MIN, MessageBlock as MessageBlockSchema } from "@rakazo/contracts";
+import {
+  GROUP_MEMBER_MIN,
+  MessageBlock as MessageBlockSchema,
+  RunRuntimeSchema,
+} from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   BACKGROUND_RUN_TRIGGERS,
@@ -580,6 +584,7 @@ function mapRun(run: {
   status: string;
   trigger: string;
   routineId: string | null;
+  runtime?: string | null;
   modelProvider: string | null;
   modelId: string | null;
   error: string | null;
@@ -596,6 +601,7 @@ function mapRun(run: {
     status: run.status as never,
     trigger: run.trigger as never,
     routineId: run.routineId ?? null,
+    runtime: RunRuntimeSchema.nullable().parse(run.runtime ?? null),
     modelProvider: run.modelProvider,
     modelId: run.modelId,
     // Same display clamp as live run.failed events so a huge stored error cannot bypass it.

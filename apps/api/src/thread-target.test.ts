@@ -687,6 +687,7 @@ describe("threadSnapshot", () => {
       taskId: "task-1",
       status: "failed",
       trigger: "user",
+      runtime: "omp",
       modelProvider: "openrouter",
       modelId: "openrouter/unknown",
       error: "Provider is not configured: openrouter",
@@ -733,6 +734,7 @@ describe("threadSnapshot", () => {
       expect.objectContaining({
         id: "run-failed",
         status: "failed",
+        runtime: "omp",
         error: "Provider is not configured: openrouter",
       }),
     );

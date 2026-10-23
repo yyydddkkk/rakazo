@@ -1804,6 +1804,7 @@ describe("createRunExecutor", () => {
       ),
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
+      runtime: { describe: () => ({ id: "pi" }) },
       prisma,
       jobs: { enqueue, cancel, close: vi.fn(async () => undefined) },
       events: { append },
@@ -1881,6 +1882,7 @@ describe("createRunExecutor", () => {
     }
     function executorFor(prisma: PrismaClient) {
       return createRunExecutor({
+        runtime: { describe: () => ({ id: "pi" }) },
         prisma,
         jobs: {
           enqueue: vi.fn(async () => undefined),
@@ -2029,6 +2031,7 @@ describe("createRunExecutor", () => {
       ),
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
+      runtime: { describe: () => ({ id: "pi" }) },
       prisma,
       jobs: {
         enqueue: vi.fn(async () => undefined),
@@ -2101,6 +2104,7 @@ describe("createRunExecutor", () => {
       ),
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
+      runtime: { describe: () => ({ id: "pi" }) },
       prisma,
       jobs: {
         enqueue: vi.fn(async () => undefined),
@@ -2190,6 +2194,7 @@ description: Prepare standup notes
       ),
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
+      runtime: { describe: () => ({ id: "pi" }) },
       prisma,
       jobs: { enqueue, cancel: vi.fn(async () => undefined), close: vi.fn(async () => undefined) },
       events: { append: vi.fn(async () => undefined) },
@@ -2250,6 +2255,7 @@ description: Prepare standup notes
       ),
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
+      runtime: { describe: () => ({ id: "pi" }) },
       prisma,
       jobs: { enqueue, cancel, close: vi.fn(async () => undefined) },
       events: { append },
@@ -2321,6 +2327,7 @@ description: Prepare standup notes
       }),
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
+      runtime: { describe: () => ({ id: "pi" }) },
       prisma,
       jobs: { enqueue, cancel: vi.fn(async () => undefined), close: vi.fn(async () => undefined) },
       events: { append: vi.fn(async () => undefined) },

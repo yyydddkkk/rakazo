@@ -38,6 +38,7 @@ const SOURCES = {
 
 /** Read by code but never passed to the api or worker containers, with the reason. */
 const NOT_PASSED: Record<string, string> = {
+  PATH: "omp executable lookup uses the process PATH; containers retain their image PATH",
   VITEST: "set by the test runner",
   PM2_HOME: "restart-supervisor detection for PM2 hosts; Compose restarts containers",
   INVOCATION_ID: "restart-supervisor detection for systemd hosts; Compose restarts containers",

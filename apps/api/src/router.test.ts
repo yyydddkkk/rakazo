@@ -3389,6 +3389,20 @@ describe("bot intro run", () => {
     );
   });
 
+  it.each([
+    [null, "pi", "pi"],
+    [null, "omp", "omp"],
+    ["omp", "pi", "omp"],
+    ["pi", "omp", "pi"],
+  ] as const)(
+    "snapshots intro runtime %s with deployment %s",
+    async (runtime, agentRuntime, expected) => {
+      const { create, deps } = introDeps({ agentRuntime });
+      await enqueueBotIntroRun(deps, actor, { ...bot, runtime });
+      expect(create.mock.calls[1]?.[0].data).toMatchObject({ runtime: expected });
+    },
+  );
+
   it("does nothing when the bot has no thread", async () => {
     const { create, enqueue, deps } = introDeps();
 
@@ -5808,6 +5822,21 @@ describe("openai-compatible enabled models", () => {
     ).toBe(200);
     await assertRouting();
   });
+
+  it.each(["omp", "pi", null] as const)(
+    "updates the bot runtime override to %s",
+    async (runtime) => {
+      const { call, prisma } = fixture({
+        plaintext: secretText(["m-a"], true),
+        defaultModel: "m-a",
+      });
+      const result = await call("bots/update", { botId: "bot-1", runtime });
+      expect(result.status).toBe(200);
+      expect(prisma.bot.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ runtime }) }),
+      );
+    },
+  );
 
   it("saves a bot thinking level on a non-default enabled id when the endpoint reasons", async () => {
     const { call, prisma } = fixture({

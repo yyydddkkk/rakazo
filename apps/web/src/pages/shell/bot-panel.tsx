@@ -1,5 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
+  AgentRuntimeChoice,
   AgentSkillCatalogEntry,
   Bot,
   ComputerMode,
@@ -223,6 +224,7 @@ export function BotSettings({
     notifyOnFinish?: boolean;
     computerMode?: ComputerMode;
     fleetManagement?: boolean;
+    runtime?: AgentRuntimeChoice | null;
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: ThinkingLevel | null;
@@ -247,6 +249,8 @@ export function BotSettings({
   const [color, setColor] = useState(bot.color);
   const [notifyOnFinish, setNotifyOnFinish] = useState(bot.notifyOnFinish ?? true);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
+  const [runtime, setRuntime] = useState<AgentRuntimeChoice | "">(bot.runtime ?? "");
+  useEffect(() => setRuntime(bot.runtime ?? ""), [bot.runtime]);
   const [fleetManagement, setFleetManagement] = useState(bot.fleetManagement);
   useEffect(() => setFleetManagement(bot.fleetManagement), [bot.fleetManagement]);
   const [modelKey, setModelKey] = useState(
@@ -283,6 +287,7 @@ export function BotSettings({
       description?: string;
       color?: string;
       notifyOnFinish?: boolean;
+      runtime?: AgentRuntimeChoice | null;
       fleetManagement?: boolean;
       disabledBuiltinTools?: string[];
       baseDisabledBuiltinTools?: string[];
@@ -345,6 +350,7 @@ export function BotSettings({
     description?: string;
     color?: string;
     notifyOnFinish?: boolean;
+    runtime?: AgentRuntimeChoice | null;
     fleetManagement?: boolean;
     disabledBuiltinTools?: string[];
     baseDisabledBuiltinTools?: string[];
@@ -352,6 +358,10 @@ export function BotSettings({
     try {
       setSaving(true);
       setError(null);
+      if (patchOverrides?.runtime !== undefined) {
+        await onSave({ runtime: patchOverrides.runtime });
+        return;
+      }
       if (patchOverrides?.fleetManagement !== undefined) {
         await onSave({ fleetManagement: patchOverrides.fleetManagement });
         return;
@@ -429,6 +439,7 @@ export function BotSettings({
       savedTitleRef.current = nextTitle;
       savedDescriptionRef.current = nextDescription;
     } catch (err) {
+      if (patchOverrides?.runtime !== undefined) setRuntime(bot.runtime ?? "");
       if (patchOverrides?.fleetManagement !== undefined)
         setFleetManagement(!patchOverrides.fleetManagement);
       setError(errorText(err, t`Could not save`));
@@ -463,6 +474,7 @@ export function BotSettings({
     description?: string;
     color?: string;
     notifyOnFinish?: boolean;
+    runtime?: AgentRuntimeChoice | null;
     fleetManagement?: boolean;
     disabledBuiltinTools?: string[];
   }) {
@@ -594,6 +606,26 @@ export function BotSettings({
             </NativeSelect>
           </label>
         ) : null}
+        <label htmlFor={`${ids}-runtime`} className={fieldLabelClass}>
+          <Trans>Runtime</Trans>
+          <NativeSelect
+            id={`${ids}-runtime`}
+            className="mt-2 w-full"
+            value={runtime}
+            disabled={saving}
+            onChange={(event) => {
+              const next = event.target.value as AgentRuntimeChoice | "";
+              setRuntime(next);
+              void enqueueSave({ runtime: next || null });
+            }}
+          >
+            <NativeSelectOption value="">
+              <Trans>Default</Trans>
+            </NativeSelectOption>
+            <NativeSelectOption value="pi">Pi</NativeSelectOption>
+            <NativeSelectOption value="omp">Oh My Pi</NativeSelectOption>
+          </NativeSelect>
+        </label>
         <div className="mt-5 flex items-center justify-between gap-3 text-[14px] text-muted-foreground">
           <div className="flex items-center gap-1">
             <label htmlFor={`${ids}-fleet-management`} className={rowLabelClass}>

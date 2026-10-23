@@ -204,6 +204,7 @@ it("keeps advanced controls inside the disclosure in the shared order", async ()
     instructions: "Instructions",
     computer: "Computer",
     model: "Model",
+    runtime: "Runtime",
     fleetManagement: "Manage the bots it creates",
     scratchpad: "Open work",
     knowledge: "Memory / Shared skills",
@@ -530,5 +531,34 @@ describe("instruction settings refresh", () => {
       );
     });
     expect(descriptionField().value).toBe("Approved replacement");
+  });
+});
+
+describe("BotSettings runtime", () => {
+  async function selectRuntime(value: string) {
+    const select = container.querySelector<HTMLSelectElement>('select[id$="-runtime"]');
+    if (!select) throw new Error("Missing runtime select");
+    await act(async () => {
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    return select;
+  }
+
+  it.each(["omp", "pi", ""] as const)(
+    "saves only the runtime when selecting %s",
+    async (runtime) => {
+      await render("Billing", { runtime: "pi" });
+      await selectRuntime(runtime);
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({ runtime: runtime || null });
+      await clickSave();
+      expect(onSave.mock.lastCall?.[0]).not.toHaveProperty("runtime");
+    },
+  );
+
+  it("restores the persisted selection when saving fails", async () => {
+    await render("Billing", { runtime: "pi" });
+    onSave.mockRejectedValueOnce(new Error("offline"));
+    expect((await selectRuntime("omp")).value).toBe("pi");
   });
 });

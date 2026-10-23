@@ -345,6 +345,7 @@ model Bot {
   computerSwitching Boolean           @default(false)
   voiceId           String?
   autoSpeak         Boolean           @default(false)
+  runtime           String?
   modelProvider     String?
   modelId           String?
   thinkingLevel     String?
@@ -554,6 +555,7 @@ model Run {
   userId               String
   status               String
   trigger              String
+  runtime              String?
   modelProvider        String?
   modelId              String?
   thinkingLevel        String?

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AgentRuntimeSchema,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
@@ -24,6 +25,17 @@ import {
 } from "./index.js";
 
 describe("contracts", () => {
+  it("validates optional bot runtime overrides and supports clearing them", () => {
+    for (const runtime of [null, "pi", "omp"] as const) {
+      expect(CreateBotInput.parse({ name: "Coder", runtime }).runtime).toBe(runtime);
+      expect(UpdateBotInput.parse({ botId: "bot-1", runtime }).runtime).toBe(runtime);
+    }
+    expect(CreateBotInput.parse({ name: "Coder" }).runtime).toBeUndefined();
+    expect(UpdateBotInput.parse({ botId: "bot-1" }).runtime).toBeUndefined();
+    expect(AgentRuntimeSchema.safeParse("scripted").success).toBe(false);
+    expect(UpdateBotInput.safeParse({ botId: "bot-1", runtime: "other" }).success).toBe(false);
+  });
+
   it("leaves bot management to the database default and preserves explicit choices", () => {
     expect(CreateBotInput.parse({ name: "New bot" }).fleetManagement).toBeUndefined();
     for (const fleetManagement of [false, true]) {

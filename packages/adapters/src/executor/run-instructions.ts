@@ -269,7 +269,9 @@ function toolUsageLine(parts: {
     builtinOffered(disabled, "request_takeover")
       ? "Use request_takeover when the user must provide protected input or human judgment."
       : undefined,
-    "Use destination_write only for connected destination records.",
+    builtinOffered(disabled, "destination_write")
+      ? "Use destination_write only for connected destination records."
+      : undefined,
   ].filter((clause): clause is string => Boolean(clause));
   return `${parts.computerInstruction} ${clauses.join(" ")}`;
 }

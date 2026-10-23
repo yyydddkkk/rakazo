@@ -278,6 +278,8 @@ export function createThreadEvents(
   options: {
     catchUpMs?: number;
     runSecretWriter?: RunSecretWriter;
+    /** Effective deployment default recorded on newly queued user runs. */
+    defaultRuntime?: string;
   } = {},
 ): ThreadEvents {
   return {
@@ -287,11 +289,11 @@ export function createThreadEvents(
     clearThread: (input) => clearThread(prisma, input, realtime),
     finalizeComputerControlRelease: (input) =>
       finalizeComputerControlRelease(prisma, input, realtime),
-    finalizeRun: (input) => finalizeRun(prisma, input, realtime),
+    finalizeRun: (input) => finalizeRun(prisma, input, realtime, options.defaultRuntime),
     notify: (threadId, seq) => notifyRealtime(realtime, threadId, seq),
-    pauseRunForInput: (input) => pauseRunForInput(prisma, input, realtime),
+    pauseRunForInput: (input) => pauseRunForInput(prisma, input, realtime, options.defaultRuntime),
     pauseRunForTakeover: (input) => pauseRunForTakeover(prisma, input, realtime),
-    sendUserMessage: (input) => sendUserMessage(prisma, input, realtime),
+    sendUserMessage: (input) => sendUserMessage(prisma, input, realtime, options.defaultRuntime),
     follow: (threadId, cursor, signal) =>
       followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs),
   };
@@ -388,6 +390,7 @@ export async function sendUserMessage(
   prisma: PrismaClient,
   input: SendUserMessageInput,
   realtime?: RealtimeFanout,
+  defaultRuntime = "pi",
 ): Promise<SendUserMessageResult> {
   const replay = async (): Promise<SendUserMessageResult | null> => {
     if (!input.clientNonce) return null;
@@ -461,6 +464,10 @@ export async function sendUserMessage(
             status: "queued",
           },
         });
+        const bot = await tx.bot.findUniqueOrThrow({
+          where: { id: input.botId, spaceId: input.spaceId },
+          select: { runtime: true },
+        });
         run = await tx.run.create({
           data: {
             spaceId: input.spaceId,
@@ -470,6 +477,7 @@ export async function sendUserMessage(
             userId: input.userId,
             status: "queued",
             trigger: input.trigger,
+            runtime: bot.runtime ?? defaultRuntime,
             clientNonce: input.clientNonce ? `send:${message.id}` : undefined,
             sourceMessageId: message.id,
             ...(input.modelPin
@@ -1056,6 +1064,7 @@ export async function pauseRunForInput(
   prisma: PrismaClient,
   input: PauseRunForInput,
   realtime?: RealtimeFanout,
+  defaultRuntime = "pi",
 ): Promise<FinalizeRunResult | false> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // Thread row first, then run rows — the same order as clearThread and finalizeRun, so a
@@ -1118,7 +1127,7 @@ export async function pauseRunForInput(
       payload: {},
     });
     await tx.event.deleteMany({ where: { runId: input.runId, type: "thread.progress" } });
-    const continuationRunId = await createPendingSteeringRun(tx, input);
+    const continuationRunId = await createPendingSteeringRun(tx, input, defaultRuntime);
     return { threadId: waitingEvent.threadId, seq: waitingEvent.seq, continuationRunId };
   });
 
@@ -1418,8 +1427,11 @@ export async function finalizeRun(
   prisma: PrismaClient,
   input: FinalizeRunInput,
   realtime?: RealtimeFanout,
+  defaultRuntime = "pi",
 ): Promise<FinalizeRunResult | false> {
-  const committed = await withTransactionRetry(() => finalizeRunOnce(prisma, input));
+  const committed = await withTransactionRetry(() =>
+    finalizeRunOnce(prisma, input, defaultRuntime),
+  );
   if (!committed) return false;
   await notifyRealtime(realtime, committed.threadId, committed.seq);
   return { continuationRunId: committed.continuationRunId };
@@ -1446,6 +1458,7 @@ export function completedRunBlocks(
 async function finalizeRunOnce(
   prisma: PrismaClient,
   input: FinalizeRunInput,
+  defaultRuntime: string,
 ): Promise<{ threadId: string; seq: number; continuationRunId: string | null } | null> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
@@ -1558,7 +1571,7 @@ async function finalizeRunOnce(
         data: { runId: null },
       });
     }
-    const continuationRunId = await createPendingSteeringRun(tx, input);
+    const continuationRunId = await createPendingSteeringRun(tx, input, defaultRuntime);
     await tx.bot.update({ where: { id: input.botId }, data: { updatedAt: now } });
     return { threadId: lastEvent.threadId, seq: lastEvent.seq, continuationRunId };
   });
@@ -1608,6 +1621,7 @@ export async function discardAnsweredSteering(
 export async function createPendingSteeringRun(
   tx: Prisma.TransactionClient,
   input: { spaceId: string; threadId: string; botId: string },
+  defaultRuntime?: string,
 ): Promise<string | null> {
   const active = await tx.run.findFirst({
     where: {
@@ -1647,8 +1661,13 @@ export async function createPendingSteeringRun(
       status: "queued",
     },
   });
+  const bot = await tx.bot.findUniqueOrThrow({
+    where: { id: input.botId, spaceId: input.spaceId },
+    select: { runtime: true },
+  });
   const run = await tx.run.create({
     data: {
+      runtime: bot.runtime ?? defaultRuntime ?? null,
       spaceId: input.spaceId,
       botId: input.botId,
       threadId: input.threadId,

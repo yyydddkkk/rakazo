@@ -99,7 +99,6 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   const teamComputer = settings.getByRole("button", { name: "Team" });
   const openWork = settings.getByTestId("bot-scratchpad");
   await expect(teamComputer).toBeHidden();
-  await expect(settings.getByRole("switch", { name: "Read replies aloud" })).toBeHidden();
   await expect(settings.getByRole("switch", { name: "Manage the bots it creates" })).toBeHidden();
   await expect(modelSelect).toBeHidden();
   await expect(openWork).toBeHidden();
@@ -109,6 +108,28 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(settings.getByRole("button", { name: "Update computer" })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "27a-settings-panel");
   await settings.getByText("Advanced", { exact: true }).click();
+  const runtimeSelect = settings.getByRole("combobox", { name: "Runtime", exact: true });
+  await expect(runtimeSelect).toHaveValue("");
+  const runtimeSaved = page.waitForResponse(
+    (response) =>
+      response.url().includes("/rpc/bots/update") &&
+      response.request().postDataJSON()?.json?.runtime === "omp" &&
+      response.ok(),
+  );
+  await runtimeSelect.selectOption("omp");
+  await runtimeSaved;
+  await expect(runtimeSelect).toHaveValue("omp");
+  await runtimeSelect.scrollIntoViewIfNeeded();
+  await captureScreenshot(page, testInfo, "27d-bot-runtime-omp");
+  const runtimeCleared = page.waitForResponse(
+    (response) =>
+      response.url().includes("/rpc/bots/update") &&
+      response.request().postDataJSON()?.json?.runtime === null &&
+      response.ok(),
+  );
+  await runtimeSelect.selectOption("");
+  await runtimeCleared;
+
   const disabledTools = settings.getByLabel("Disabled tools");
   await expect(disabledTools).toBeVisible();
   await disabledTools.fill("not_a_tool");
@@ -119,7 +140,6 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(settings.getByRole("switch", { name: "web_search" })).toBeChecked();
   await captureScreenshot(page, testInfo, "27c-disabled-builtin-tools");
   await expect(teamComputer).toBeVisible();
-  await expect(settings.getByRole("switch", { name: "Read replies aloud" })).toBeVisible();
   await expect(settings.getByRole("switch", { name: "Manage the bots it creates" })).toBeVisible();
   await expect(openWork).toBeVisible();
   await expect(modelSelect).toBeVisible();

@@ -161,6 +161,7 @@ function fixture({
     trigger,
     sourceMessageId: sourceRole ? "source-1" : null,
     leaseFence: 0,
+    runtime: null as string | null,
   };
   const externalEffect = {
     findMany: vi.fn(
@@ -357,7 +358,7 @@ function fixture({
   const enqueue = vi.fn(async (_job: unknown) => undefined);
   const executor = createRunExecutor({
     prisma: transactionalPrisma,
-    runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
+    runtime: { describe: () => ({ id: "pi", capabilities: { scripted: false } }), run: runtimeRun },
     connector: {
       discoverTools: async () =>
         builtin
@@ -458,6 +459,7 @@ function fixture({
         blocks: [{ kind: "text", text: promptText }],
       };
       const tx = {
+        bot: { findUniqueOrThrow: vi.fn(async () => ({ runtime: null })) },
         $queryRaw: vi.fn(async () => []),
         thread: { update: vi.fn(async () => ({ nextMessageSeq: 2, nextEventSeq: 2 })) },
         message: {

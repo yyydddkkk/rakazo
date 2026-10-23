@@ -8,6 +8,7 @@ import {
   ChatSdkMessagingSurface,
   CodexCatalogCache,
   ComposioConnector,
+  createAgentRuntimeSelection,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
   createConnectorStack,
@@ -34,14 +35,12 @@ import {
   mcpStdioOptionsFromEnv,
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
-  PiAgentRuntime,
   PostgresRealtimeFanout,
   reconcileCloudAgents,
   reconcileComputerUpdates,
   resolveDeploymentModel,
   resolvePiSessionRoot,
   resolveSandboxProvider,
-  ScriptedAgentRuntime,
   sandboxProviderOptionsFromEnv,
   withSecretPersistence,
 } from "@rakazo/adapters";
@@ -95,14 +94,17 @@ async function main() {
     });
   const events = createThreadEvents(prisma, realtime, {
     runSecretWriter: createRunSecretWriter(secrets),
+    defaultRuntime: process.env.AGENT_RUNTIME ?? "pi",
   });
   const ticketBoardEnabled = process.env.TICKET_BOARD_ENABLED === "true";
   const boardEvents = createBoardEvents(realtime);
   const dataDir = process.env.DATA_DIR ?? "./data";
-  const runtime =
-    process.env.AGENT_RUNTIME === "scripted"
-      ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({ sessionRoot: resolvePiSessionRoot(dataDir) });
+  const selection = createAgentRuntimeSelection({
+    defaultRuntime: process.env.AGENT_RUNTIME,
+    dataDir,
+    piSessionRoot: resolvePiSessionRoot(dataDir),
+  });
+  const { runtime } = selection;
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey, configured: deploymentModelConfigured } =
     resolveDeploymentModel();
@@ -157,6 +159,7 @@ async function main() {
     maxUploadSizeBytes: uploadSizeFromEnv(process.env),
     prisma,
     runtime,
+    runtimeFor: selection.runtimeFor,
     // Live per-account Codex catalog; never refreshes or writes credentials.
     codexCatalog: new CodexCatalogCache(),
     sandbox,

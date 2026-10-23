@@ -250,6 +250,7 @@ describe("retrying a routine run after a transient model failure", () => {
 });
 
 interface RetryScenario {
+  runtime?: "pi" | "omp" | null;
   status?: string;
   retryOfRunId?: string | null;
   active?: boolean;
@@ -282,6 +283,7 @@ function retryHarness(scenario: RetryScenario = {}) {
     trigger: "routine",
     routineId: "routine-1",
     retryOfRunId: scenario.retryOfRunId ?? null,
+    runtime: scenario.runtime ?? null,
     modelProvider: "routine-provider",
     modelId: "routine-model",
     thinkingLevel: "low",
@@ -353,6 +355,7 @@ function retryHarness(scenario: RetryScenario = {}) {
   });
   const send = vi.fn(async () => undefined);
   const executor = createRunExecutor({
+    runtime: { describe: () => ({ id: "pi" }) },
     prisma,
     jobs: { enqueue },
     notifications: { send },
@@ -515,44 +518,48 @@ describe("running a routine retry", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("queues one new run of the routine that points at the failed run", async () => {
-    const { executor, tx, enqueue } = retryHarness();
+  it.each([null, "pi", "omp"] as const)(
+    "queues one retry with the failed run's runtime snapshot (%s)",
+    async (runtime) => {
+      const { executor, tx, enqueue } = retryHarness({ runtime });
 
-    await executor.retryRoutineRun("run-1");
+      await executor.retryRoutineRun("run-1");
 
-    expect(tx.task.create).toHaveBeenCalledWith({
-      data: {
-        spaceId: "space-1",
-        botId: "bot-1",
-        threadId: "thread-1",
-        userId: "user-1",
-        prompt: "Sweep the inbox",
-        status: "queued",
-      },
-    });
-    expect(tx.run.create).toHaveBeenCalledWith({
-      data: {
-        spaceId: "space-1",
-        botId: "bot-1",
-        threadId: "thread-1",
-        taskId: "task-2",
-        userId: "user-1",
-        status: "queued",
-        trigger: "routine",
-        routineId: "routine-1",
-        retryOfRunId: "run-1",
-        modelProvider: "routine-provider",
-        modelId: "routine-model",
-        thinkingLevel: "low",
-        modelPinned: true,
-      },
-    });
-    expect(enqueue).toHaveBeenCalledExactlyOnceWith({
-      name: "run.continue",
-      payload: { runId: "run-2" },
-      replaceKey: "run:run-2",
-    });
-  });
+      expect(tx.task.create).toHaveBeenCalledWith({
+        data: {
+          spaceId: "space-1",
+          botId: "bot-1",
+          threadId: "thread-1",
+          userId: "user-1",
+          prompt: "Sweep the inbox",
+          status: "queued",
+        },
+      });
+      expect(tx.run.create).toHaveBeenCalledWith({
+        data: {
+          spaceId: "space-1",
+          botId: "bot-1",
+          threadId: "thread-1",
+          taskId: "task-2",
+          userId: "user-1",
+          status: "queued",
+          trigger: "routine",
+          routineId: "routine-1",
+          retryOfRunId: "run-1",
+          runtime,
+          modelProvider: "routine-provider",
+          modelId: "routine-model",
+          thinkingLevel: "low",
+          modelPinned: true,
+        },
+      });
+      expect(enqueue).toHaveBeenCalledExactlyOnceWith({
+        name: "run.continue",
+        payload: { runId: "run-2" },
+        replaceKey: "run:run-2",
+      });
+    },
+  );
 
   it.each([
     ["the run did not fail", { status: "completed" }],

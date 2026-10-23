@@ -13,6 +13,7 @@ describe("bot settings layout", () => {
       "computer",
       "model",
       "thinking",
+      "runtime",
       "fleetManagement",
       "scratchpad",
       "knowledge",

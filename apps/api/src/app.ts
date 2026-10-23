@@ -19,6 +19,7 @@ import {
   ChatSdkMessagingSurface,
   CodexCatalogCache,
   ComposioConnector,
+  createAgentRuntimeSelection,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
   createConnectorStack,
@@ -45,14 +46,12 @@ import {
   McpConnector,
   McpOAuthBroker,
   messagingPlatformsFromEnv,
-  PiAgentRuntime,
   PiOAuthLogins,
   PostgresRealtimeFanout,
   piSessionsRoot,
   reconcileCloudAgents,
   reconcileComputerUpdates,
   removePiUserSessions,
-  ScriptedAgentRuntime,
   SmtpEmailProvider,
   sandboxProviderOptionsFromEnv,
   toExternalConversationInbound,
@@ -224,6 +223,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     });
   const events = createThreadEvents(prisma, realtime, {
     runSecretWriter: createRunSecretWriter(secrets),
+    defaultRuntime: runtimeOverride?.describe().id ?? env.agentRuntime,
   });
   const ticketBoardEnabled = env.ticketBoardEnabled;
   const boardEvents = createBoardEvents(realtime);
@@ -321,13 +321,12 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     mcp,
     ...connectorOverrides,
   ]);
-  const runtime =
-    runtimeOverride ??
-    (env.agentRuntime === "scripted"
-      ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({
-          sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
-        }));
+  const selection = createAgentRuntimeSelection({
+    defaultRuntime: env.agentRuntime,
+    dataDir: env.dataDir,
+    piSessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
+  });
+  const runtime = runtimeOverride ?? selection.runtime;
   const auth = createAuth(prisma, {
     breachedPasswordCheck: env.breachedPasswordCheck,
     secret: env.authSecret,
@@ -383,6 +382,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     contextStrategy,
     prisma,
     runtime,
+    runtimeFor: runtimeOverride ? undefined : selection.runtimeFor,
     codexCatalog,
     sandbox,
     memory,

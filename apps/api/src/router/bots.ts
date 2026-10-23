@@ -12,6 +12,7 @@ import {
   validateBotModelChange,
 } from "@rakazo/adapters";
 import type { Actor, Bot } from "@rakazo/contracts";
+import { AgentRuntimeSchema } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, displayName } from "@rakazo/core";
 import {
   BotSectionNameConflictError,
@@ -78,6 +79,7 @@ export async function enqueueBotIntroRun(deps: RouterDeps, actor: Actor, bot: Bo
         userId: actor.userId,
         status: "queued",
         trigger: "created",
+        runtime: bot.runtime ?? deps.env.agentRuntime ?? "pi",
       },
       select: { id: true },
     });
@@ -126,6 +128,7 @@ export function botsRouter(ctx: RouterContext) {
             notifyOnFinish: source.notifyOnFinish,
             color: source.color,
             computerMode: source.computer?.scope === "dedicated" ? "dedicated" : "team",
+            runtime: AgentRuntimeSchema.nullable().parse(source.runtime ?? null),
             modelProvider: source.modelProvider,
             modelId: source.modelId,
             thinkingLevel: source.thinkingLevel,
@@ -214,6 +217,7 @@ export function botsRouter(ctx: RouterContext) {
             color: input.color,
             pinned: input.pinned,
             sectionId: input.sectionId,
+            ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
             ...(input.modelProvider !== undefined
               ? { modelProvider: input.modelProvider, modelId: input.modelId ?? null }
               : {}),

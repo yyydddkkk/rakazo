@@ -36,6 +36,8 @@ async function runRoutine(
     copyFailureOnce?: boolean;
     parallel?: boolean;
     priorSetupFailures?: number;
+    runtime?: "pi" | "omp" | null;
+    botRuntime?: "pi" | "omp" | null;
   } = {},
 ) {
   const attachment: Extract<MessageBlock, { kind: "file" | "image" }> = {
@@ -58,6 +60,7 @@ async function runRoutine(
     routineId: "routine-1",
     retryOfRunId: null,
     leaseFence: 0,
+    runtime: options.runtime ?? null,
   };
   const toolResults: unknown[] = [];
   const steeringInputs: unknown[] = [];
@@ -103,6 +106,7 @@ async function runRoutine(
     bot: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: run.botId,
+        runtime: options.botRuntime ?? null,
         name: "Assistant",
         title: "Assistant",
         description: "Test assistant",
@@ -208,10 +212,15 @@ async function runRoutine(
     sandbox.writeFile.mockRejectedValueOnce(new Error("temporary copy failure"));
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
   const enqueue = vi.fn(async () => undefined);
+  const runtimeFor = vi.fn((name: string | null | undefined) => ({
+    describe: () => ({ id: name ?? "pi", capabilities: { scripted: false } }),
+    run: runtimeRun,
+  }));
   const executor = createRunExecutor({
     prisma: withEmptyModels(prisma),
     deploymentModelKey: "fake-deployment-key",
-    runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
+    runtime: { describe: () => ({ id: "pi", capabilities: { scripted: false } }), run: runtimeRun },
+    runtimeFor,
     sandbox,
     home: { commit: vi.fn(async () => "fixture-revision") },
     memory: { read: async () => ({ documents: [] }) },
@@ -240,6 +249,7 @@ async function runRoutine(
     toolResults,
     enqueue,
     runtimeRun,
+    runtimeFor,
     steeringInputs,
     prisma,
   };
@@ -255,6 +265,37 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   installLogger(createLogger({ service: "test", level: "off", sinks: [] }));
+});
+
+describe("run runtime selection", () => {
+  it("keeps a queued runtime snapshot when the bot has since switched", async () => {
+    const { runtimeFor, runtimeRun, finalizeRun } = await runRoutine([], {
+      runtime: "pi",
+      botRuntime: "omp",
+    });
+    expect(runtimeFor).toHaveBeenCalledWith("pi");
+    expect(runtimeRun).toHaveBeenCalledOnce();
+    expect(finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: "completed" }));
+  });
+
+  it("pins legacy enqueues and exposes only product tools for omp", async () => {
+    const { runtimeFor, runtimeRun, prisma, finalizeRun } = await runRoutine([], {
+      botRuntime: "omp",
+    });
+    expect(runtimeFor).toHaveBeenCalledWith("omp");
+    expect(prisma.run.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { runtime: "omp" },
+      }),
+    );
+    const request = runtimeRun.mock.calls[0]?.[0];
+    expect(request?.tools.map((tool) => tool.name)).toContain("remember");
+    expect(request?.tools.map((tool) => tool.name)).not.toEqual(expect.arrayContaining(["shell"]));
+    expect(request?.instructions).toContain("native execution tools");
+    expect(request?.instructions).not.toContain("persistent sandbox");
+    expect(finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: "completed" }));
+    expect(provisionComputer).not.toHaveBeenCalled();
+  });
 });
 
 describe("run computer provisioning", () => {

@@ -4,6 +4,7 @@ export const BOT_SETTINGS_ADVANCED_ORDER = [
   "computer",
   "model",
   "thinking",
+  "runtime",
   "fleetManagement",
   "scratchpad",
   "knowledge",

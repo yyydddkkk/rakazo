@@ -16,6 +16,7 @@ function tx(options?: {
   const messages: Array<Record<string, unknown>> = [];
   const events: Array<Record<string, unknown>> = [];
   const client = {
+    bot: { findUniqueOrThrow: vi.fn(async () => ({ runtime: null })) },
     $queryRaw: vi.fn(async () => []),
     run: {
       updateMany: vi.fn(async () => ({ count: options?.cancelled ?? 1 })),
