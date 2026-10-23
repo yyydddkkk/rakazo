@@ -5,7 +5,13 @@ import { OmpRpcQueue } from "./omp-rpc-queue.js";
 
 export type OmpProcessEvent =
   | { type: "stdout" | "stderr"; data: Uint8Array }
-  | { type: "exit"; code: number | null; signal: string | null };
+  | {
+      type: "exit";
+      code: number | null;
+      signal: string | null;
+      /** Last bytes of stderr, unredacted; the runtime redacts before surfacing it. */
+      stderrTail?: string;
+    };
 
 export interface OmpProcess {
   events: AsyncIterable<OmpProcessEvent>;
@@ -19,6 +25,8 @@ export interface OmpProcess {
 export interface OmpTransport {
   start(spec: { argv: string[]; cwd: string; env: Record<string, string> }): Promise<OmpProcess>;
 }
+
+const STDERR_TAIL_CHARS = 2000;
 
 export function ompWorkspaceDirectory(root: string, spaceId: string, botId: string): string {
   if (![spaceId, botId].every((id) => /^[a-zA-Z0-9_-]+$/.test(id))) {
@@ -61,14 +69,18 @@ export class LocalOmpTransport implements OmpTransport {
       child.stdout.pause();
       queue.push({ type: "stdout", data });
     });
-    // Never queue raw provider/tool diagnostics or allow stderr to block the process.
-    child.stderr.on("data", () => undefined);
+    // Never queue raw provider/tool diagnostics or allow stderr to block the process; keep a
+    // bounded tail so an early exit can say why.
+    let stderrTail = "";
+    child.stderr.on("data", (data: Buffer) => {
+      stderrTail = (stderrTail + data.toString("utf8")).slice(-STDERR_TAIL_CHARS);
+    });
     child.stdin.on("error", () => undefined);
     let closed = false;
     const exited = new Promise<void>((done) => {
       child.once("close", (code, signal) => {
         closed = true;
-        queue.push({ type: "exit", code, signal });
+        queue.push({ type: "exit", code, signal, stderrTail: stderrTail || undefined });
         queue.close();
         done();
       });

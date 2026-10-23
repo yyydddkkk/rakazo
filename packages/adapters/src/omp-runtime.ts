@@ -19,6 +19,7 @@ import type { OmpProcess, OmpTransport } from "./omp-transport.js";
 import { LocalOmpTransport, ompWorkspaceDirectory } from "./omp-transport.js";
 import type { OmpUsageRecovery } from "./omp-usage.js";
 import { OmpUsageJournal } from "./omp-usage.js";
+import { parametersFor } from "./pi-runtime.js";
 
 export const OMP_HOST_TOOL_NAMES: ReadonlySet<string> = new Set([
   "message_user",
@@ -571,8 +572,15 @@ export class OmpRpcRuntime implements AgentRuntime {
             if (text) emit({ type: "text", text: safe(text) });
           }
           usage(frame);
-          if (message.stopReason === "error" && !cancelled && !paused)
-            throw new Error("omp model call failed");
+          if (message.stopReason === "error" && !cancelled && !paused) {
+            const detail =
+              typeof message.errorMessage === "string" ? message.errorMessage.trim() : "";
+            throw new Error(
+              detail
+                ? `omp model call failed: ${safe(detail).slice(0, 1000)}`
+                : "omp model call failed",
+            );
+          }
         } else if (frame.type === "tool_execution_start") {
           if (stopped || cancelled) return;
           const id = String(frame.toolCallId);
@@ -767,7 +775,7 @@ export class OmpRpcRuntime implements AgentRuntime {
             "--approval-mode",
             "yolo",
             "--tools",
-            "read,write,edit,bash,grep,glob,find,lsp,task,eval,web_search",
+            "read,write,edit,bash,grep,glob,lsp,task,eval,web_search",
             "--config",
             config,
             "--append-system-prompt",
@@ -791,8 +799,14 @@ export class OmpRpcRuntime implements AgentRuntime {
           for await (const chunk of child.events) {
             if (chunk.type === "exit") {
               decoder.finish();
-              if (!finished && !paused && !cancelled && !failure)
-                throw new Error("omp process exited before the session settled");
+              if (!finished && !paused && !cancelled && !failure) {
+                const detail = chunk.stderrTail?.trim();
+                throw new Error(
+                  detail
+                    ? `omp process exited before the session settled: ${safe(detail)}`
+                    : "omp process exited before the session settled",
+                );
+              }
               break;
             }
             if (chunk.type === "stderr") continue;
@@ -839,7 +853,8 @@ export class OmpRpcRuntime implements AgentRuntime {
                       tools: [...tools.values()].map((tool) => ({
                         name: tool.name,
                         description: tool.description,
-                        parameters: tool.inputSchema,
+                        // Same provider-safe schema Pi sends: root unions flattened to an object.
+                        parameters: JSON.parse(JSON.stringify(parametersFor(tool))),
                         loadMode: "essential",
                       })),
                     });

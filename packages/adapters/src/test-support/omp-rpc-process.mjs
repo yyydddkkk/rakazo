@@ -84,6 +84,21 @@ for await (const line of createInterface({ input: process.stdin })) {
         status: "error",
         error: { message: process.env.RAKAZO_OMP_MODEL_KEY },
       });
+    } else if (scenario === "model-error") {
+      write({ type: "message_start", messageId: "failed", message: { role: "assistant" } });
+      write({
+        type: "message_end",
+        messageId: "failed",
+        message: {
+          role: "assistant",
+          content: [],
+          stopReason: "error",
+          errorMessage: `400 Invalid schema (key ${process.env.RAKAZO_OMP_MODEL_KEY})`,
+        },
+      });
+    } else if (scenario === "crash") {
+      process.stderr.write(`Error: tool unavailable (key ${process.env.RAKAZO_OMP_MODEL_KEY})\n`);
+      process.exit(1);
     } else if (scenario === "chunk") {
       write({ type: "rpc_chunk", data: "not-supported" });
     } else if (scenario === "native") {
@@ -124,6 +139,9 @@ for await (const line of createInterface({ input: process.stdin })) {
     if (command.type === "set_host_tools") {
       if (command.tools.some((tool) => ["shell", "spawn_bot"].includes(tool.name)))
         throw new Error("Unwanted host tool");
+      // Providers reject tool parameters whose root is not an object (e.g. a bare oneOf).
+      if (command.tools.some((tool) => tool.parameters?.type !== "object"))
+        throw new Error("Host tool parameters must be an object schema");
     }
     write({ type: "response", id: command.id, command: command.type, success: true });
   }

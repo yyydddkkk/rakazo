@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentRunRequest, AgentRuntimeEvent } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { builtinAgentTools } from "./builtin-tools.js";
 import { OmpRpcRuntime, selectOmpHostTools } from "./omp-runtime.js";
 import type { OmpProcess, OmpTransport } from "./omp-transport.js";
 import { LocalOmpTransport } from "./omp-transport.js";
@@ -39,6 +40,8 @@ async function runtime(scenario: string) {
     async start(spec) {
       expect(spec.argv).not.toContain("fake-model-secret");
       expect(Object.keys(spec.env)).not.toContain("DATABASE_URL");
+      // omp 18.12.6 rejects unknown built-in tool names at startup.
+      expect(spec.argv[spec.argv.indexOf("--tools") + 1]?.split(",")).not.toContain("find");
       launched = await local.start(spec);
       const write = launched.writeStdin;
       launched.writeStdin = (data) => {
@@ -195,6 +198,37 @@ describe("OmpRpcRuntime v1", () => {
       ],
     });
     expect(events.some((event) => event.type === "done")).toBe(false);
+  });
+
+  it("surfaces the provider's error detail, redacted, when a model call fails", async () => {
+    const { runner } = await runtime("model-error");
+    const failure = await collect(runner).catch((error: unknown) => error);
+    expect(String(failure)).toContain("omp model call failed: 400 Invalid schema");
+    expect(String(failure)).not.toContain("fake-model-secret");
+  });
+
+  it("explains an early exit with the redacted stderr tail", async () => {
+    const { runner } = await runtime("crash");
+    const failure = await collect(runner).catch((error: unknown) => error);
+    expect(String(failure)).toContain("exited before the session settled: Error: tool unavailable");
+    expect(String(failure)).not.toContain("fake-model-secret");
+  });
+
+  it("registers provider-safe object schemas and only native tools omp ships", async () => {
+    const { runner, sent } = await runtime("text");
+    const input = request();
+    const schedule = builtinAgentTools.find((tool) => tool.name === "schedule_create");
+    if (!schedule) throw new Error("schedule_create is missing");
+    // Its declared schema is a root oneOf, which providers reject as tool parameters.
+    expect("type" in schedule.inputSchema).toBe(false);
+    input.tools = [schedule];
+    await collect(runner, input);
+    const registered = sent.find((frame) => frame.type === "set_host_tools") as {
+      tools: Array<{ name: string; parameters: { type?: string } }>;
+    };
+    expect(registered.tools.map((tool) => [tool.name, tool.parameters.type])).toEqual([
+      ["schedule_create", "object"],
+    ]);
   });
 
   it("redacts the key even across text deltas and never forwards stderr", async () => {
