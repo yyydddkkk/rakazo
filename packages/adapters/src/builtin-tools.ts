@@ -971,6 +971,12 @@ export const builtinAgentTools: ConnectorTool[] = [
       type: "object",
       properties: {
         name: { type: "string", description: "Exact skill name from the catalog." },
+        skillId: { type: "string", description: "Stable ID returned by a workflow skill read." },
+        path: {
+          type: "string",
+          description:
+            "Optional text resource relative to this workflow skill, or a skill:// reference in the same package.",
+        },
       },
       required: ["name"],
     },

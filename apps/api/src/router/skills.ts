@@ -8,7 +8,7 @@ import type { RouterContext } from "./shared.js";
 import { authed, mayUsePrivateEndpoint } from "./shared.js";
 
 export function skillsRouter(ctx: RouterContext) {
-  const { deps, repos, taughtSkills, agentSkills } = ctx;
+  const { deps, repos, taughtSkills, agentSkills, workflows } = ctx;
   return {
     skills: {
       list: authed.skills.list.handler(async ({ context, input }) => {
@@ -48,10 +48,22 @@ export function skillsRouter(ctx: RouterContext) {
       ),
     },
     agentSkills: {
-      list: authed.agentSkills.list.handler(async ({ context }) => agentSkills.list(context.actor)),
-      get: authed.agentSkills.get.handler(async ({ context, input }) =>
-        agentSkills.get(context.actor, input),
-      ),
+      list: authed.agentSkills.list.handler(async ({ context, input }) => {
+        const skills = await agentSkills.list(context.actor);
+        if (!input?.botId) return skills;
+        const packages = await workflows.skillsForBot(context.actor, input.botId);
+        return [...skills, ...packages.map(({ content: _content, ...skill }) => skill)];
+      }),
+      get: authed.agentSkills.get.handler(async ({ context, input }) => {
+        if (input.botId) {
+          const skills = await workflows.skillsForBot(context.actor, input.botId);
+          const skill = skills.find((skill) =>
+            input.skillId ? skill.id === input.skillId : skill.name === input.name,
+          );
+          if (skill) return skill;
+        }
+        return agentSkills.get(context.actor, input);
+      }),
       create: authed.agentSkills.create.handler(async ({ context, input }) =>
         agentSkills.create(context.actor, input),
       ),

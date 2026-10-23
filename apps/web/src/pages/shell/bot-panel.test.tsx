@@ -72,6 +72,7 @@ vi.mock("@rakazo/ui-web", () => ({
 }));
 vi.mock("./avatar-studio-popover", () => ({ AvatarStudioPopover: () => null }));
 vi.mock("./bot-credentials", () => ({ BotCredentialsSection: () => null }));
+vi.mock("../WorkflowSettings", () => ({ WorkflowSettings: () => null }));
 vi.mock("../ScratchpadSection", () => ({ ScratchpadSection: () => <div>Open work</div> }));
 vi.mock("../KnowledgeSection", () => ({
   KnowledgeSection: () => <div>Memory / Shared skills</div>,

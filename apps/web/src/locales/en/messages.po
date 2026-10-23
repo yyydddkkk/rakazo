@@ -533,6 +533,10 @@ msgstr "Always allow this tool"
 msgid "Always allowed"
 msgstr "Always allowed"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Always use"
+msgstr "Always use"
+
 #: src/lib/model-connection-preflight.ts
 msgid "An API key is stored for this provider, not a subscription sign-in."
 msgstr "An API key is stored for this provider, not a subscription sign-in."
@@ -832,6 +836,7 @@ msgstr "Can't read images"
 #: src/pages/Onboarding.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
+#: src/pages/WorkflowSettings.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -1066,6 +1071,10 @@ msgstr "Command variable"
 #: src/pages/Board.tsx
 msgid "Comment"
 msgstr "Comment"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Commit or tag"
+msgstr "Commit or tag"
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Compact"
@@ -1439,6 +1448,10 @@ msgstr "Could not load this chat."
 msgid "Could not load this file."
 msgstr "Could not load this file."
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Could not load workflows"
+msgstr "Could not load workflows"
+
 #: src/lib/sign-out.ts
 msgid "Could not log out. Try again."
 msgstr "Could not log out. Try again."
@@ -1541,6 +1554,10 @@ msgstr "Could not save the credential"
 #: src/pages/shell/message-cards.tsx
 msgid "Could not save this choice"
 msgstr "Could not save this choice"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Could not save workflows"
+msgstr "Could not save workflows"
 
 #: src/pages/IntegrationsPanel.tsx
 msgid "Could not search catalog"
@@ -1814,8 +1831,13 @@ msgstr "Description"
 
 #: src/pages/RoutineRunHistory.tsx
 #: src/pages/shell/composer-error.tsx
+#: src/pages/WorkflowSettings.tsx
 msgid "Details"
 msgstr "Details"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Digest"
+msgstr "Digest"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
@@ -2191,6 +2213,10 @@ msgstr "Getting ready"
 msgid "Git event"
 msgstr "Git event"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Git URL"
+msgstr "Git URL"
+
 #: src/lib/identity-display.ts
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/shell/shell-main-header.tsx
@@ -2292,6 +2318,10 @@ msgstr "Inbox & email"
 msgid "Inputs"
 msgstr "Inputs"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Install"
+msgstr "Install"
+
 #: src/components/McpServerHealthLine.tsx
 msgid "Installing…"
 msgstr "Installing…"
@@ -2387,6 +2417,10 @@ msgstr "Last check {0}: no changes"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Leave"
 msgstr "Leave"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "License"
+msgstr "License"
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Light"
@@ -2915,6 +2949,10 @@ msgstr "Not checked yet"
 msgid "Not connected"
 msgstr "Not connected"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Not declared"
+msgstr "Not declared"
+
 #: src/pages/IntegrationsPanel.tsx
 msgid "Not in the plugin catalog"
 msgstr "Not in the plugin catalog"
@@ -2980,6 +3018,10 @@ msgstr "On a schedule"
 #: src/pages/RoutineSchedule.tsx
 msgid "on the 1st at {0}"
 msgstr "on the 1st at {0}"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Only skills are available with Pi."
+msgstr "Only skills are available with Pi."
 
 #: src/components/markdown-link-prompt.tsx
 #: src/pages/ScratchpadSection.tsx
@@ -3075,6 +3117,10 @@ msgstr "Other model…"
 #: src/pages/Board.tsx
 msgid "Owner"
 msgstr "Owner"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Package path"
+msgstr "Package path"
 
 #: src/pages/ScratchpadSection.tsx
 msgid "Park"
@@ -4034,6 +4080,10 @@ msgstr "Thinking"
 msgid "Thinking: {activeThinkingLabel}"
 msgstr "Thinking: {activeThinkingLabel}"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Third-party instructions can use this bot’s tools."
+msgstr "Third-party instructions can use this bot’s tools."
+
 #: src/pages/Artifacts.tsx
 msgid "This can't be undone."
 msgstr "This can't be undone."
@@ -4205,8 +4255,14 @@ msgid "Undo"
 msgstr "Undo"
 
 #: src/pages/IntegrationsPanel.tsx
+#: src/pages/WorkflowSettings.tsx
 msgid "Uninstall"
 msgstr "Uninstall"
+
+#. placeholder {0}: removing?.name
+#: src/pages/WorkflowSettings.tsx
+msgid "Uninstall {0}?"
+msgstr "Uninstall {0}?"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Unknown tool"
@@ -4224,6 +4280,10 @@ msgstr "Unpin"
 #: src/pages/shell/use-composer-actions.ts
 msgid "Unsupported file type: {0}"
 msgstr "Unsupported file type: {0}"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Update"
+msgstr "Update"
 
 #: src/components/ComputerMaintenanceActions.tsx
 msgid "Update computer"
@@ -4421,6 +4481,12 @@ msgstr "When to use"
 #: src/lib/ticket-status.ts
 msgid "Won't do"
 msgstr "Won't do"
+
+#: src/pages/SettingsOverlay.tsx
+#: src/pages/shell/bot-panel.tsx
+#: src/pages/WorkflowSettings.tsx
+msgid "Workflows"
+msgstr "Workflows"
 
 #: src/lib/roster-status.ts
 #: src/pages/Auth.tsx

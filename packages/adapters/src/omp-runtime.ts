@@ -19,6 +19,7 @@ import type { OmpProcess, OmpTransport } from "./omp-transport.js";
 import { LocalOmpTransport, ompWorkspaceDirectory } from "./omp-transport.js";
 import type { OmpUsageRecovery } from "./omp-usage.js";
 import { OmpUsageJournal } from "./omp-usage.js";
+import { prepareOmpWorkflows, WORKFLOW_DISABLED_PROVIDERS } from "./omp-workflows.js";
 import { parametersFor } from "./pi-runtime.js";
 
 export const OMP_HOST_TOOL_NAMES: ReadonlySet<string> = new Set([
@@ -705,6 +706,13 @@ export class OmpRpcRuntime implements AgentRuntime {
           }[request.model.provider];
         if (!baseUrl) throw new Error("omp requires a model connection URL");
         temporary = await mkdtemp(join(tmpdir(), "rakazo-omp-"));
+        const spaceId = context?.spaceId;
+        if (!spaceId) throw new Error("omp requires a Space-scoped context");
+        const cwd = ompWorkspaceDirectory(this.options.workspaceRoot, spaceId, request.botId);
+        const workflowPackages = request.workflowPackages ?? [];
+        const workflowIsolation = workflowPackages.length
+          ? await prepareOmpWorkflows(workflowPackages, temporary, cwd)
+          : undefined;
         const agentDirectory = join(temporary, "agent");
         const home = join(temporary, "home");
         await Promise.all([mkdir(agentDirectory, { mode: 0o700 }), mkdir(home, { mode: 0o700 })]);
@@ -749,7 +757,42 @@ export class OmpRpcRuntime implements AgentRuntime {
             composer: { predictions: false },
             retry: { modelFallback: false },
             async: { enabled: true, maxJobs: 4 },
-            task: { batch: true, maxConcurrency: 2 },
+            task: {
+              batch: true,
+              maxConcurrency: 2,
+              ...(workflowIsolation
+                ? {
+                    isolation: { enabled: false },
+                    maxRecursionDepth: 1,
+                    agentModelOverrides: Object.fromEntries(
+                      [
+                        "scout",
+                        "reviewer",
+                        "security-reviewer",
+                        "task",
+                        "sonic",
+                        ...workflowPackages.flatMap((pkg) => pkg.agents),
+                      ].map((name) => [name, `${provider}/${request.model.id}`]),
+                    ),
+                  }
+                : {}),
+            },
+            ...(workflowIsolation
+              ? {
+                  disabledProviders: WORKFLOW_DISABLED_PROVIDERS,
+                  skills: {
+                    enabled: true,
+                    includeSkills: workflowPackages.flatMap((pkg) => pkg.skills),
+                    enablePiUser: false,
+                    enablePiProject: false,
+                    enableClaudeUser: false,
+                    enableClaudeProject: false,
+                    enableCodexUser: false,
+                    enableAgentsUser: false,
+                    enableAgentsProject: false,
+                  },
+                }
+              : {}),
             computer: { enabled: false },
           }),
           { mode: 0o600 },
@@ -760,14 +803,16 @@ export class OmpRpcRuntime implements AgentRuntime {
           PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
           HOME: home,
           XDG_CONFIG_HOME: join(home, ".config"),
+          XDG_DATA_HOME: join(home, ".local", "share"),
+          XDG_CACHE_HOME: join(home, ".cache"),
+          XDG_STATE_HOME: join(home, ".local", "state"),
           PI_CODING_AGENT_DIR: agentDirectory,
           PI_NO_TITLE: "1",
           ...(request.model.apiKey ? { RAKAZO_OMP_MODEL_KEY: request.model.apiKey } : {}),
         };
-        const spaceId = context?.spaceId;
-        if (!spaceId) throw new Error("omp requires a Space-scoped context");
         child = await this.transport.start({
-          cwd: ompWorkspaceDirectory(this.options.workspaceRoot, spaceId, request.botId),
+          cwd,
+          workflowIsolation,
           env: environment,
           argv: [
             "--mode",
@@ -775,7 +820,9 @@ export class OmpRpcRuntime implements AgentRuntime {
             "--no-ui",
             "--no-session",
             "--no-extensions",
-            "--no-skills",
+            ...(workflowIsolation
+              ? workflowIsolation.packageRoots.flatMap((root) => ["--plugin-dir", root])
+              : ["--no-skills"]),
             "--no-rules",
             "--no-prewalk",
             "--approval-mode",

@@ -34,6 +34,7 @@ import {
   createSecretStore,
   createTicketChangeNotifier,
   createWebProvider,
+  createWorkflowResolver,
   destroyBot,
   EmailEmulator,
   GraphileJobPublisher,
@@ -56,6 +57,7 @@ import {
   SmtpEmailProvider,
   sandboxProviderOptionsFromEnv,
   toExternalConversationInbound,
+  WorkflowPackageStore,
   withSecretPersistence,
 } from "@rakazo/adapters";
 import { bootstrapAdmin, createAuth, isBlockedAuthPath, loopbackTwinOrigins } from "@rakazo/auth";
@@ -381,6 +383,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   // resolution alike, so a list call warms the run path in this process.
   const codexCatalog = new CodexCatalogCache();
   const executor = createRunExecutor({
+    resolveWorkflows: createWorkflowResolver({ prisma, dataDir: env.dataDir }),
     maxUploadSizeBytes: env.maxUploadSizeBytes,
     contextStrategy,
     prisma,
@@ -457,7 +460,21 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     : undefined;
   reconciler?.start();
 
+  const workflowPackages = new WorkflowPackageStore({ dataDir: env.dataDir });
   const router = createRouter({
+    workflowInstaller: (source, scope) => workflowPackages.install(source, scope),
+    workflowRemover: (scope) => workflowPackages.remove(scope),
+    workflowRunsCancelled: async (actor, runIds) => {
+      const runs = await prisma.run.findMany({
+        where: { id: { in: runIds }, spaceId: actor.spaceId, userId: actor.userId },
+        select: { id: true, runtime: true },
+      });
+      await Promise.all(
+        runs.map((run) =>
+          (runtimeOverride ? runtime : selection.runtimeFor(run.runtime)).abort(run.id),
+        ),
+      );
+    },
     cloudAgent,
     codexCatalog,
     prisma,

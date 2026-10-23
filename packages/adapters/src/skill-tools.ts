@@ -9,6 +9,8 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
+import type { ResolvedWorkflow } from "./workflow-runtime.js";
+import { readWorkflowSkill } from "./workflow-runtime.js";
 
 export const SKILL_TOOL_NAMES = new Set([
   "skill_read",
@@ -109,9 +111,16 @@ async function findOwnedSkill(
 export async function skillReadFromTool(
   prisma: PrismaClient,
   owner: SkillOwner,
-  input: { name?: string; skillId?: string },
+  input: { name?: string; skillId?: string; path?: string },
+  workflows: ResolvedWorkflow[] = [],
 ): Promise<Record<string, unknown>> {
-  const skill = await findOwnedSkill(prisma, owner, input);
+  const bareName = Boolean(input.name && !input.name.includes(":") && !input.skillId);
+  const existing = bareName ? await findOwnedSkill(prisma, owner, input) : null;
+  const workflowSkill = existing ? undefined : readWorkflowSkill(workflows, input);
+  if (workflowSkill) return workflowSkill;
+  if (input.path || input.skillId?.startsWith("workflow:"))
+    return { error: "Workflow skill not found." };
+  const skill = bareName ? existing : await findOwnedSkill(prisma, owner, input);
   if (!skill) return { error: "Skill not found." };
   return {
     name: skill.name,

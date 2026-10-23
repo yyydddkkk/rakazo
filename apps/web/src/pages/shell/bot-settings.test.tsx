@@ -57,6 +57,7 @@ vi.mock("@rakazo/ui-web", () => ({
     variant?: string;
   }) => <button type="button" {...props} />,
 }));
+vi.mock("../WorkflowSettings", () => ({ WorkflowSettings: () => null }));
 vi.mock("../ScratchpadSection", () => ({ ScratchpadSection: () => null }));
 vi.mock("../KnowledgeSection", () => ({ KnowledgeSection: () => null }));
 vi.mock("./avatar-studio-popover", () => ({ AvatarStudioPopover: () => null }));

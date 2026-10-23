@@ -20,6 +20,7 @@ import type { CloudAgentConnection } from "../cloud-agent-factory.js";
 import type { CodexLiveCatalog } from "../pi-codex-catalog.js";
 import type { RemoteTransportDependencies } from "../remote-mcp.js";
 import type { TicketChangeNotifier } from "../ticket-changes.js";
+import type { ResolvedWorkflow, WorkflowRunScope } from "../workflow-runtime.js";
 
 export interface ExecutorDeps {
   maxUploadSizeBytes?: number;
@@ -29,6 +30,7 @@ export interface ExecutorDeps {
   runtime: AgentRuntime;
   /** Resolve a bot or pinned run override; absent keeps injected test runtimes. */
   runtimeFor?: (name: string | null | undefined) => AgentRuntime;
+  resolveWorkflows?: (run: WorkflowRunScope) => Promise<ResolvedWorkflow[]>;
   sandbox: SandboxProvider;
   memory: MemoryStore;
   home: AgentHomeStore;

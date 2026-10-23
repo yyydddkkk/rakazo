@@ -1,4 +1,5 @@
 import type { ConnectorTool } from "@rakazo/adapter-kit";
+import type { SkillRecord } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { listSchedulesFromTool } from "./schedule-tools.js";
 import { listScratchpadItems } from "./scratchpad-tools.js";
@@ -14,6 +15,7 @@ type TaskCatalogInput = {
   userId: string;
   threadId?: string;
   tools: readonly Pick<ConnectorTool, "name" | "description" | "readOnly">[];
+  workflowSkills?: SkillRecord[];
 };
 
 /**
@@ -86,7 +88,7 @@ export async function taskCatalogFromTool(deps: TaskCatalogToolDeps, input: Task
       status: skill.status,
       source: "taught_skill",
     })),
-    skills: skills.map((skill) => ({
+    skills: [...skills, ...(input.workflowSkills ?? [])].map((skill) => ({
       name: skill.name,
       description: skill.description,
       source: skill.source,

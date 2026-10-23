@@ -1,7 +1,27 @@
 // Deterministic JSONL peer. No omp, Bun, model or network calls.
+
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 const scenario = process.argv[2];
+if (scenario === "workflows") {
+  const paths = process.argv.flatMap((arg, i) =>
+    arg === "--plugin-dir" ? [process.argv[i + 1]] : [],
+  );
+  if (paths.length !== 1 || process.argv.includes("--no-skills"))
+    throw new Error("Wrong workflow roots");
+  for (const root of paths) {
+    const manifest = JSON.parse(await readFile(join(root, "plugin.json"), "utf8"));
+    if (manifest.name !== "example") throw new Error("Wrong workflow identity");
+    const agent = await readFile(join(root, "agents/fixture-agent.md"), "utf8");
+    if (!agent.includes("spawns: false") || !agent.includes("structured: true"))
+      throw new Error("Wrong agent contract");
+    const entries = await readdir(root);
+    if (entries.some((name) => ["scripts", "extensions", "hooks", "node_modules"].includes(name)))
+      throw new Error("Executable workflow resources");
+  }
+}
 const write = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`);
 const assistant = (id, text, tokens = 3) => {
   write({ type: "message_start", messageId: id, message: { role: "assistant" } });

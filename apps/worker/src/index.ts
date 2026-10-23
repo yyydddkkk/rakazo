@@ -22,6 +22,7 @@ import {
   createSandboxProvider,
   createTicketChangeNotifier,
   createWebProvider,
+  createWorkflowResolver,
   databaseCapacityBackoffMs,
   GraphileJobPublisher,
   GraphileJobWorkerHost,
@@ -159,6 +160,7 @@ async function main() {
   // One provider instance so emulator launches and polls share the same Map.
   const cloudAgent = createCloudAgentConnection();
   const executor = createRunExecutor({
+    resolveWorkflows: createWorkflowResolver({ prisma, dataDir: dataDir }),
     maxUploadSizeBytes: uploadSizeFromEnv(process.env),
     prisma,
     runtime,

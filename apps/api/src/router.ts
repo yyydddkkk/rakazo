@@ -16,6 +16,7 @@ import { createRouterContext, os } from "./router/shared.js";
 import { skillsRouter } from "./router/skills.js";
 import { threadsRouter } from "./router/threads.js";
 import { usageRouter } from "./router/usage.js";
+import { workflowsRouter } from "./router/workflows.js";
 
 export { enqueueBotIntroRun } from "./router/bots.js";
 export type { RouterDeps } from "./router/shared.js";
@@ -33,6 +34,7 @@ export function createRouter(deps: RouterDeps) {
     ...routinesRouter(ctx),
     ...boardRouter(ctx),
     ...skillsRouter(ctx),
+    ...workflowsRouter(ctx),
     ...mcpRouter(ctx),
     ...connectionsRouter(ctx),
     ...messagingRouter(ctx),

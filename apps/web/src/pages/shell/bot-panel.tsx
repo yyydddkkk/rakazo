@@ -44,6 +44,7 @@ import { thinkingLevelLabel } from "../../lib/model-catalog";
 import { lazyComponent } from "../../lib/preload-recovery";
 import { rpc } from "../../lib/rpc";
 import { errorText } from "../../lib/user-error";
+import { WorkflowSettings } from "../WorkflowSettings";
 import { AvatarStudioPopover } from "./avatar-studio-popover";
 import { BotCredentialsSection } from "./bot-credentials";
 import { ChatModelPicker } from "./chat-model-picker";
@@ -701,6 +702,11 @@ export function BotSettings({
             />
           </label>
         ))}
+        {advancedOpened ? (
+          <Disclosure summary={<Trans>Workflows</Trans>} className="mt-4">
+            <WorkflowSettings botId={bot.id} isPi={runtime !== "omp"} />
+          </Disclosure>
+        ) : null}
         {advancedOpened ? <BotCredentialsSection botId={bot.id} /> : null}
         <div className="mt-5 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => void onExport()}>

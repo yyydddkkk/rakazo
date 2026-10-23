@@ -1,6 +1,17 @@
 # 工作流包（Workflow Package）
 
-状态：第一阶段设计，待确认；本文不代表已实现插件安装或通过真实 pstack 验收。只提交本文，确认后再做第二阶段。
+状态：设计已确认，第二阶段最小实现已完成；真实模型与真实 omp 的 pstack 体验由用户验收。下文保留设计依据，当前实现边界以本节为准。
+
+## 当前实现
+
+- Space 安装、bot 显式选择和常驻技能已接入；新增 `workflows` API 与设置入口。首次执行固定 run 的包版本 ID/常驻快照，摘要与转换器版本从不可变 revision 解析，升级不改变暂停重试的版本；停用/卸载取消相关活动 run，worker 的工作流取消轮询在下一次检查触发清理，已发生的副作用不能撤回。
+- 生产导入先支持公开 GitHub HTTPS 仓库，完整 commit 或明确 tag；其他 Git 主机、私有仓库和其他插件方言暂不支持。本地假 Git 只从测试注入。显式技能根支持一层布局，过深的技能布局拒绝；引用文本和许可保留，脚本与可执行入口省略。规范化投影生成最小 root/OMP/Claude manifests，让固定 omp 的兼容 loader 正确读取显式技能路径；这些文件不复制上游执行字段。
+- Pi 的 `skill_read`、包内资源、bot slash 目录与常驻指令已接入；导入 agent 在 Pi 中不可用。omp 用显式 `--plugin-dir` 原生加载技能和 agent，模型固定 bot 选择，导入 agent 禁止再启动子 agent，要求 yield 的定义启用 structured。
+- **显式来源缺口采用 OS 挂载解决，未修改上游 omp。** 有包的 omp 进程要求 Linux、bubblewrap 和可用 user namespaces。根目录只读，只有 bot 工作目录和本 run 临时目录可写；投影、可信配置、空配置目录的所有路径别名只读。工作目录和临时 HOME 的 OMP/Claude/Codex/Gemini 等配置根、XDG 插件注册表被空目录覆盖，祖先 agent 搜索在本工作目录命中空 agents 目录即停止；原生 task 的独立 worktree 模式关闭，防止换到未覆盖的 cwd。原配置不删除、不覆盖写入，缺少隔离能力时明确失败。无包的原有 omp 路径不启用此包装。
+- 原生模块仍是可信已安装 omp；没有加载包 extensions/hooks/tools/MCP，也没有执行其安装或验证脚本。挂载保护并不禁止模型使用已授权 bash 编写等价内联代码，也不把可读宿主文件变成跨 Space 的完整 OS 保密隔离。
+- 应用镜像包含 bubblewrap；原生宿主安装需要自行提供该系统工具。容器策略也须允许所需 user namespaces，本实现不自动放宽 seccomp 或增加宿主特权；镜像构建未在本次验证。下载大小监控超过软上限会取消 Git 请求，轮询与进程退出期间仍可能短暂超限，不等于磁盘配额。
+- 新增三张带 Space RLS 的表及 `Run.workflowSnapshot` 可空列，migration 只增不删。卸载回收没有 run 引用的版本目录；历史 run 引用的不可变版本保留。安装失败和重复升级的临时版本清理，不引入自动升级或后台 GC。
+- 固定社区样本已通过一次性离线导入核对：49 个技能、两个 agents、118 个投影文本文件，摘要重读一致；未把第三方内容提交进仓库。脚本步骤、长期 owner、独立审查模型及被省略的字段不属于已验证能力。
 
 ## 1. 决策与调研基线
 
@@ -87,6 +98,8 @@ run 在首次执行前固定有效集合；审批暂停后的重试复用同一�
 
 第一版 omp 内部保留 `poteto-mode` 和 `poteto-agent` 原名，使包内 `skill://poteto-mode/...`、sibling 引用和命名 agent 调用有效。Rakazo 维护 qualified-name → native-name 映射，`/poteto-mode` 仅在本 bot 的有效目录中唯一时提供短名；`/pstack:poteto-mode` 始终能定位包。**第一版拒绝启用会产生原生同名技能/agent 的包组合**，包含与 omp bundled agent 的碰撞，不依赖安装顺序覆盖；Pi 同样不静默遮蔽用户/builtin skill 的短名。
 
+已有 Rakazo 用户/builtin 技能占用短名时，不生成包的同名短别名，包的 qualified 名仍然可用；例如 Rakazo 的 `Interrogate` 保持原义，pstack 的同名技能用 `pstack:interrogate`。`skill_read` 同样优先解析已有短名，包内引用使用 qualified 来源或稳定 ID。
+
 这是有意的最小限制：Pi 可以按 qualified 名区分多个来源，omp 的 [技能冲突机制][O3] 与 [agent first-wins 机制][O4]并不统一，而且原始技能名禁止 `/`。要让冲突包同时运行，后续必须生成合法的原生名字并改写结构化 URI、spawns 和受控模板引用；不能对任意 Markdown 做全文替换后宣称所有自然语言引用都可靠。冲突时返回具体包和名称，让用户只选一个，不自动重命名原包。
 
 ### omp：显式文本目录，继续用原生 skills/task
@@ -150,7 +163,7 @@ Web `/poteto-mode` 经统一 resolver 选中技能，在 Rakazo 任务封装中�
 - Space 设置的“Workflows”：安装列表，包名、版本/短 SHA、开关与菜单；安装表单输入 URL、revision，按需展开子目录。详情按需显示完整来源、许可证、被省略/缺失能力；卸载复用确认对话框。
 - bot 设置的“Workflows”：选择已安装且 Space 启用的包；选中后才出现常驻技能选择。没有安装包时只给安装入口；Pi bot 的包详情在相关处说明命名 agent 不支持。
 
-第二阶段拟新增英文原文（中文仅为本文解释）：
+第二阶段实际新增英文原文（中文仅为本文解释）：
 
 | 文案 | 用处；为何必要/为何在此出现 |
 | --- | --- |
@@ -161,9 +174,11 @@ Web `/poteto-mode` 经统一 resolver 选中技能，在 Rakazo 任务封装中�
 | `Only skills are available with Pi.` | 仅 Pi 包详情在含 agents 时显示，避免承诺错误能力。 |
 | `Third-party instructions can use this bot’s tools.` | 安装确认时显示一次，说明文本也有行为影响，不能只用“无代码”让用户误判信任边界。 |
 
-复用现有 Enable/Disable、Update、Uninstall、Cancel、版本/许可字段文案和确认组件，不为它们新造同义词。兼容错误只在安装/启用失败或相关详情出现，引用具体组件名；实现时列出实际新增错误原文。本文不新增产品界面或文案资源。
+另新增 `Could not load workflows`、`Could not save workflows`，只在相应请求失败时展示，用户需要知道操作未成功；`Digest`、`License`、`Not declared` 只在 Details 展开后展示，支持核对版本与许可；`Update` 是详情内的固定版本升级操作，`Uninstall {0}?` 仅在卸载确认时展示包名，防止删错。它们连同上表共 15 项，均提供英文和中文翻译。
 
-后续涉及 UI 的提交/PR 描述必须引用实际新增原文，解释不可删除或为何仅在相关处显示；补充打开这两个设置屏幕的 Web 测试，并在 PR 链接 CI E2E 截图。本阶段没有 UI 改动，不制造截图或 PR。
+复用现有开关、Details、Uninstall、Cancel 和确认组件；没有常驻说明区。服务端兼容/校验错误只在安装、启用或执行失败时展示具体原因，不新增持续提示。
+
+涉及 UI 的提交/PR 描述须引用实际新增原文，解释不可删除或为何仅在相关处显示。本轮已有打开这两个设置屏幕的 Web 测试与本地截图；以后创建 PR 时链接该测试的 CI E2E 附件，本轮不创建或推送 PR。
 
 ## 7. 安全保证与明确非保证
 
@@ -202,18 +217,26 @@ Web `/poteto-mode` 经统一 resolver 选中技能，在 Rakazo 任务封装中�
 
 每次提交前按顺序完成 `pnpm check`、`pnpm lint`、`pnpm test`；不启动真实模型或真实 omp，不绕过 hooks。真实用户验收时检查原生 skill 读取、实际 `task` 中的命名 agent、子事件和结果，不把模型自述或 fake 事件当作已运行的证明。
 
-### 确认设计时需要接受的边界
+### 第一阶段提出的边界（实际处理见文首）
 
 - 先导入社区 omp 文本格式，官方 Cursor/Claude 来源延后；Pi 不运行导入 agent，omp 同名冲突组合先拒绝。
 - 原生 `18.12.6` 没有已验证的完整显式来源开关；要严格满足来源限制，第二阶段需一个小的上游能力补足并重新锁版本。否则这一条就是未完成，不降低验收口径。
 - 本机 runner 的文件权限不是强制只读挂载。接受文本副本的现有宿主信任边界，或将 OS 只读进程隔离列为第二阶段前置，两者不能混称。
 - 文本模式不能保证完整 pstack：脚本、独立审查模型和长期 owner 等门槛缺失时，只报告未完成。受支持有界路径的真实模型表现尚无证据，由用户体验，不提前宣称通过。
 
-## 第一阶段验证记录
+## 第一阶段验证记录（历史）
 
 仅新增本文；无产品代码、界面、第三方仓库内容或 migration。初次检查因工作树缺少开发依赖未能启动，按锁文件安装依赖后，`pnpm check`、`pnpm lint`、`pnpm test` 全部通过；lint 只有既存信息提示，全量默认测试通过，环境相关用例按仓库配置跳过。本地文档链接、固定 SHA 引用和空白差异检查通过；来源样本的技能/agent/playbook 数量与许可文件已交叉核对。
 
 未运行 host 测试、Web E2E、真实 omp、模型或第三方脚本；本文没有 UI 改动，不以现有测试通过宣称工作流功能已实现。到此停止，等待确认设计后再进入第二阶段。
+
+## 第二阶段验证记录
+
+- 提交前 `pnpm check`、`pnpm lint`、`pnpm test` 最终全部通过；lint 仅有既存信息提示，默认全量测试通过，环境依赖用例按既有配置跳过。初次全量回归暴露的子进程 HOME 扫描误报和旧 UI 测试 mock 缺项已修复，不修改部署环境允许列表或绕过测试；另补齐 pstack 与 builtin Interrogate 的短名兼容，以及保留已停用选择时编辑其他包的回归。
+- 离线假 Git 覆盖固定 SHA/tag、tag 移动、升级、显式子目录/技能目录、路径/符号链接/脚本拒绝、完整性与卸载；API 覆盖 Space/bot 归属、启停、常驻选择、取消与历史版本保留；共享 Pi `skill_read` 路径实际返回包正文和同包引用，停用后旧 ID 不可读。
+- 假 RPC 进程核对已选包目录、最小 manifests、模型/structured/spawns 配置与扩展禁用参数；真实 Linux bubblewrap + 本地 Node host 测试验证只读挂载、隐藏原配置、XDG 插件注册表、只读目录原路径别名、不可 chmod、普通工作目录可写，不启动 omp 或模型。
+- 定向 Web E2E 通过安装、bot 选择/常驻、qualified slash 目录、停用和卸载；生成 `space-workflows`、`bot-workflows`、`workflows-uninstalled` 截图，已目视检查。E2E 的工作流 RPC 使用离线假服务；不将其等同真实 Git 导入或模型工作流验收。以后创建 PR 时应链接该测试的 CI 附件，本轮没有创建或推送 PR。
+- 未调用真实模型、真实 omp、第三方脚本或在线 Git 安装；未运行全量 host 测试。真实 pstack 任务路由和命名子 agent 的模型表现仍由用户体验。
 
 ## 固定上游证据
 

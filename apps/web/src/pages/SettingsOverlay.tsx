@@ -11,6 +11,7 @@ import {
   Plug,
   Settings,
   ShieldCheck,
+  Workflow,
   XIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -25,12 +26,14 @@ import {
 import { IntegrationsPanel } from "./IntegrationsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
+import { WorkflowSettings } from "./WorkflowSettings";
 
 export type SettingsSection =
   | "general"
   | "models"
   | "memory"
   | "confirmations"
+  | "workflows"
   | "integrations"
   | "usage"
   | "computer";
@@ -147,6 +150,7 @@ export function SettingsOverlay({
       items: [
         { id: "models", label: t`Models`, icon: Cpu },
         { id: "memory", label: t`Memory`, icon: Brain },
+        { id: "workflows", label: t`Workflows`, icon: Workflow },
         { id: "confirmations", label: t`Confirmations`, icon: ShieldCheck },
         { id: "integrations", label: t`Integrations`, icon: Plug },
         { id: "usage", label: t`Usage`, icon: Gauge },
@@ -326,6 +330,7 @@ export function SettingsOverlay({
                   onTimezoneChange={onTimezoneChange}
                 />
               ) : null}
+              {section === "workflows" ? <WorkflowSettings /> : null}
               {section === "confirmations" ? <ApprovalRulesSettings /> : null}
               {section === "integrations" ? (
                 <div className="space-y-5">

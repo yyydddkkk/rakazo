@@ -99,6 +99,7 @@ it("splits settings into account sections and the shown space's sections", async
     expect(navItems(container, "space")).toEqual([
       "settings-nav-models",
       "settings-nav-memory",
+      "settings-nav-workflows",
       "settings-nav-confirmations",
       "settings-nav-integrations",
       "settings-nav-usage",

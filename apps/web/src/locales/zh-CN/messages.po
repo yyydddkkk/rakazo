@@ -533,6 +533,10 @@ msgstr "始终允许此工具"
 msgid "Always allowed"
 msgstr "始终允许"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Always use"
+msgstr "始终使用"
+
 #: src/lib/model-connection-preflight.ts
 msgid "An API key is stored for this provider, not a subscription sign-in."
 msgstr "此提供方存储的是 API 密钥，不是订阅登录。"
@@ -832,6 +836,7 @@ msgstr "无法读取图像"
 #: src/pages/Onboarding.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
+#: src/pages/WorkflowSettings.tsx
 msgid "Cancel"
 msgstr "取消"
 
@@ -1066,6 +1071,10 @@ msgstr "命令变量"
 #: src/pages/Board.tsx
 msgid "Comment"
 msgstr "评论"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Commit or tag"
+msgstr "提交或标签"
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Compact"
@@ -1439,6 +1448,10 @@ msgstr "无法加载此对话。"
 msgid "Could not load this file."
 msgstr "无法加载此文件。"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Could not load workflows"
+msgstr "无法加载工作流"
+
 #: src/lib/sign-out.ts
 msgid "Could not log out. Try again."
 msgstr "无法退出登录。请重试。"
@@ -1541,6 +1554,10 @@ msgstr "无法保存凭据"
 #: src/pages/shell/message-cards.tsx
 msgid "Could not save this choice"
 msgstr "无法保存此选择"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Could not save workflows"
+msgstr "无法保存工作流"
 
 #: src/pages/IntegrationsPanel.tsx
 msgid "Could not search catalog"
@@ -1814,8 +1831,13 @@ msgstr "描述"
 
 #: src/pages/RoutineRunHistory.tsx
 #: src/pages/shell/composer-error.tsx
+#: src/pages/WorkflowSettings.tsx
 msgid "Details"
 msgstr "详情"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Digest"
+msgstr "内容摘要"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
@@ -2191,6 +2213,10 @@ msgstr "正在准备"
 msgid "Git event"
 msgstr "Git 事件"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Git URL"
+msgstr "Git URL"
+
 #: src/lib/identity-display.ts
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/shell/shell-main-header.tsx
@@ -2292,6 +2318,10 @@ msgstr "收件箱和邮件"
 msgid "Inputs"
 msgstr "输入"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Install"
+msgstr "安装"
+
 #: src/components/McpServerHealthLine.tsx
 msgid "Installing…"
 msgstr "正在安装…"
@@ -2387,6 +2417,10 @@ msgstr "上次检查 {0}：无变化"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Leave"
 msgstr "退出"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "License"
+msgstr "许可证"
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Light"
@@ -2915,6 +2949,10 @@ msgstr "尚未检查"
 msgid "Not connected"
 msgstr "未连接"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Not declared"
+msgstr "未声明"
+
 #: src/pages/IntegrationsPanel.tsx
 msgid "Not in the plugin catalog"
 msgstr "不在插件目录中"
@@ -2980,6 +3018,10 @@ msgstr "按计划"
 #: src/pages/RoutineSchedule.tsx
 msgid "on the 1st at {0}"
 msgstr "每月 1 日 {0}"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Only skills are available with Pi."
+msgstr "Pi 仅支持技能。"
 
 #: src/components/markdown-link-prompt.tsx
 #: src/pages/ScratchpadSection.tsx
@@ -3075,6 +3117,10 @@ msgstr "其他模型…"
 #: src/pages/Board.tsx
 msgid "Owner"
 msgstr "所有者"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Package path"
+msgstr "包路径"
 
 #: src/pages/ScratchpadSection.tsx
 msgid "Park"
@@ -4034,6 +4080,10 @@ msgstr "思考"
 msgid "Thinking: {activeThinkingLabel}"
 msgstr "思考：{activeThinkingLabel}"
 
+#: src/pages/WorkflowSettings.tsx
+msgid "Third-party instructions can use this bot’s tools."
+msgstr "第三方指令可以使用此机器人的工具。"
+
 #: src/pages/Artifacts.tsx
 msgid "This can't be undone."
 msgstr "此操作无法撤销。"
@@ -4205,8 +4255,14 @@ msgid "Undo"
 msgstr "撤销"
 
 #: src/pages/IntegrationsPanel.tsx
+#: src/pages/WorkflowSettings.tsx
 msgid "Uninstall"
 msgstr "卸载"
+
+#. placeholder {0}: removing?.name
+#: src/pages/WorkflowSettings.tsx
+msgid "Uninstall {0}?"
+msgstr "卸载 {0}？"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Unknown tool"
@@ -4224,6 +4280,10 @@ msgstr "取消置顶"
 #: src/pages/shell/use-composer-actions.ts
 msgid "Unsupported file type: {0}"
 msgstr "不支持的文件类型：{0}"
+
+#: src/pages/WorkflowSettings.tsx
+msgid "Update"
+msgstr "更新"
 
 #: src/components/ComputerMaintenanceActions.tsx
 msgid "Update computer"
@@ -4421,6 +4481,12 @@ msgstr "何时使用"
 #: src/lib/ticket-status.ts
 msgid "Won't do"
 msgstr "不做"
+
+#: src/pages/SettingsOverlay.tsx
+#: src/pages/shell/bot-panel.tsx
+#: src/pages/WorkflowSettings.tsx
+msgid "Workflows"
+msgstr "工作流"
 
 #: src/lib/roster-status.ts
 #: src/pages/Auth.tsx

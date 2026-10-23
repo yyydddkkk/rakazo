@@ -462,6 +462,14 @@ export type AgentContextStrategy = "current" | "retrieval" | "snapshots" | "cach
 export const DEFAULT_CONTEXT_STRATEGY: AgentContextStrategy = "retrieval";
 
 export interface AgentRunRequest {
+  /** Immutable, owner-authorized workflow text selected by the executor. */
+  workflowPackages?: Array<{
+    id: string;
+    alias: string;
+    files: Record<string, string>;
+    skills: string[];
+    agents: string[];
+  }>;
   /** Awaited producer-side accounting, independent of event-consumer cancellation. */
   onUsage?: (event: Extract<AgentRuntimeEvent, { type: "usage" }>) => void | Promise<void>;
   contextStrategy?: AgentContextStrategy;

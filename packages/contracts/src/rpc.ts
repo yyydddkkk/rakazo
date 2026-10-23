@@ -94,6 +94,12 @@ import { MessageReactionSchema } from "./reactions.js";
 import { RoutineWatchSchema } from "./routine-watch.js";
 import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
+import {
+  BotWorkflowsSchema,
+  InstallWorkflowPackageInput,
+  SetBotWorkflowsInput,
+  WorkflowPackageSchema,
+} from "./workflows.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -587,11 +593,17 @@ export const appContract = {
   },
   /** Claude Agent Skills (SKILL.md recipes) shared across assistants (not taught/demo skills). Pi already understands this format; we persist and inject them. */
   agentSkills: {
-    list: oc.output(z.array(AgentSkillCatalogEntrySchema)),
+    list: oc
+      .input(z.object({ botId: Id.optional() }).optional())
+      .output(z.array(AgentSkillCatalogEntrySchema)),
     get: oc
       .input(
         z
-          .object({ skillId: Id.optional(), name: z.string().min(1).max(80).optional() })
+          .object({
+            skillId: Id.optional(),
+            name: z.string().min(1).max(80).optional(),
+            botId: Id.optional(),
+          })
           .superRefine((input, ctx) => {
             if (!input.skillId && !input.name?.trim()) {
               ctx.addIssue({
@@ -606,6 +618,19 @@ export const appContract = {
     create: oc.input(CreateAgentSkillInput).output(AgentSkillSchema),
     update: oc.input(UpdateAgentSkillInput).output(AgentSkillSchema),
     remove: oc.input(z.object({ skillId: Id })).output(z.object({ ok: z.literal(true) })),
+  },
+  workflows: {
+    list: oc.output(z.array(WorkflowPackageSchema)),
+    install: oc.input(InstallWorkflowPackageInput).output(WorkflowPackageSchema),
+    updateVersion: oc
+      .input(z.object({ packageId: Id, revision: z.string().trim().min(1).max(200) }))
+      .output(WorkflowPackageSchema),
+    setEnabled: oc
+      .input(z.object({ packageId: Id, enabled: z.boolean() }))
+      .output(WorkflowPackageSchema),
+    remove: oc.input(z.object({ packageId: Id })).output(z.object({ ok: z.literal(true) })),
+    getBot: oc.input(z.object({ botId: Id })).output(BotWorkflowsSchema),
+    setBot: oc.input(SetBotWorkflowsInput).output(BotWorkflowsSchema),
   },
   capabilities: {
     list: oc.output(z.array(CapabilityInstallSchema)),

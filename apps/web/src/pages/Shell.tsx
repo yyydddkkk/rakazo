@@ -802,8 +802,9 @@ function SpaceShell() {
 
   useEffect(() => {
     let cancelled = false;
+    setAgentSkills([]);
     void rpc.agentSkills
-      .list()
+      .list(active?.id ? { botId: active.id } : undefined)
       .then((skills) => {
         if (!cancelled) setAgentSkills(skills);
       })
@@ -813,12 +814,15 @@ function SpaceShell() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [active?.id]);
 
   const refreshAgentSkills = useCallback(() => {
+    const botId = activeBotId.current;
     void rpc.agentSkills
-      .list()
-      .then(setAgentSkills)
+      .list(botId ? { botId } : undefined)
+      .then((skills) => {
+        if (activeBotId.current === botId) setAgentSkills(skills);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -2178,7 +2182,7 @@ function SpaceShell() {
         createBot={createBot}
         openBot={openBot}
         navigate={navigate}
-        setAgentSkills={setAgentSkills}
+        setAgentSkills={refreshAgentSkills}
         setClearTarget={setClearTarget}
       />
 

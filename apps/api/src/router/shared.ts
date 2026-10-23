@@ -71,6 +71,8 @@ import { getLogger } from "@rakazo/logging";
 import { createAgentSkillsService } from "../agent-skills.js";
 import type { McpSecretMaterial } from "../mcp-material.js";
 import { createTaughtSkillsService } from "../taught-skills.js";
+import type { WorkflowPackageInstaller, WorkflowPackageRemoval } from "../workflows.js";
+import { createWorkflowsService } from "../workflows.js";
 
 export const THREAD_MESSAGE_PAGE_SIZE = 100;
 
@@ -138,6 +140,9 @@ export interface RouterDeps {
   remoteConnectors?: RemoteConnectorDependencies;
   artifacts: ArtifactStore;
   dataDir: string;
+  workflowInstaller?: WorkflowPackageInstaller;
+  workflowRemover?: WorkflowPackageRemoval;
+  workflowRunsCancelled?: (actor: Actor, runIds: string[]) => Promise<void>;
   /** Present when the external messaging surface is enabled. */
   messaging?: { enabled: boolean; providers: string[] };
   env: {
@@ -493,6 +498,17 @@ export function createRouterContext(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma);
+  const workflows = createWorkflowsService(
+    deps.prisma,
+    deps.workflowInstaller ??
+      (async () => {
+        throw new ORPCError("SERVICE_UNAVAILABLE", {
+          message: "Workflow installation is unavailable.",
+        });
+      }),
+    deps.workflowRunsCancelled,
+    deps.workflowRemover,
+  );
 
   const boardEnabled = os
     .use(async ({ next }) => {
@@ -525,6 +541,7 @@ export function createRouterContext(deps: RouterDeps) {
     groupRepos,
     taughtSkills,
     agentSkills,
+    workflows,
     boardEnabled,
     ticketDeps,
   };

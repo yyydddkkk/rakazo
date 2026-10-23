@@ -178,6 +178,7 @@ model Space {
   routines                    Routine[]
   scratchpadItems             ScratchpadItem[]
   taughtSkills                TaughtSkill[]
+  workflowPackages            WorkflowPackage[]
   agentSkills                 AgentSkill[]
   connections                 Connection[]
   capabilities                CapabilityInstall[]
@@ -364,6 +365,7 @@ model Bot {
   tasks             Task[]
   runs              Run[]
   steeringMessages  SteeringMessage[]
+  workflowPackages  BotWorkflowPackage[]
   mcpServers        BotMcpServer[]
   groupMembers      ChatGroupMember[]
   botSecrets BotSecret[]
@@ -559,6 +561,7 @@ model Run {
   modelProvider        String?
   modelId              String?
   thinkingLevel        String?
+  workflowSnapshot     Json?
   // True when these columns are the model the run must keep. A later attempt
   // may record the model it used in the same columns without setting this.
   modelPinned          Boolean          @default(false)
@@ -1391,4 +1394,54 @@ model TicketComment {
 
   @@index([ticketId, createdAt])
   @@map("ticket_comments")
+}
+
+model WorkflowPackage {
+  id               String                    @id @default(cuid())
+  spaceId          String
+  space            Space                     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId           String
+  alias            String
+  enabled          Boolean                   @default(true)
+  activeRevisionId String?                   @unique
+  activeRevision   WorkflowPackageRevision?  @relation("ActiveWorkflowRevision", fields: [activeRevisionId], references: [id], onDelete: SetNull)
+  revisions        WorkflowPackageRevision[] @relation("WorkflowRevisions")
+  bots             BotWorkflowPackage[]
+  deletedAt        DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  // Live aliases are unique; removed packages retain their historical identity.
+  @@index([spaceId, userId])
+  @@map("workflow_packages")
+}
+
+model WorkflowPackageRevision {
+  id                String           @id @default(cuid())
+  packageId         String
+  package           WorkflowPackage  @relation("WorkflowRevisions", fields: [packageId], references: [id], onDelete: Cascade)
+  activePackage     WorkflowPackage? @relation("ActiveWorkflowRevision")
+  url               String
+  requestedRevision String
+  packagePath       String           @default("")
+  commit            String
+  digest            String
+  transformVersion  String
+  content           Json
+  createdAt         DateTime         @default(now())
+
+  @@unique([packageId, commit])
+  @@index([digest])
+  @@map("workflow_package_revisions")
+}
+
+model BotWorkflowPackage {
+  botId     String
+  bot       Bot             @relation(fields: [botId], references: [id], onDelete: Cascade)
+  packageId String
+  package   WorkflowPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  alwaysUse String[]        @default([])
+
+  @@id([botId, packageId])
+  @@map("bot_workflow_packages")
 }

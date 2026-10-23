@@ -23,7 +23,85 @@ export interface OmpProcess {
 }
 
 export interface OmpTransport {
-  start(spec: { argv: string[]; cwd: string; env: Record<string, string> }): Promise<OmpProcess>;
+  start(spec: {
+    argv: string[];
+    cwd: string;
+    env: Record<string, string>;
+    workflowIsolation?: { temporary: string; configRoot: string; packageRoots: string[] };
+  }): Promise<OmpProcess>;
+}
+
+export const WORKFLOW_CONFIG_ROOTS = [
+  ".omp",
+  ".claude",
+  ".codex",
+  ".gemini",
+  ".agents",
+  ".agent",
+  ".opencode",
+  ".cursor",
+] as const;
+
+/** Mounts preserve native discovery while hiding ambient project definitions. */
+export function ompProcessCommand(
+  spec: Parameters<OmpTransport["start"]>[0],
+  executable: string,
+  prefixArgs: string[] = [],
+): { executable: string; argv: string[] } {
+  if (!spec.workflowIsolation) return { executable, argv: [...prefixArgs, ...spec.argv] };
+  if (process.platform !== "linux") {
+    throw new Error("omp workflows require Linux with bubblewrap");
+  }
+  const { temporary, configRoot, packageRoots } = spec.workflowIsolation;
+  const { HOME: workflowHome } = spec.env;
+  if (!workflowHome) throw new Error("Workflow processes require an isolated home.");
+  return {
+    executable: "bwrap",
+    argv: [
+      "--die-with-parent",
+      "--new-session",
+      "--unshare-user",
+      "--unshare-pid",
+      "--cap-drop",
+      "ALL",
+      "--ro-bind",
+      "/",
+      "/",
+      "--proc",
+      "/proc",
+      "--dev",
+      "/dev",
+      "--tmpfs",
+      "/tmp",
+      "--bind",
+      spec.cwd,
+      spec.cwd,
+      "--bind",
+      temporary,
+      temporary,
+      "--ro-bind",
+      configRoot,
+      configRoot,
+      ...["XDG_DATA_HOME", "XDG_CONFIG_HOME"].flatMap((key) =>
+        spec.env[key] ? ["--ro-bind", configRoot, join(spec.env[key]!, "omp", "plugins")] : [],
+      ),
+      ...[spec.cwd, workflowHome].flatMap((base) =>
+        WORKFLOW_CONFIG_ROOTS.flatMap((name) => ["--ro-bind", configRoot, join(base, name)]),
+      ),
+      ...[
+        join(temporary, "config.yml"),
+        join(temporary, "agent", "models.yml"),
+        join(temporary, "instructions.md"),
+      ].flatMap((file) => ["--ro-bind", file, file]),
+      ...packageRoots.flatMap((root) => ["--ro-bind", root, root]),
+      "--chdir",
+      spec.cwd,
+      "--",
+      executable,
+      ...prefixArgs,
+      ...spec.argv,
+    ],
+  };
 }
 
 const STDERR_TAIL_CHARS = 2000;
@@ -49,18 +127,19 @@ export class LocalOmpTransport implements OmpTransport {
 
   async start(spec: Parameters<OmpTransport["start"]>[0]): Promise<OmpProcess> {
     await mkdir(spec.cwd, { recursive: true, mode: 0o700 });
-    const queue = new OmpRpcQueue<OmpProcessEvent>();
-    const child = spawn(
+    const command = ompProcessCommand(
+      spec,
       this.options.executable ?? "omp",
-      [...(this.options.prefixArgs ?? []), ...spec.argv],
-      {
-        cwd: spec.cwd,
-        env: spec.env,
-        detached: process.platform !== "win32",
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true,
-      },
+      this.options.prefixArgs,
     );
+    const queue = new OmpRpcQueue<OmpProcessEvent>();
+    const child = spawn(command.executable, command.argv, {
+      cwd: spec.cwd,
+      env: spec.env,
+      detached: process.platform !== "win32",
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    });
     let draining = false;
     let cleanupActive = false;
     let readerActive = false;
@@ -89,7 +168,11 @@ export class LocalOmpTransport implements OmpTransport {
       child.once("spawn", ready);
       child.once("error", () => {
         reject(
-          new Error("Unable to start omp; install the supported omp executable on the worker"),
+          new Error(
+            spec.workflowIsolation
+              ? "Unable to start omp workflows; Linux bubblewrap and user namespaces are required"
+              : "Unable to start omp; install the supported omp executable on the worker",
+          ),
         );
       });
     });
