@@ -1,16 +1,23 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   AgentRunRequest,
+  AgentRuntime,
   AutoReviewProvider,
   ConnectorCall,
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { MEMORY_REVISION_CONFLICT_ERROR } from "@rakazo/adapter-kit";
+import type { AgentRuntimeChoice } from "@rakazo/contracts";
 import type { ActionApprovalRule } from "@rakazo/core";
 import { inboundRoutineBlock } from "@rakazo/core";
 import { approvalEffectKey, toolEffectIdempotencyKey } from "@rakazo/core/node/approval-effect-key";
 import type { PrismaClient } from "@rakazo/db";
+import * as database from "@rakazo/db";
 import { createPendingSteeringRun, sendUserMessage } from "@rakazo/db";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
 import { MAX_SHARED_MEMORY_CHARS } from "./builtin-tools.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
@@ -18,6 +25,9 @@ import { createRunExecutor } from "./executor.js";
 import { FakeWebProvider } from "./fake-web.js";
 import type * as FleetToolsModule from "./fleet-tools.js";
 import { catalogEntries, resolveCatalogCall } from "./lazy-tool-catalog.js";
+import { OmpRpcRuntime } from "./omp-runtime.js";
+import type { OmpProcess } from "./omp-transport.js";
+import { LocalOmpTransport } from "./omp-transport.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -85,7 +95,13 @@ function fixture({
   fleetBots = [] as { id: string; name: string }[],
   secondResource = false,
   routines = [] as { name: string; prompt: string }[],
+  runtimeOverride,
+  botRuntime,
+  dataDir,
 }: {
+  runtimeOverride?: AgentRuntime;
+  botRuntime?: AgentRuntimeChoice | null;
+  dataDir?: string;
   /** The bot's routines, as the owner wrote them. */
   routines?: { name: string; prompt: string }[];
   /** Adds `demo_get_other`, a read on a separate installed resource with the same name prefix. */
@@ -212,6 +228,7 @@ function fixture({
   const liveBot = { fleetManagement };
   let outsideSteering = false;
   let offeredTools: string[] = [];
+  let instructions = "";
   const prisma = {
     user: { findUnique: vi.fn(async () => null) },
     run: {
@@ -229,6 +246,8 @@ function fixture({
       findUniqueOrThrow: vi.fn(async () => ({
         ...instructionState,
         id: run.botId,
+        spaceId: run.spaceId,
+        runtime: botRuntime ?? null,
         name: bot.name,
         title: bot.title,
         description: bot.description,
@@ -291,10 +310,11 @@ function fixture({
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {
       findUnique: vi.fn(async () => ({
-        defaultModelProvider: "scripted",
-        defaultModelId: "scripted",
+        defaultModelProvider: runtimeOverride ? "openrouter" : "scripted",
+        defaultModelId: runtimeOverride ? "fixture-model" : "scripted",
       })),
     },
+    usageRecord: { createMany: vi.fn(async () => ({ count: 1 })) },
     taughtSkill: { findMany: vi.fn(async () => []) },
     chatGroup: { findMany: vi.fn(async () => []) },
     botSection: { findMany: vi.fn(async () => []) },
@@ -334,6 +354,22 @@ function fixture({
   };
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
     offeredTools = request.tools.map((tool) => tool.name);
+    instructions = request.instructions;
+    if (runtimeOverride) {
+      const executeTool = request.executeTool!;
+      yield* runtimeOverride.run(
+        {
+          ...request,
+          executeTool: async (...args) => {
+            const result = await executeTool(...args);
+            results.push(result);
+            return result;
+          },
+        },
+        { spaceId: run.spaceId, userId: run.userId },
+      );
+      return;
+    }
     const executeCall = async (call: (typeof calls)[number]) => {
       const result = call.name
         ? await request.executeTool!(call.name, call.args, call.executionId)
@@ -358,7 +394,12 @@ function fixture({
   const enqueue = vi.fn(async (_job: unknown) => undefined);
   const executor = createRunExecutor({
     prisma: transactionalPrisma,
-    runtime: { describe: () => ({ id: "pi", capabilities: { scripted: false } }), run: runtimeRun },
+    dataDir,
+    runtime: {
+      describe: () =>
+        runtimeOverride?.describe() ?? { id: "pi", capabilities: { scripted: false } },
+      run: runtimeRun,
+    },
     connector: {
       discoverTools: async () =>
         builtin
@@ -438,6 +479,7 @@ function fixture({
       outsideSteering = value;
     },
     offeredTools: () => offeredTools,
+    instructions: () => instructions,
     cancelAtInstructionCommit() {
       transactionalPrisma.$queryRaw.mockImplementation(async (...values: unknown[]) => {
         if (String(values[0]).includes("FROM threads")) run.status = "cancelled";
@@ -449,6 +491,7 @@ function fixture({
     commit,
     sharedMemoryState,
     pauseRunForInput,
+    finalizeRun,
     enqueue,
     async deliverInbound(promptText: string, busyTrigger?: string) {
       const pending: Array<Record<string, unknown>> = [];
@@ -1821,4 +1864,151 @@ describe("Auto Review of new sites", () => {
       });
     });
   });
+});
+
+describe("omp fleet host tools through the executor", () => {
+  const roots: string[] = [];
+  const peer = fileURLToPath(new URL("./test-support/omp-rpc-process.mjs", import.meta.url));
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    createFleetGroupMock.mockReset();
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+
+  async function omp(scenario: string, botRuntime?: AgentRuntimeChoice | null, trigger = "user") {
+    const root = await mkdtemp(join(tmpdir(), "rakazo-omp-fleet-"));
+    roots.push(root);
+    const local = new LocalOmpTransport({
+      executable: process.execPath,
+      prefixArgs: [peer, scenario],
+    });
+    const processes: OmpProcess[] = [];
+    const sent: Array<Record<string, unknown>> = [];
+    const runtimeOverride = new OmpRpcRuntime({
+      workspaceRoot: join(root, "omp-workspaces"),
+      transport: {
+        async start(spec) {
+          const child = await local.start(spec);
+          processes.push(child);
+          const write = child.writeStdin;
+          child.writeStdin = (data) => {
+            sent.push(JSON.parse(data));
+            return write(data);
+          };
+          return child;
+        },
+      },
+    });
+    const f = fixture({
+      builtin: true,
+      fleetManagement: true,
+      trigger,
+      fleetBots: [
+        { id: "bot-a", name: "Alpha" },
+        { id: "bot-b", name: "Beta" },
+      ],
+      runtimeOverride,
+      botRuntime,
+      dataDir: root,
+    });
+    return { ...f, processes, sent };
+  }
+
+  it("registers no host tools for an intro run", async () => {
+    const f = await omp("text", null, "created");
+    await f.run();
+    expect(f.offeredTools()).toEqual([]);
+    expect(f.sent.find((frame) => frame.type === "set_host_tools")).toMatchObject({ tools: [] });
+  });
+
+  it("round-trips list_fleet without approval", async () => {
+    const f = await omp("fleet-list");
+    await f.run();
+    expect(f.results).toEqual([{ bots: [], groups: [], sections: [], truncated: false }]);
+    expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    expect(f.sent.find((frame) => frame.type === "host_tool_result")).toMatchObject({
+      id: "host-1",
+      result: { content: [{ type: "text", text: JSON.stringify(f.results[0]) }] },
+    });
+    expect(f.instructions()).toContain(
+      "create_group, update_group, set_child_instructions, set_child_bot_model and create_child_routine need the owner's approval",
+    );
+    expect(f.instructions()).toContain("list_fleet before changing anything");
+  });
+
+  it("closes on mandatory approval, then replays canonical args once in new processes", async () => {
+    const f = await omp("fleet-approval");
+    await f.run();
+    expect(f.processes).toHaveLength(1);
+    expect(f.finalizeRun).not.toHaveBeenCalled();
+    await expect(f.processes[0]!.exited).resolves.toBeUndefined();
+    expect(f.sent.some((frame) => frame.type === "abort")).toBe(true);
+    expect(f.sent.some((frame) => frame.type === "host_tool_result")).toBe(false);
+    expect(f.pauseRunForInput).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        runId: "run-1",
+        blocks: [
+          expect.objectContaining({
+            kind: "ask",
+            text: "Create group “Crew”?",
+            detail: "Members: Alpha, Beta",
+            actions: [
+              { id: "allow", label: "Allow once" },
+              { id: "deny", label: "Deny" },
+            ],
+          }),
+        ],
+      }),
+    );
+    const canonical = f.effects[0]!.request;
+    expect(canonical).toMatchObject({ botIds: ["bot-a", "bot-b"] });
+    expect(createFleetGroupMock).not.toHaveBeenCalled();
+    f.effects[0]!.status = "approved";
+    const created = { groupId: "group-1", threadId: "thread-group-1", name: "Crew" };
+    createFleetGroupMock.mockResolvedValue(created);
+    await f.run();
+    expect(f.processes).toHaveLength(2);
+    expect(f.sent.filter((frame) => frame.type === "prompt").at(-1)?.message).toContain(
+      "Call each listed approved request exactly once",
+    );
+    expect(createFleetGroupMock).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      expect.objectContaining({ botId: "bot-1" }),
+      canonical,
+    );
+    expect(f.effects).toHaveLength(1);
+    expect(f.effects[0]).toMatchObject({ status: "completed", result: created });
+    // A further process with the same logical call recovers the saved result too.
+    await f.run();
+    expect(createFleetGroupMock).toHaveBeenCalledTimes(1);
+    expect(f.pauseRunForInput).toHaveBeenCalledTimes(1);
+    expect(f.results).toHaveLength(3);
+    expect(f.results.slice(1)).toEqual([created, created]);
+  });
+
+  it.each(["omp", "pi", null] as const)(
+    "inherits the parent's Bot.runtime %s when omp spawns a bot",
+    async (botRuntime) => {
+      const createBot = vi.fn(async () => ({
+        id: "child-1",
+        name: "Scout",
+        title: "",
+        threadId: "thread-child-1",
+      }));
+      vi.spyOn(database, "createRepos").mockReturnValue({ createBot } as unknown as ReturnType<
+        typeof database.createRepos
+      >);
+      const f = await omp("fleet-spawn", botRuntime);
+      await f.run();
+      expect(createBot).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ spaceId: "space-1", userId: "user-1" }),
+        expect.objectContaining({
+          parentBotId: "bot-1",
+          runtime: botRuntime,
+          name: "Scout",
+        }),
+      );
+      expect(f.results[0]).toMatchObject({ ok: true, botId: "child-1" });
+    },
+  );
 });

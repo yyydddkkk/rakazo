@@ -7,21 +7,20 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
-import type { Actor, Bot, ComputerMode } from "@rakazo/contracts";
+import type { Actor, AgentRuntimeChoice, Bot, ComputerMode } from "@rakazo/contracts";
 import {
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
   GROUP_MEMBER_MIN,
 } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import type { Prisma, PrismaClient } from "@rakazo/db";
 import {
   cancelRunsInTransaction,
   computerScopeKey,
   createRepos,
   createThreadMessageInTransaction,
   expireComputerExecutionLeases,
-  type Prisma,
-  type PrismaClient,
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -58,6 +57,7 @@ export async function spawnBot(
       name: string;
       spaceId: string;
       userId: string;
+      runtime?: AgentRuntimeChoice | null;
     };
     runId: string;
     spawnKey: string;
@@ -88,6 +88,7 @@ export async function spawnBot(
       instructions: (input.instructions ?? "").trim().slice(0, BOT_INSTRUCTIONS_MAX_LENGTH),
       notifyOnFinish: true,
       parentBotId: input.spawnedBy.id,
+      runtime: input.spawnedBy.runtime,
       spawnKey: input.spawnKey,
       computerMode: input.computerMode,
       initialMessage: {

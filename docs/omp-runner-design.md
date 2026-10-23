@@ -1,16 +1,43 @@
 # Oh My Pi 可选执行器设计与原型加固
 
-状态：第一阶段与 2a 已完成；本轮继续 **2b 加固**，完成后停止，不进入第三阶段。AGENTS.md 和 VISION.md 保持不变。原有调研章节保留设计依据，当前实现边界以本节和下方 2b 说明为准。
+状态：第一阶段、2a 与 2b 已完成；当前扩展为 **fleet 宿主工具接入**，不进入原生持久 session 的第三阶段。原有调研章节保留设计依据，当前实现边界以本节、fleet 接入说明和下方 2b 说明为准。
 
 ## 当前实现范围与后续边界
 
 - 本机每 run 启动 omp、每 bot 独立目录、每轮重放文本历史；API/worker 共用 runtime selector，Pi 仍是部署默认。`Bot.runtime` 和 `Run.runtime` 仅新增可空列；设置中以 Default / Pi / Oh My Pi 切换。
 - 支持 v2 JSONL 分片协商，并兼容未声明 v2 的 v1 进程；支持文本、turn、工具观察、宿主往返、abort 和基本 usage；`prompt_result` 后继续等显式的 `session_settled`（包括前者已标记 sessionSettled:true 的 agent 调用），不是 `agent_end` 就完成。后台子 agent 事件通过现有 Web 子任务卡片呈现，真实 omp 的事件形状仍需手动核验。
-- 宿主注册只包括 `message_user`、`ask_user`、`remember`、`save_shared_memory`、`search_history`、`read_history`、`schedule_create/list/cancel`、`skill_read`、`attach_file` 及本 run 已授权的应用连接工具。fleet 和其他 Rakazo 工具不注册，fleet 是 2a 后的第一个扩展项。
-- 2b 新增分片校验、用量 outbox/持久去重、EOF → TERM → KILL 限时清理及竞态覆盖，详见下节。此轮只加固执行器，不扩大宿主工具清单；fleet 仍是下一项能力扩展。
+- 宿主注册只包括 `message_user`、`ask_user`、`remember`、`save_shared_memory`、`search_history`、`read_history`、`schedule_create/list/cancel`、`skill_read`、`attach_file`、下节列出的 fleet 工具及本 run 已授权的应用连接工具。其他 Rakazo 工具仍不注册。
+- 2b 新增分片校验、用量 outbox/持久去重、EOF → TERM → KILL 限时清理及竞态覆盖，详见 2b 说明。该阶段只加固执行器；本轮 fleet 接入在此基础上进行。
 - 第三阶段才处理原生持久 session、服务重启后的接续；容器传输与插件/工作流全套验证也未包含在 2a。
 - 普通消息/continuation 和 intro 入队时记录 runtime；部分内部直接创建 run 的路径仍可能留下 null，executor 在首次取得租约时填入有效 runtime。此类待领取 run 在领取前可能受 bot 或部署默认变更影响，尚未做到所有入口在入队瞬间固定。
 - 当前轮授权附件会复制到本机 omp 工作目录；之前轮次的附件不会从文本历史自动重新物化，不能假设换执行器后旧附件路径仍存在。当前验收以文本为主；图像、OAuth 和特殊网关能力不在本轮真实兼容性承诺中。
+
+## Fleet 宿主工具：审批、暂停与重放
+
+### 调研结论与最小方案
+
+Pi 和 omp 共用 executor 的 `executeTool`，审批无需另一套协议。`prepareFleetRequest` 在首次调用时将名字解析为固定 bot/group ID、版本、模型或日程，生成 canonical request 和卡片摘要；`action-approval.ts` 强制审批的五个 fleet 工具不能由 Always allow 或自动审查放行。executor 以 `approvalEffectKey(runId, tool, canonicalArgs)` 保存 effect，调用 `pauseRunForInput` 持久化审批卡片及暂停状态，再返回终止型暂停结果。
+
+批准走 `packages/db/src/events.ts` 的 `answerRunInput` / `commitAnswerRunInput`：effect 变为 approved，**同一持久 run** 重新排队，API 入队 continuation；不是创建一个没有旧 effect 的新 run ID。新 attempt 会启动新的 omp 进程，executor 读取 approved effects，以 `buildApprovalContinuation` 把待重放请求放入 prompt。模型调用匹配工具时，`nextApprovedTool` / `approvedEffectReplays` 按 FIFO 消费，用已存 canonical request 覆盖模型重建的参数，跳过重新解析；依旧检查 live fleet 开关、owner 来源及目标权限。然后复用原 key 和 approved effect，原子 claim 为 executing，成功后保存 completed 结果，不再弹卡。
+
+omp 的宿主桥已经识别 `isToolPauseResult`：停止接收后续宿主调用，abort 并关闭进程，不把 paused 当成功结果传回模型，也不产生 done。审批卡片由 executor 发布，runtime 不重复发布。下次执行不依赖旧 omp transcript 或 toolCallId，因此每 run 进程与文本历史重放可以原样复用这条链路。本轮只扩展工具白名单、子 bot 的 runtime 传递及回归测试，不新增审批状态或迁移。
+
+去重分两层：同一进程的相同 RPC 请求 ID 复用宿主结果；跨 attempt 的第一次同一逻辑调用复用持久 effect，completed 返回已存结果，executing/uncertain 不盲目重做。新 attempt 的 toolCallId 可以改变。一次 attempt 内模型再次发出新的请求 ID、相同参数的调用仍是新意图（occurrence 增加），需要新的审批；不把任意相同参数永久视为重复。原生工具和未知外部副作用仍不承诺 exactly-once，原进程也不会恢复。
+
+### 工具、提示词与子 bot
+
+新增宿主白名单：`list_fleet`、`create_group`、`update_group`、`organize_bot`、`set_child_instructions`、`set_child_bot_model`、`create_child_routine`、`spawn_bot`、`update_bot`、`archive_bot`、`message_bot`、`handoff_to_bot`。所有定义继续经 `parametersFor` 转为 provider-safe object schema，调用仍交给 executor。
+
+- 前七个工具按共享 selector 要求 `bot.fleetManagement` 且 owner 发起（user、call_end 或用户发起的 follow_up）；禁用工具不注册。写操作保留执行时 live 开关和外部 steering 检查。
+- `spawn_bot`、`update_bot`、`archive_bot` 沿用既有选择条件，不新增 fleet 开关限制；`update_bot` 修改子 bot 时仍需 fleet 开关、owner 来源及子 bot 归属校验。
+- `message_bot` 仅私聊，`handoff_to_bot` 仅群聊；后台 tickets run 均不提供。intro（created）run 不注册任何宿主工具，所有工具仍受 disabledBuiltinTools 约束。
+- 提示词复用 `fleetClause(offeredFleetTools(...))`，只引用本轮实际提供的工具；禁用 `list_fleet` 时不再引用它。
+- omp 模式的 `spawn_bot` 在内部将父 bot 的 `Bot.runtime` 原样传给创建接口：显式 Pi/omp 就继承该值，null/未设置保持 null，由部署默认决定。继承的是 bot 设置，不是当前 run 的快照。Pi 创建路径保持既有行为，不新增模型可填的工具参数。
+- 固定上游版本的普通 `task` 子 agent 不继承根会话 RPC host tools：[RPC 安装](https://github.com/can1357/oh-my-pi/blob/0b5c27ab24719c86a5986b95ee55f4e75bc1aaa0/packages/coding-agent/src/modes/rpc/rpc-mode.ts#L2061-L2065) 只刷新当前 session，[task](https://github.com/can1357/oh-my-pi/blob/0b5c27ab24719c86a5986b95ee55f4e75bc1aaa0/packages/coding-agent/src/task/index.ts#L1743-L1761) 只把显式 eval custom tools 下传。产品 fleet 调用由根 agent 完成。RPC host frame 无 agent 身份；未来若向子 agent 开放宿主桥，须先补共享 helper 身份校验，不能沿用根身份。
+
+### 验证范围
+
+用 `test-support/omp-rpc-process.mjs` 离线进程覆盖 fleet 往返、provider-safe schemas、强制审批的产品卡片与进程清理、批准后新进程的 canonical 重放及重复帧去重、completed effect 跨 attempt 去重，以及子 bot runtime 继承。复用 Pi fleet 回归测试；不需要真实 omp、模型、UI 改动或新 migration。
 
 ## 2b 加固实现与边界
 

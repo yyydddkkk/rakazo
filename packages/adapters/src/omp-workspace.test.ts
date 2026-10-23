@@ -11,7 +11,7 @@ afterEach(async () => {
   if (root) await rm(root, { recursive: true, force: true });
 });
 
-it("offers only the stage 2a product tools from Rakazo's builtin catalog", () => {
+it("offers only the supported product and fleet tools from Rakazo's builtin catalog", () => {
   expect(
     selectOmpHostTools(builtinAgentTools)
       .map((tool) => tool.name)
@@ -29,6 +29,18 @@ it("offers only the stage 2a product tools from Rakazo's builtin catalog", () =>
       "schedule_cancel",
       "skill_read",
       "attach_file",
+      "list_fleet",
+      "create_group",
+      "update_group",
+      "organize_bot",
+      "set_child_instructions",
+      "set_child_bot_model",
+      "create_child_routine",
+      "spawn_bot",
+      "update_bot",
+      "archive_bot",
+      "message_bot",
+      "handoff_to_bot",
     ].sort(),
   );
 });

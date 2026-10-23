@@ -9,7 +9,7 @@ import type {
   AgentRuntimeEvent,
   ConnectorTool,
 } from "@rakazo/adapter-kit";
-import { isBuiltinToolName } from "@rakazo/contracts";
+import { FLEET_TOOL_NAMES, isBuiltinToolName } from "@rakazo/contracts";
 import { createStreamingRedactor, redactSecrets } from "@rakazo/core";
 import { stringify } from "yaml";
 import { isToolPauseResult } from "./approval-effect.js";
@@ -33,6 +33,12 @@ export const OMP_HOST_TOOL_NAMES: ReadonlySet<string> = new Set([
   "schedule_cancel",
   "skill_read",
   "attach_file",
+  ...FLEET_TOOL_NAMES,
+  "spawn_bot",
+  "update_bot",
+  "archive_bot",
+  "message_bot",
+  "handoff_to_bot",
 ]);
 
 /** Input is already scoped/authorized by the executor; never discover additional tools here. */

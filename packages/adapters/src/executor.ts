@@ -21,6 +21,7 @@ import {
 } from "@rakazo/adapter-kit";
 import type { ComputerCommand, MessageBlock, RunStatus } from "@rakazo/contracts";
 import {
+  AgentRuntimeSchema,
   ATTACHMENT_MAX_BYTES,
   BotSecretName,
   botSecretSubmissionSchema,
@@ -4322,6 +4323,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 name: bot.name,
                 spaceId: bot.spaceId,
                 userId: run.userId,
+                runtime: omp ? AgentRuntimeSchema.nullable().parse(bot.runtime ?? null) : undefined,
               },
               runId,
               spawnKey: effectKey,

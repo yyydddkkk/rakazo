@@ -31,12 +31,33 @@ const assistant = (id, text, tokens = 3) => {
   if (scenario === "duplicate") write(end);
 };
 let promptId;
+let fleetCall;
+let fleetResults = 0;
 write({ type: "ready", protocolVersion: 1, maxFrameBytes: 1048576 });
 for await (const line of createInterface({ input: process.stdin })) {
   const command = JSON.parse(line);
   if (command.type === "host_tool_result") {
     if (command.id !== "host-1") throw new Error("Wrong host correlation id");
     if (command.isError) throw new Error("Host call failed");
+    if (scenario.startsWith("fleet-")) {
+      const result = JSON.parse(command.result.content[0].text);
+      if (result.error) throw new Error("Fleet host call failed");
+      if (++fleetResults === 1) {
+        // Repeat a completed RPC request, not a new model intent.
+        write(fleetCall);
+      } else {
+        write({
+          type: "tool_execution_end",
+          toolCallId: fleetCall.toolCallId,
+          toolName: fleetCall.toolName,
+          result: command.result,
+        });
+        assistant("answer", "Done.");
+        write({ type: "prompt_result", id: promptId, status: "completed", sessionSettled: true });
+        write({ type: "session_settled" });
+      }
+      continue;
+    }
     const content = command.result.content[0].text;
     if (content !== '{"saved":true}') throw new Error("Wrong host result");
     write({
@@ -61,7 +82,26 @@ for await (const line of createInterface({ input: process.stdin })) {
       }
     }
     write({ type: "response", id: command.id, command: "prompt", success: true });
-    if (scenario === "host" || scenario === "ask") {
+    if (scenario.startsWith("fleet-")) {
+      const replay = command.message.includes("Call each listed approved request exactly once");
+      const toolName = {
+        "fleet-list": "list_fleet",
+        "fleet-approval": "create_group",
+        "fleet-spawn": "spawn_bot",
+      }[scenario];
+      const args =
+        scenario === "fleet-list"
+          ? {}
+          : scenario === "fleet-spawn"
+            ? { name: "Scout" }
+            : replay
+              ? { name: "Model reconstruction", bot_names: ["Unknown"] }
+              : { name: "Crew", bot_names: ["Alpha", "Beta"] };
+      const toolCallId = replay ? "tool-replay" : "tool-1";
+      write({ type: "tool_execution_start", toolCallId, toolName, args });
+      fleetCall = { type: "host_tool_call", id: "host-1", toolCallId, toolName, arguments: args };
+      write(fleetCall);
+    } else if (scenario === "host" || scenario === "ask") {
       const toolName = scenario === "ask" ? "ask_user" : "remember";
       const args =
         scenario === "ask"
@@ -137,7 +177,7 @@ for await (const line of createInterface({ input: process.stdin })) {
     }
   } else {
     if (command.type === "set_host_tools") {
-      if (command.tools.some((tool) => ["shell", "spawn_bot"].includes(tool.name)))
+      if (command.tools.some((tool) => tool.name === "shell"))
         throw new Error("Unwanted host tool");
       // Providers reject tool parameters whose root is not an object (e.g. a bare oneOf).
       if (command.tools.some((tool) => tool.parameters?.type !== "object"))

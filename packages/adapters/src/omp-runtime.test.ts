@@ -3,8 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentRunRequest, AgentRuntimeEvent } from "@rakazo/adapter-kit";
+import { FLEET_TOOL_NAMES } from "@rakazo/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { approvalPausedToolResult } from "./approval-effect.js";
 import { builtinAgentTools } from "./builtin-tools.js";
+import { selectBuiltinToolsForRun } from "./executor/tool-selection.js";
 import { OmpRpcRuntime, selectOmpHostTools } from "./omp-runtime.js";
 import type { OmpProcess, OmpTransport } from "./omp-transport.js";
 import { LocalOmpTransport } from "./omp-transport.js";
@@ -200,6 +203,19 @@ describe("OmpRpcRuntime v1", () => {
     expect(events.some((event) => event.type === "done")).toBe(false);
   });
 
+  it("closes an approval pause without a success result or done event", async () => {
+    const { runner, sent, launched } = await runtime("fleet-approval");
+    const input = request();
+    input.tools = builtinAgentTools.filter((tool) => tool.name === "create_group");
+    input.executeTool = vi.fn().mockResolvedValue(approvalPausedToolResult());
+    const events = await collect(runner, input);
+    expect(input.executeTool).toHaveBeenCalledTimes(1);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+    expect(sent.some((frame) => frame.type === "host_tool_result")).toBe(false);
+    expect(sent.some((frame) => frame.type === "abort")).toBe(true);
+    await expect(launched()!.exited).resolves.toBeUndefined();
+  });
+
   it("surfaces the provider's error detail, redacted, when a model call fails", async () => {
     const { runner } = await runtime("model-error");
     const failure = await collect(runner).catch((error: unknown) => error);
@@ -221,13 +237,25 @@ describe("OmpRpcRuntime v1", () => {
     if (!schedule) throw new Error("schedule_create is missing");
     // Its declared schema is a root oneOf, which providers reject as tool parameters.
     expect("type" in schedule.inputSchema).toBe(false);
-    input.tools = [schedule];
+    input.tools = [
+      schedule,
+      ...builtinAgentTools.filter((tool) =>
+        [
+          ...FLEET_TOOL_NAMES,
+          "spawn_bot",
+          "update_bot",
+          "archive_bot",
+          "message_bot",
+          "handoff_to_bot",
+        ].includes(tool.name),
+      ),
+    ];
     await collect(runner, input);
     const registered = sent.find((frame) => frame.type === "set_host_tools") as {
       tools: Array<{ name: string; parameters: { type?: string } }>;
     };
     expect(registered.tools.map((tool) => [tool.name, tool.parameters.type])).toEqual([
-      ["schedule_create", "object"],
+      ...input.tools.map((tool) => [tool.name, "object"]),
     ]);
   });
 
@@ -263,14 +291,73 @@ describe("OmpRpcRuntime v1", () => {
     },
   );
 
-  it("keeps only the prototype host allowlist and already-authorized application tools", () => {
+  it("keeps only the host allowlist and already-authorized application tools", () => {
     const tools = ["shell", "spawn_bot", "message_user", "remember", "mcp__fixture__read"].map(
       (name) => ({ name, description: name, inputSchema: {} }),
     );
     expect(selectOmpHostTools(tools).map((tool) => tool.name)).toEqual([
+      "spawn_bot",
       "message_user",
       "remember",
       "mcp__fixture__read",
     ]);
   });
+});
+
+describe("omp fleet selection", () => {
+  it.each([
+    { trigger: "user", fleetManagement: true, groupId: null, owner: true },
+    { trigger: "user", fleetManagement: false, groupId: null, owner: false },
+    { trigger: "user", fleetManagement: true, groupId: "group-1", owner: true },
+    { trigger: "call_end", fleetManagement: true, groupId: null, owner: true },
+    {
+      trigger: "follow_up",
+      fleetManagement: true,
+      followUpFromUser: true,
+      groupId: null,
+      owner: true,
+    },
+    {
+      trigger: "follow_up",
+      fleetManagement: true,
+      followUpFromUser: false,
+      groupId: null,
+      owner: false,
+    },
+    ...["routine", "webhook", "bot_message", "spawn", "tickets"].map((trigger) => ({
+      trigger,
+      fleetManagement: true,
+      groupId: null,
+      owner: false,
+    })),
+  ])(
+    "preserves selector conditions for $trigger, fleet=$fleetManagement, group=$groupId",
+    ({ owner, ...options }) => {
+      const selected = selectBuiltinToolsForRun({
+        ...options,
+        graphicalToolsAllowed: false,
+        messagingChannelRun: false,
+      });
+      const names = selectOmpHostTools(selected).map((tool) => tool.name);
+      expect(names.filter((name) => FLEET_TOOL_NAMES.some((fleet) => fleet === name))).toEqual(
+        owner ? [...FLEET_TOOL_NAMES] : [],
+      );
+      expect(names).toEqual(expect.arrayContaining(["spawn_bot", "update_bot", "archive_bot"]));
+      expect(names.includes("message_bot")).toBe(
+        options.groupId === null && options.trigger !== "tickets",
+      );
+      expect(names.includes("handoff_to_bot")).toBe(
+        options.groupId !== null && options.trigger !== "tickets",
+      );
+      const disabled = selectOmpHostTools(
+        selectBuiltinToolsForRun({
+          ...options,
+          graphicalToolsAllowed: false,
+          messagingChannelRun: false,
+          disabledBuiltinTools: names,
+        }),
+      );
+      expect(disabled).toEqual([]);
+    },
+  );
 });

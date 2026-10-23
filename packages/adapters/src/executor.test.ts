@@ -1393,6 +1393,24 @@ describe("userTurnInstructions", () => {
       "update_group, set_child_bot_model and create_child_routine need the owner's approval",
     );
     expect(narrowed).not.toContain("set_child_instructions");
+    const withoutList = userTurnInstructions({
+      ...base,
+      groupContext: undefined,
+      messagingContext: undefined,
+      redactedMemoryContext: undefined,
+      redactedScratchpadContext: undefined,
+      hasHistoricalContext: false,
+      agentEnvironmentInstruction: undefined,
+      botDirectory: undefined,
+      pluginLine: undefined,
+      agentSkillsLine: undefined,
+      taughtSkillsLine: undefined,
+      offeredFleetTools: ["set_child_instructions", "create_group"],
+    }).join("\n");
+    expect(withoutList).toContain(
+      "create_group and set_child_instructions need the owner's approval",
+    );
+    expect(withoutList).not.toContain("list_fleet");
     expect(clauseFor("user", false)).toBeUndefined();
     expect(clauseFor("bot_message", true)).toBeUndefined();
     expect(clauseFor("follow_up", true, false)).toBeUndefined();
