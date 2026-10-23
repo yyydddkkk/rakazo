@@ -1,13 +1,6 @@
-import { useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import type { AvatarStyle } from "@rakazo/contracts";
-import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTitle,
-  OptionSelect,
-} from "@rakazo/ui-web";
+import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import {
   Brain,
   ChevronLeft,
@@ -24,7 +17,6 @@ import type { ComponentType } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
-import { SpaceRpcProvider } from "../lib/space-rpc";
 import {
   ComputerSettingsPanel,
   GeneralSettingsPanels,
@@ -43,14 +35,6 @@ export type SettingsSection =
   | "usage"
   | "computer";
 
-/** Sections whose settings belong to a space; only these show the space picker. */
-const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set([
-  "models",
-  "memory",
-  "confirmations",
-  "integrations",
-]);
-
 type NavItem = {
   id: SettingsSection;
   label: string;
@@ -58,9 +42,7 @@ type NavItem = {
 };
 
 export function SettingsOverlay({
-  space,
-  spaces = [],
-  onSpaceChange,
+  spaceName,
   email,
   name,
   usage,
@@ -79,10 +61,8 @@ export function SettingsOverlay({
   onOpenMcp,
   onClose,
 }: {
-  /** The space the per-space sections act on; it need not be the selected space. */
-  space?: { id: string; name: string } | null;
-  spaces?: { id: string; name: string }[];
-  onSpaceChange?: (spaceId: string) => void;
+  /** The shown space, which the space sections act on. */
+  spaceName?: string;
   email?: string | null;
   name: string;
   usage?: {
@@ -102,7 +82,7 @@ export function SettingsOverlay({
   onSandboxProviderChange?: (sandboxProvider: string) => void;
   messagingEnabled?: boolean;
   onOpenMessaging?: () => void;
-  /** A bot of the settings' space, told when an app connects. */
+  /** A bot of the shown space, told when an app connects. */
   activeBotId?: string;
   onOpenMcp?: () => void;
   onClose: () => void;
@@ -117,8 +97,6 @@ export function SettingsOverlay({
   const recoveryHoldTimer = useRef<number | undefined>(undefined);
   const showComputer =
     keepComputerRecovery || (isDeploymentOwner && computersAreUnavailable(sandboxProvider));
-  const spaceScoped = SPACE_SECTIONS.has(section);
-  const spaceId = spaceScoped ? (space?.id ?? null) : null;
   const releaseComputerRecovery = useCallback(() => {
     window.clearTimeout(recoveryHoldTimer.current);
     recoveryHoldTimer.current = undefined;
@@ -153,15 +131,29 @@ export function SettingsOverlay({
     }
   }, [section, onUsageOpen]);
 
-  const navItems: NavItem[] = [
-    { id: "general", label: t`General`, icon: Settings },
-    { id: "models", label: t`Models`, icon: Cpu },
-    { id: "memory", label: t`Memory`, icon: Brain },
-    { id: "confirmations", label: t`Confirmations`, icon: ShieldCheck },
-    { id: "integrations", label: t`Integrations`, icon: Plug },
-    { id: "usage", label: t`Usage`, icon: Gauge },
-    ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
+  // The account sections apply to every space; the space sections only to the shown one.
+  const navGroups: { id: string; title: string; items: NavItem[] }[] = [
+    {
+      id: "account",
+      title: t`Account`,
+      items: [
+        { id: "general", label: t`General`, icon: Settings },
+        ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
+      ],
+    },
+    {
+      id: "space",
+      title: spaceName ?? t`Space`,
+      items: [
+        { id: "models", label: t`Models`, icon: Cpu },
+        { id: "memory", label: t`Memory`, icon: Brain },
+        { id: "confirmations", label: t`Confirmations`, icon: ShieldCheck },
+        { id: "integrations", label: t`Integrations`, icon: Plug },
+        { id: "usage", label: t`Usage`, icon: Gauge },
+      ],
+    },
   ];
+  const navItems = navGroups.flatMap((group) => group.items);
 
   useEffect(() => {
     const nav = navRef.current;
@@ -249,27 +241,44 @@ export function SettingsOverlay({
               aria-label={t`Settings`}
               className="flex min-w-0 flex-1 flex-row gap-1 overflow-x-auto py-3 md:w-[200px] md:shrink-0 md:flex-none md:flex-col md:overflow-y-auto md:border-e md:border-border md:px-3 md:py-4"
             >
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = item.id === section;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    data-testid={`settings-nav-${item.id}`}
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => setSection(item.id)}
-                    className={`flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-[13.5px] transition-colors disabled:pointer-events-none disabled:opacity-50 ${
-                      active
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    }`}
+              {navGroups.map((group) => (
+                // biome-ignore lint/a11y/useSemanticElements: labels a run of nav buttons, not form fields.
+                <div
+                  key={group.id}
+                  role="group"
+                  aria-label={group.title}
+                  data-testid={`settings-nav-group-${group.id}`}
+                  className="flex shrink-0 flex-row gap-1 md:flex-col"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="hidden truncate px-2.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase md:block md:pt-3 md:pb-1"
                   >
-                    <Icon className="size-4 shrink-0" strokeWidth={1.75} />
-                    <span className="whitespace-nowrap">{item.label}</span>
-                  </button>
-                );
-              })}
+                    {group.title}
+                  </span>
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = item.id === section;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        data-testid={`settings-nav-${item.id}`}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => setSection(item.id)}
+                        className={`flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-[13.5px] transition-colors disabled:pointer-events-none disabled:opacity-50 ${
+                          active
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                        <span className="whitespace-nowrap">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </nav>
             <Button
               variant="ghost"
@@ -288,27 +297,9 @@ export function SettingsOverlay({
               data-testid="settings-header"
               className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-6 pb-5 pt-6 sm:px-8 sm:pt-7"
             >
-              <div className="flex min-w-0 flex-col gap-2">
-                <DialogTitle className="text-2xl font-medium text-foreground">
-                  {sectionTitle}
-                </DialogTitle>
-                {!spaceScoped ? null : space && spaces.length > 1 && onSpaceChange ? (
-                  <OptionSelect
-                    className="w-56"
-                    data-testid="settings-space"
-                    aria-label={t`Space`}
-                    options={spaces.map((option) => ({ value: option.id, label: option.name }))}
-                    value={space.id}
-                    onValueChange={(next) => {
-                      if (next !== space.id) onSpaceChange(next);
-                    }}
-                  />
-                ) : space ? (
-                  <p data-testid="settings-space" className="text-sm text-muted-foreground">
-                    {space.name}
-                  </p>
-                ) : null}
-              </div>
+              <DialogTitle className="min-w-0 text-2xl font-medium text-foreground">
+                {sectionTitle}
+              </DialogTitle>
               <DialogClose
                 aria-label={closeLabel}
                 render={<Button variant="ghost" size="icon-sm" />}
@@ -317,53 +308,64 @@ export function SettingsOverlay({
               </DialogClose>
             </div>
 
-            <SpaceRpcProvider spaceId={spaceId}>
-              <div
-                key={spaceId ?? "selected"}
-                data-testid="settings-scroll"
-                className={`min-h-0 flex-1 ${
-                  section === "models" || section === "memory"
-                    ? "flex flex-col overflow-hidden"
-                    : "rk-scroll overflow-y-auto overscroll-contain px-6 pb-6 pt-6 sm:px-8 sm:pb-8"
-                }`}
-              >
-                {section === "general" ? (
-                  <GeneralSettingsPanels
-                    email={email}
-                    name={name}
-                    avatarStyle={avatarStyle}
-                    onAvatarStyleChange={onAvatarStyleChange}
-                    timezone={timezone}
-                    onTimezoneChange={onTimezoneChange}
-                    messagingEnabled={messagingEnabled}
-                    onOpenMessaging={onOpenMessaging}
-                  />
-                ) : null}
-                {section === "confirmations" ? <ApprovalRulesSettings /> : null}
-                {section === "integrations" ? (
+            <div
+              data-testid="settings-scroll"
+              className={`min-h-0 flex-1 ${
+                section === "models" || section === "memory"
+                  ? "flex flex-col overflow-hidden"
+                  : "rk-scroll overflow-y-auto overscroll-contain px-6 pb-6 pt-6 sm:px-8 sm:pb-8"
+              }`}
+            >
+              {section === "general" ? (
+                <GeneralSettingsPanels
+                  email={email}
+                  name={name}
+                  avatarStyle={avatarStyle}
+                  onAvatarStyleChange={onAvatarStyleChange}
+                  timezone={timezone}
+                  onTimezoneChange={onTimezoneChange}
+                />
+              ) : null}
+              {section === "confirmations" ? <ApprovalRulesSettings /> : null}
+              {section === "integrations" ? (
+                <div className="space-y-5">
                   <IntegrationsPanel activeBotId={activeBotId} onOpenMcp={onOpenMcp} />
-                ) : null}
-                {section === "usage" ? (
-                  <UsageSettingsPanel usage={usage} panelRef={usageRef} />
-                ) : null}
-                {section === "computer" && showComputer ? (
-                  <ComputerSettingsPanel
-                    sandboxProvider={sandboxProvider}
-                    onSandboxProviderChange={(next) => {
-                      onSandboxProviderChange?.(next);
-                      holdComputerRecovery();
-                    }}
-                    onRecoveryDismissed={releaseComputerRecovery}
-                  />
-                ) : null}
-                {section === "models" ? (
-                  <ModelSettingsOverlay embedded onClose={requestClose} />
-                ) : null}
-                {section === "memory" ? (
-                  <MemorySettingsOverlay embedded onClose={requestClose} />
-                ) : null}
-              </div>
-            </SpaceRpcProvider>
+                  {messagingEnabled && onOpenMessaging ? (
+                    <section className="rounded-xl border border-border px-4 py-4">
+                      <h3 className="text-[15px] font-medium text-foreground">
+                        <Trans>Messaging</Trans>
+                      </h3>
+                      <Button
+                        variant="secondary"
+                        className="mt-3 rounded-full"
+                        onClick={onOpenMessaging}
+                      >
+                        <Trans>Manage messaging settings</Trans>
+                      </Button>
+                    </section>
+                  ) : null}
+                </div>
+              ) : null}
+              {section === "usage" ? (
+                <UsageSettingsPanel usage={usage} panelRef={usageRef} />
+              ) : null}
+              {section === "computer" && showComputer ? (
+                <ComputerSettingsPanel
+                  sandboxProvider={sandboxProvider}
+                  onSandboxProviderChange={(next) => {
+                    onSandboxProviderChange?.(next);
+                    holdComputerRecovery();
+                  }}
+                  onRecoveryDismissed={releaseComputerRecovery}
+                />
+              ) : null}
+              {section === "models" ? (
+                <ModelSettingsOverlay embedded onClose={requestClose} />
+              ) : null}
+              {section === "memory" ? (
+                <MemorySettingsOverlay embedded onClose={requestClose} />
+              ) : null}
+            </div>
           </div>
         </div>
       </DialogContent>

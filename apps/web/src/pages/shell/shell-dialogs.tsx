@@ -41,8 +41,8 @@ export function ShellDialogs({
   setCommandPaletteOpen,
   bots,
   onSelectBot,
-  pickerInfoTopic,
-  setPickerInfoTopic,
+  groupInfoOpen,
+  setGroupInfoOpen,
   clearTarget,
   setClearTarget,
   confirmClear,
@@ -69,8 +69,8 @@ export function ShellDialogs({
   setCommandPaletteOpen: (open: boolean) => void;
   bots: Bot[];
   onSelectBot: (id: string) => void;
-  pickerInfoTopic: "group" | "space" | null;
-  setPickerInfoTopic: (topic: "group" | "space" | null) => void;
+  groupInfoOpen: boolean;
+  setGroupInfoOpen: (open: boolean) => void;
   clearTarget: ChatTarget | null;
   setClearTarget: (target: ChatTarget | null) => void;
   confirmClear: (target: ChatTarget) => Promise<void>;
@@ -130,13 +130,10 @@ export function ShellDialogs({
           section={renameSectionTarget.section}
           onCancel={() => setRenameSectionTarget(null)}
           onConfirm={async (name) => {
-            await rpc.botSections.update(
-              {
-                sectionId: renameSectionTarget.section.id,
-                name,
-              },
-              { context: { spaceId: renameSectionTarget.spaceId } },
-            );
+            await rpc.botSections.update({
+              sectionId: renameSectionTarget.section.id,
+              name,
+            });
             setRenameSectionTarget(null);
             await refreshBots();
           }}
@@ -150,10 +147,7 @@ export function ShellDialogs({
           description={<Trans>Its bots and groups are kept and leave the section.</Trans>}
           onCancel={() => setDeleteSectionTarget(null)}
           onConfirm={async () => {
-            await rpc.botSections.remove(
-              { sectionId: deleteSectionTarget.section.id },
-              { context: { spaceId: deleteSectionTarget.spaceId } },
-            );
+            await rpc.botSections.remove({ sectionId: deleteSectionTarget.section.id });
             setDeleteSectionTarget(null);
             await refreshBots();
           }}
@@ -167,9 +161,7 @@ export function ShellDialogs({
         onSelectBot={onSelectBot}
       />
 
-      {pickerInfoTopic ? (
-        <PickerInfoDialog topic={pickerInfoTopic} onClose={() => setPickerInfoTopic(null)} />
-      ) : null}
+      {groupInfoOpen ? <PickerInfoDialog onClose={() => setGroupInfoOpen(false)} /> : null}
 
       {clearTarget ? (
         <ClearConversationDialog

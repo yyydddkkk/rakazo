@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
 vi.mock("@lingui/react/macro", () => ({
+  Trans: ({ children }: { children?: ReactNode }) => <>{children}</>,
   useLingui: () => ({
     t: (strings: TemplateStringsArray) => strings.join(""),
     i18n: { locale: "en" },
@@ -30,34 +31,6 @@ vi.mock("@rakazo/ui-web", () => ({
     "children"
   >) => <div {...props}>{children}</div>,
   DialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
-  OptionSelect: ({
-    options,
-    value,
-    onValueChange,
-    "data-testid": testId,
-  }: {
-    options: readonly { value: string; label: string }[];
-    value: string;
-    onValueChange: (value: string) => void;
-    "data-testid"?: string;
-  }) => (
-    <div>
-      <button type="button" data-testid={testId}>
-        {options.find((option) => option.value === value)?.label}
-      </button>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="option"
-          aria-selected={option.value === value}
-          onClick={() => onValueChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  ),
 }));
 
 vi.mock("./AccountSettingsOverlay", () => ({
@@ -65,7 +38,9 @@ vi.mock("./AccountSettingsOverlay", () => ({
   GeneralSettingsPanels: () => null,
   UsageSettingsPanel: () => null,
 }));
-vi.mock("../lib/rpc", () => ({ rpc: {}, rpcForSpace: () => ({}) }));
+vi.mock("../lib/rpc", () => ({ rpc: {} }));
+vi.mock("./IntegrationsPanel", () => ({ IntegrationsPanel: () => null }));
+vi.mock("../components/ApprovalRulesSettings", () => ({ ApprovalRulesSettings: () => null }));
 vi.mock("./MemorySettingsOverlay", () => ({ MemorySettingsOverlay: () => null }));
 vi.mock("./ModelSettingsOverlay", () => ({ ModelSettingsOverlay: () => null }));
 vi.mock("../components/ComputersUnavailableHint", () => ({
@@ -73,9 +48,6 @@ vi.mock("../components/ComputersUnavailableHint", () => ({
 }));
 
 import { SettingsOverlay } from "./SettingsOverlay";
-
-const acme = { id: "space-a", name: "Acme" };
-const spaces = [acme, { id: "space-b", name: "Beta" }];
 
 async function render(props: Partial<React.ComponentProps<typeof SettingsOverlay>>) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -110,56 +82,58 @@ async function render(props: Partial<React.ComponentProps<typeof SettingsOverlay
   };
 }
 
-it("names the space a space-scoped section acts on and switches it in place", async () => {
-  const onSpaceChange = vi.fn();
-  const { container, cleanup } = await render({
-    space: acme,
-    spaces,
-    onSpaceChange,
-    initialSection: "models",
-  });
+function navItems(container: HTMLElement, group: string) {
+  return [...container.querySelectorAll(`[data-testid="settings-nav-group-${group}"] button`)].map(
+    (button) => button.getAttribute("data-testid"),
+  );
+}
+
+it("splits settings into account sections and the shown space's sections", async () => {
+  const { container, cleanup } = await render({ spaceName: "Acme" });
   try {
-    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="settings-space"]');
-    if (!trigger) throw new Error("Missing space switcher");
-    expect(trigger.textContent).toBe("Acme");
-
-    const options = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')];
-    expect(options.map((option) => option.textContent)).toEqual(["Acme", "Beta"]);
-
-    await act(async () => options[1]?.click());
-
-    expect(onSpaceChange).toHaveBeenCalledWith("space-b");
-  } finally {
-    await cleanup();
-  }
-});
-
-it("shows the space name without a switcher when there is only one space", async () => {
-  const { container, cleanup } = await render({
-    space: acme,
-    spaces: [acme],
-    onSpaceChange: vi.fn(),
-    initialSection: "models",
-  });
-  try {
-    const label = container.querySelector('[data-testid="settings-space"]');
-    expect(label?.tagName).toBe("P");
-    expect(label?.textContent).toBe("Acme");
-  } finally {
-    await cleanup();
-  }
-});
-
-it("shows no space picker on sections that are not per space", async () => {
-  const { container, cleanup } = await render({
-    space: acme,
-    spaces,
-    onSpaceChange: vi.fn(),
-    initialSection: "general",
-  });
-  try {
+    const account = container.querySelector('[data-testid="settings-nav-group-account"]');
+    const space = container.querySelector('[data-testid="settings-nav-group-space"]');
+    expect(account?.getAttribute("aria-label")).toBe("Account");
+    expect(space?.getAttribute("aria-label")).toBe("Acme");
+    expect(navItems(container, "account")).toEqual(["settings-nav-general"]);
+    expect(navItems(container, "space")).toEqual([
+      "settings-nav-models",
+      "settings-nav-memory",
+      "settings-nav-confirmations",
+      "settings-nav-integrations",
+      "settings-nav-usage",
+    ]);
     expect(container.querySelector('[data-testid="settings-space"]')).toBeNull();
   } finally {
     await cleanup();
+  }
+});
+
+it("labels the space group generically until the space name is known", async () => {
+  const { container, cleanup } = await render({});
+  try {
+    const space = container.querySelector('[data-testid="settings-nav-group-space"]');
+    expect(space?.getAttribute("aria-label")).toBe("Space");
+  } finally {
+    await cleanup();
+  }
+});
+
+it("offers messaging with the space's integrations", async () => {
+  const onOpenMessaging = vi.fn();
+  const integrations = await render({
+    initialSection: "integrations",
+    messagingEnabled: true,
+    onOpenMessaging,
+  });
+  try {
+    const open = [...integrations.container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Manage messaging settings",
+    );
+    if (!open) throw new Error("Missing messaging button");
+    await act(async () => open.click());
+    expect(onOpenMessaging).toHaveBeenCalledOnce();
+  } finally {
+    await integrations.cleanup();
   }
 });

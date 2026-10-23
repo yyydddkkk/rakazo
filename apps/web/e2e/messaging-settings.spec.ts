@@ -154,6 +154,7 @@ test("messaging settings show linked chat apps, channels, connections, and team 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
   await page.getByRole("button", { name: "Settings" }).click();
   const settings = page.getByTestId("user-settings");
+  await settings.getByTestId("settings-nav-integrations").click();
   await settings
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "Messaging", exact: true }) })
@@ -182,6 +183,7 @@ test("messaging settings show linked chat apps, channels, connections, and team 
   await page.getByRole("button", { name: "Settings" }).click();
   await settings.getByTestId("ui-locale-select").click();
   await page.getByRole("option", { name: "简体中文", exact: true }).click();
+  await settings.getByTestId("settings-nav-integrations").click();
   await expect(settings.getByRole("heading", { name: "消息", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "管理消息设置" }).click();
 

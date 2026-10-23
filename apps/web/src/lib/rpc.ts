@@ -130,15 +130,3 @@ export function createSpaceRpc(spaceId: string | null): typeof rpc {
       }),
   });
 }
-
-const spaceClients = new Map<string, RpcClient>();
-
-/** Reuse a client for settings without changing the selected space. */
-export function rpcForSpace(spaceId: string): RpcClient {
-  let client = spaceClients.get(spaceId);
-  if (!client) {
-    client = createSpaceRpc(spaceId);
-    spaceClients.set(spaceId, client);
-  }
-  return client;
-}

@@ -1,11 +1,10 @@
 import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot, BotSection, Group, Me, Space, ThreadSnapshot } from "@rakazo/contracts";
+import type { Bot, BotSection, Group, Space, ThreadSnapshot } from "@rakazo/contracts";
 import { nestRosterByParent } from "@rakazo/core";
 import {
   BotAvatar,
-  Button,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -15,8 +14,8 @@ import {
   ContextMenuTrigger,
   GroupAvatar,
 } from "@rakazo/ui-web";
-import { ChevronDown, CircleAlert, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
+import { ChevronDown, CircleAlert, Pencil, Trash2 } from "lucide-react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { Suspense } from "react";
 import { IconTooltip } from "../../components/IconTooltip";
 import type { BotsSidebarDensity } from "../../lib/bots-sidebar-density-pref";
@@ -26,22 +25,18 @@ import {
   rosterWorkStatusLabel,
 } from "../../lib/roster-status";
 import type { RosterDropAction, RosterDropTarget } from "./roster-drop";
-import type { sidebarGroupsForSpaces } from "./space-sidebar";
+import type { sidebarGroupsForSpace } from "./space-sidebar";
 
 export function SidebarRoster({
   sidebarGroups,
   collapsedSidebarSections,
   collapsedRosterParents,
-  bootstrapMe,
   botSections,
-  spaces,
   rosterDropKey,
   setRosterDropKey,
   rosterDropAction,
   applyRosterDrop,
-  openSpaceChat,
-  spaceMenuAnchor,
-  setSpaceMenu,
+  openChat,
   setRenameSectionTarget,
   setDeleteSectionTarget,
   toggleSidebarSection,
@@ -62,22 +57,18 @@ export function SidebarRoster({
   mini = false,
 }: {
   sidebarGroups: ReturnType<
-    typeof sidebarGroupsForSpaces<Space["bots"][number], Space["groups"][number]>
+    typeof sidebarGroupsForSpace<Space["bots"][number], Space["groups"][number]>
   >;
   collapsedSidebarSections: ReadonlySet<string>;
   collapsedRosterParents: ReadonlySet<string>;
-  bootstrapMe: Pick<Me, "spaceId"> | null | undefined;
   botSections: BotSection[];
-  spaces: Space[];
   rosterDropKey: string | null;
   setRosterDropKey: (key: string | null) => void;
   rosterDropAction: (target: RosterDropTarget, sameParent: boolean) => RosterDropAction | null;
   applyRosterDrop: (target: RosterDropTarget, sameParent: boolean, botIds: string[]) => void;
-  openSpaceChat: (spaceId: string, path: string) => void;
-  spaceMenuAnchor: RefObject<HTMLElement | null>;
-  setSpaceMenu: (menu: { id: string; position: { x: number; y: number } }) => void;
-  setRenameSectionTarget: (target: { section: BotSection; spaceId: string }) => void;
-  setDeleteSectionTarget: (target: { section: BotSection; spaceId: string }) => void;
+  openChat: (path: string) => void;
+  setRenameSectionTarget: (target: { section: BotSection }) => void;
+  setDeleteSectionTarget: (target: { section: BotSection }) => void;
   toggleSidebarSection: (key: string) => void;
   inGroup: boolean;
   active: Pick<Bot, "id"> | undefined;
@@ -116,19 +107,13 @@ export function SidebarRoster({
           nestedRows.flatMap((row) =>
             row.item.kind === "bot" && row.parentId === parentId ? [row.item.chat.id] : [],
           );
-        const hasSpaceActions = group.canOpenSpaceSettings;
         const headerDropTarget: RosterDropTarget | null =
-          group.spaceId === bootstrapMe?.spaceId &&
-          !group.emptySpaceId &&
-          (group.sectionId || group.key.endsWith("unassigned"))
+          group.sectionId || group.key.endsWith("unassigned")
             ? { kind: "section", sectionId: group.sectionId }
             : null;
         const headerDropKey = `header:${group.key}`;
         const section = group.sectionId
-          ? (group.spaceId === bootstrapMe?.spaceId
-              ? botSections
-              : (spaces.find((space) => space.id === group.spaceId)?.botSections ?? [])
-            ).find((item) => item.id === group.sectionId)
+          ? botSections.find((item) => item.id === group.sectionId)
           : undefined;
         return (
           <Collapsible
@@ -140,16 +125,12 @@ export function SidebarRoster({
             data-sidebar-group={group.key}
             className={`flex flex-col gap-0.5 ${mini && groupIndex > 0 ? "mt-2 border-t border-sidebar-border pt-2" : ""}`}
           >
-            {!mini && (group.title || hasSpaceActions) ? (
+            {!mini && group.title ? (
               // biome-ignore lint/a11y/useSemanticElements: groups sidebar controls, not form fields; Move to remains the keyboard alternative.
               <div
                 role="group"
                 data-roster-drop={rosterDropKey === headerDropKey ? "true" : undefined}
-                className={`${
-                  group.title && hasSpaceActions
-                    ? "grid pt-3 pb-0.5"
-                    : `flex items-center pt-3 pb-0.5${group.title ? "" : " justify-end"}`
-                } rounded-lg ${rosterDropKey === headerDropKey ? "bg-sidebar-accent" : ""}`}
+                className={`flex items-center pt-3 pb-0.5 rounded-lg ${rosterDropKey === headerDropKey ? "bg-sidebar-accent" : ""}`}
                 onDragOver={(event) => {
                   if (!headerDropTarget || !rosterDropAction(headerDropTarget, false)) return;
                   event.preventDefault();
@@ -165,107 +146,42 @@ export function SidebarRoster({
                   applyRosterDrop(headerDropTarget, false, groupBotIds);
                 }}
               >
-                {group.title ? (
-                  // Prefer the section menu over the space menu when both apply;
-                  // the dedicated space-actions button still opens the space menu.
-                  <ContextMenu disabled={!section}>
-                    <ContextMenuTrigger
-                      render={
-                        group.emptySpaceId ? <button type="button" /> : <CollapsibleTrigger />
-                      }
-                      className={`flex min-w-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring ${hasSpaceActions ? "col-start-1 row-start-1 w-full pe-8" : "flex-1"}`}
-                      onClick={() => {
-                        if (group.emptySpaceId) {
-                          openSpaceChat(group.emptySpaceId, "/onboarding");
-                        }
-                      }}
-                      onContextMenu={
-                        section
-                          ? (event) => event.currentTarget.focus()
-                          : hasSpaceActions
-                            ? (event) => {
-                                event.preventDefault();
-                                spaceMenuAnchor.current = event.currentTarget;
-                                setSpaceMenu({
-                                  id: group.spaceId,
-                                  position: { x: event.clientX, y: event.clientY },
-                                });
-                              }
-                            : undefined
-                      }
-                      aria-label={
-                        group.emptySpaceId
-                          ? t`Open ${group.title}`
-                          : collapsed
-                            ? t`Expand ${group.title}`
-                            : t`Collapse ${group.title}`
-                      }
-                    >
-                      <span className="flex min-w-0 items-center gap-1.5 truncate">
-                        {group.showLock ? (
-                          <Lock size={11} strokeWidth={2} aria-hidden="true" />
-                        ) : null}
-                        <span className="truncate">{group.title}</span>
-                      </span>
-                      {group.emptySpaceId ? null : (
-                        <ChevronDown
-                          size={14}
-                          strokeWidth={1.8}
-                          className={
-                            collapsed ? "-rotate-90 transition-transform" : "transition-transform"
-                          }
-                          aria-hidden="true"
-                        />
-                      )}
-                    </ContextMenuTrigger>
-                    {section ? (
-                      <ContextMenuContent
-                        aria-label={t`Actions for ${section.name}`}
-                        className="w-[220px]"
-                      >
-                        <ContextMenuItem
-                          onClick={() =>
-                            setRenameSectionTarget({ section, spaceId: group.spaceId })
-                          }
-                        >
-                          <Pencil />
-                          {t`Rename section`}
-                        </ContextMenuItem>
-                        <ContextMenuItem
-                          variant="destructive"
-                          onClick={() =>
-                            setDeleteSectionTarget({ section, spaceId: group.spaceId })
-                          }
-                        >
-                          <Trash2 />
-                          {t`Delete section`}
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    ) : null}
-                  </ContextMenu>
-                ) : null}
-                {hasSpaceActions ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className={
-                      group.title
-                        ? "col-start-1 row-start-1 justify-self-end self-center"
-                        : undefined
-                    }
-                    aria-label={t`Actions for ${group.spaceName}`}
-                    onClick={(event) => {
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      spaceMenuAnchor.current = event.currentTarget;
-                      setSpaceMenu({
-                        id: group.spaceId,
-                        position: { x: rect.left, y: rect.bottom },
-                      });
-                    }}
+                <ContextMenu disabled={!section}>
+                  <ContextMenuTrigger
+                    render={<CollapsibleTrigger />}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                    onContextMenu={section ? (event) => event.currentTarget.focus() : undefined}
+                    aria-label={collapsed ? t`Expand ${group.title}` : t`Collapse ${group.title}`}
                   >
-                    <MoreHorizontal size={14} aria-hidden="true" />
-                  </Button>
-                ) : null}
+                    <span className="truncate">{group.title}</span>
+                    <ChevronDown
+                      size={14}
+                      strokeWidth={1.8}
+                      className={
+                        collapsed ? "-rotate-90 transition-transform" : "transition-transform"
+                      }
+                      aria-hidden="true"
+                    />
+                  </ContextMenuTrigger>
+                  {section ? (
+                    <ContextMenuContent
+                      aria-label={t`Actions for ${section.name}`}
+                      className="w-[220px]"
+                    >
+                      <ContextMenuItem onClick={() => setRenameSectionTarget({ section })}>
+                        <Pencil />
+                        {t`Rename section`}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        variant="destructive"
+                        onClick={() => setDeleteSectionTarget({ section })}
+                      >
+                        <Trash2 />
+                        {t`Delete section`}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  ) : null}
+                </ContextMenu>
               </div>
             ) : null}
             <CollapsibleContent
@@ -296,18 +212,16 @@ export function SidebarRoster({
                       ? item.chat.preview || (item.chat.status !== "idle" ? item.chat.status : "")
                       : item.chat.preview ||
                         item.chat.members.map((member) => member.name).join(", ")));
-                const rowDropTarget: RosterDropTarget | null =
-                  item.chat.spaceId !== bootstrapMe?.spaceId
-                    ? null
-                    : item.kind === "bot"
-                      ? { kind: "bot", chat: item.chat }
-                      : {
-                          kind: "group",
-                          chat: {
-                            id: item.chat.id,
-                            memberIds: item.chat.members.map((member) => member.botId),
-                          },
-                        };
+                const rowDropTarget: RosterDropTarget =
+                  item.kind === "bot"
+                    ? { kind: "bot", chat: item.chat }
+                    : {
+                        kind: "group",
+                        chat: {
+                          id: item.chat.id,
+                          memberIds: item.chat.members.map((member) => member.botId),
+                        },
+                      };
                 const rowSameParent =
                   Boolean(draggedBotId) &&
                   groupBotIds.includes(draggedBotId ?? "") &&
@@ -363,7 +277,7 @@ export function SidebarRoster({
                       event.dataTransfer.setData("text/plain", item.chat.id);
                     }}
                     onDragOver={(event) => {
-                      if (!rowDropTarget || !rosterDropAction(rowDropTarget, rowSameParent)) return;
+                      if (!rosterDropAction(rowDropTarget, rowSameParent)) return;
                       event.preventDefault();
                       event.dataTransfer.dropEffect = "move";
                       if (rosterDropKey !== rowDropKey) setRosterDropKey(rowDropKey);
@@ -372,7 +286,6 @@ export function SidebarRoster({
                       if (rosterDropKey === rowDropKey) setRosterDropKey(null);
                     }}
                     onDrop={(event) => {
-                      if (!rowDropTarget) return;
                       event.preventDefault();
                       applyRosterDrop(rowDropTarget, rowSameParent, groupBotIds);
                     }}
@@ -396,8 +309,7 @@ export function SidebarRoster({
                       reorderRosterBot(item.chat.id, target, groupBotIds);
                     }}
                     onClick={() => {
-                      openSpaceChat(
-                        item.chat.spaceId,
+                      openChat(
                         item.kind === "bot" ? `/app/${item.chat.id}` : `/app/g/${item.chat.id}`,
                       );
                     }}
@@ -577,7 +489,6 @@ export function SidebarRoster({
                       </span>
                     ) : null}
                     <ContextMenu
-                      disabled={item.chat.spaceId !== bootstrapMe?.spaceId}
                       open={botMenu?.kind === item.kind && botMenu.id === item.chat.id}
                       // A sibling row's menu may already own the state; only clear our own.
                       onOpenChange={(open) =>

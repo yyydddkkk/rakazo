@@ -2,7 +2,7 @@ import type { ModelOAuthBegin, ThinkingLevel } from "@rakazo/contracts";
 import { cancelModelOAuthAttempt, finishModelOAuthAttempt } from "@rakazo/core";
 import { useEffect, useRef, useState } from "react";
 import { waitForModelOAuth } from "./model-auth";
-import { useSpaceRpc } from "./space-rpc";
+import { rpc } from "./rpc";
 import { errorText } from "./user-error";
 
 export type ModelOAuthSignInBegin = {
@@ -18,7 +18,6 @@ export function useModelOAuthSignIn(options: {
   onError: (message: string) => void;
   onClearError?: () => void;
 }) {
-  const rpc = useSpaceRpc();
   const { onFinished, onError, onClearError } = options;
   const [oauth, setOauth] = useState<ModelOAuthBegin | null>(null);
   const [pasteCode, setPasteCode] = useState("");

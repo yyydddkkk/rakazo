@@ -168,13 +168,7 @@ export function RenameSpaceDialog({
   );
 }
 
-export function PickerInfoDialog({
-  topic,
-  onClose,
-}: {
-  topic: "group" | "space";
-  onClose: () => void;
-}) {
+export function PickerInfoDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog
       open
@@ -185,32 +179,19 @@ export function PickerInfoDialog({
       <DialogContent data-testid="picker-info-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
-            {topic === "group" ? (
-              <Users
-                size={17}
-                strokeWidth={1.8}
-                className="text-muted-foreground"
-                aria-hidden="true"
-              />
-            ) : (
-              <Lock
-                size={17}
-                strokeWidth={1.8}
-                className="text-muted-foreground"
-                aria-hidden="true"
-              />
-            )}
-            {topic === "group" ? <Trans>Groups</Trans> : <Trans>Spaces</Trans>}
+            <Users
+              size={17}
+              strokeWidth={1.8}
+              className="text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Trans>Groups</Trans>
           </DialogTitle>
           <DialogDescription>
-            {topic === "group" ? (
-              <Trans>
-                Shared chat with {GROUP_MEMBER_MIN}-{GROUP_MEMBER_MAX} bots. They all reply in the
-                same thread.
-              </Trans>
-            ) : (
-              <Trans>Private workspace with its own bots and groups.</Trans>
-            )}
+            <Trans>
+              Shared chat with {GROUP_MEMBER_MIN}-{GROUP_MEMBER_MAX} bots. They all reply in the
+              same thread.
+            </Trans>
           </DialogDescription>
         </DialogHeader>
       </DialogContent>

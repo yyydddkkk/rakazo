@@ -14,6 +14,7 @@ msgstr ""
 "Plural-Forms: \n"
 
 #: src/pages/shell/sidebar-roster.tsx
+#: src/pages/shell/space-switcher.tsx
 msgid " (unread)"
 msgstr "（未读）"
 
@@ -298,16 +299,13 @@ msgstr "关于{label}"
 msgid "About groups"
 msgstr "关于群组"
 
-#: src/pages/shell/bot-picker.tsx
-msgid "About spaces"
-msgstr "关于工作区"
-
 #: src/components/integrations/IntegrationSetup.tsx
 #: src/pages/McpServersOverlay.tsx
 msgid "Access token (optional)"
 msgstr "访问令牌（可选）"
 
 #: src/pages/AccountSettingsOverlay.tsx
+#: src/pages/SettingsOverlay.tsx
 msgid "Account"
 msgstr "账户"
 
@@ -320,16 +318,11 @@ msgid "Account menu for {name}"
 msgstr "{name} 的账户菜单"
 
 #. placeholder {0}: bot.name
-#. placeholder {0}: group.spaceName
 #. placeholder {0}: section.name
 #: src/pages/BotContextMenu.tsx
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Actions for {0}"
 msgstr "{0} 的操作"
-
-#: src/pages/shell/space-dialogs.tsx
-msgid "Actions for space"
-msgstr "工作区操作"
 
 #: src/pages/RoutineEditor.tsx
 msgid "Active"
@@ -1638,10 +1631,6 @@ msgstr "新建 Bot"
 msgid "Create new Group"
 msgstr "新建群组"
 
-#: src/pages/shell/bot-picker.tsx
-msgid "Create new Space"
-msgstr "新建工作区"
-
 #: src/pages/RoutineEditor.tsx
 msgid "Create Routine"
 msgstr "创建例行任务"
@@ -1788,7 +1777,7 @@ msgstr "同时删除记忆"
 msgid "Delete section"
 msgstr "删除分组"
 
-#: src/pages/shell/space-dialogs.tsx
+#: src/pages/shell/space-switcher.tsx
 msgid "Delete space"
 msgstr "删除工作区"
 
@@ -2492,7 +2481,7 @@ msgstr "请确认这台电脑上没有仍在运行的任务。"
 msgid "Manage MCP servers"
 msgstr "管理 MCP 服务器"
 
-#: src/pages/AccountSettingsOverlay.tsx
+#: src/pages/SettingsOverlay.tsx
 msgid "Manage messaging settings"
 msgstr "管理消息设置"
 
@@ -2616,8 +2605,8 @@ msgstr "消息…"
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
-#: src/pages/AccountSettingsOverlay.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
+#: src/pages/SettingsOverlay.tsx
 msgid "Messaging"
 msgstr "消息"
 
@@ -2786,6 +2775,7 @@ msgid "New skill"
 msgstr "新建技能"
 
 #: src/pages/shell/dialogs.tsx
+#: src/pages/shell/space-switcher.tsx
 msgid "New space"
 msgstr "新建工作区"
 
@@ -2990,21 +2980,12 @@ msgstr "按计划"
 msgid "on the 1st at {0}"
 msgstr "每月 1 日 {0}"
 
-#: src/pages/shell/space-dialogs.tsx
-msgid "Only empty spaces can be deleted. Delete its bots and groups first."
-msgstr "只能删除空的工作区。请先删除其中的 Bot 和群组。"
-
 #: src/components/markdown-link-prompt.tsx
 #: src/pages/ScratchpadSection.tsx
 #: src/pages/shell/computer-panel.tsx
 #: src/pages/shell/message-view.tsx
 msgid "Open"
 msgstr "打开"
-
-#. placeholder {0}: group.title
-#: src/pages/shell/sidebar-roster.tsx
-msgid "Open {0}"
-msgstr "打开 {0}"
 
 #. placeholder {0}: oauth.verificationUri.replace(/^https:\/\//, "")
 #: src/pages/model-settings/connection-controls.tsx
@@ -3200,10 +3181,6 @@ msgstr "优先级"
 #: src/pages/shell/bot-panel.tsx
 msgid "Private"
 msgstr "私有"
-
-#: src/pages/shell/dialogs.tsx
-msgid "Private workspace with its own bots and groups."
-msgstr "私有工作区，拥有独立的 Bot 和群组。"
 
 #: src/components/teach/TeachRecordingChrome.tsx
 msgid "Protected input"
@@ -3420,7 +3397,7 @@ msgid "Rename section"
 msgstr "重命名分组"
 
 #: src/pages/shell/dialogs.tsx
-#: src/pages/shell/space-dialogs.tsx
+#: src/pages/shell/space-switcher.tsx
 msgid "Rename space"
 msgstr "重命名工作区"
 
@@ -3764,7 +3741,6 @@ msgstr "服务器 URL"
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/shell/shell-side-panel.tsx
-#: src/pages/shell/space-dialogs.tsx
 msgid "Settings"
 msgstr "设置"
 
@@ -3901,10 +3877,6 @@ msgstr "空间已更改。重新打开“模型”以保存备用列表。"
 #: src/pages/shell/bot-panel.tsx
 msgid "Space default"
 msgstr "工作区默认"
-
-#: src/pages/shell/dialogs.tsx
-msgid "Spaces"
-msgstr "工作区"
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Start recording"

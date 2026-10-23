@@ -4,7 +4,7 @@ import { Button, Disclosure, Input } from "@rakazo/ui-web";
 import { useState } from "react";
 import { newClientId } from "../../lib/client-id";
 import { connectMcpOauth } from "../../lib/mcp-connect";
-import { useBoundSpaceId, useSpaceRpc } from "../../lib/space-rpc";
+import { rpc } from "../../lib/rpc";
 import { errorText } from "../../lib/user-error";
 
 export function IntegrationSetup({
@@ -17,8 +17,6 @@ export function IntegrationSetup({
   onServerConnected?: (id: string) => void;
 }) {
   const { t } = useLingui();
-  const rpc = useSpaceRpc();
-  const spaceId = useBoundSpaceId();
   const [endpoint, setEndpoint] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [query, setQuery] = useState("");
@@ -65,7 +63,7 @@ export function IntegrationSetup({
         }));
       if (existing && secret) await rpc.mcp.servers.update({ id: existing.id, secret });
       setAccessToken("");
-      const result = await connectMcpOauth(server.id, { client: rpc, spaceId });
+      const result = await connectMcpOauth(server.id);
       if (result === "cancelled") return;
       if (botId) await rpc.mcp.assignments.approve({ botId, serverId: server.id });
       setConnected((current) => [...current, url]);

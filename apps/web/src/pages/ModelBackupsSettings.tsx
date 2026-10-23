@@ -24,8 +24,7 @@ import {
 } from "@rakazo/ui-web";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { selectedSpaceId } from "../lib/rpc";
-import { useBoundSpaceId, useSpaceRpc } from "../lib/space-rpc";
+import { rpc, selectedSpaceId } from "../lib/rpc";
 
 type Scope = { userId: string; spaceId: string };
 type BackupsState = {
@@ -51,9 +50,8 @@ function loadingState(key: string): BackupsState {
   return { scopeKey: key, loading: true, ready: false, backups: [], error: null };
 }
 
-/** Backups load and save only while the space they belong to is the one settings act on. */
-function isSelectedSpace(spaceId: string, boundSpaceId: string | null): boolean {
-  if (boundSpaceId) return boundSpaceId === spaceId;
+/** Backups load and save only while the space they belong to is the one shown. */
+function isSelectedSpace(spaceId: string): boolean {
   const selected = selectedSpaceId();
   return selected === null || selected === spaceId;
 }
@@ -64,8 +62,6 @@ export function ModelBackupsSettings({
   catalog,
   credentials,
 }: Scope & { catalog: ModelCatalogEntry[]; credentials: ModelCredential[] }) {
-  const rpc = useSpaceRpc();
-  const boundSpaceId = useBoundSpaceId();
   const { t } = useLingui();
   const activeScopeKey = scopeKey({ userId, spaceId });
   const activeScopeRef = useRef(activeScopeKey);
@@ -86,7 +82,7 @@ export function ModelBackupsSettings({
     [options],
   );
   const currentState = state.scopeKey === activeScopeKey ? state : null;
-  const selectedSpaceMatches = isSelectedSpace(spaceId, boundSpaceId);
+  const selectedSpaceMatches = isSelectedSpace(spaceId);
   const backups = currentState?.backups ?? [];
   const backupKeys = new Set(backups.map(backupChoiceKey));
   const addableOptions = options.filter((option) => !backupKeys.has(backupChoiceKey(option)));
@@ -99,12 +95,12 @@ export function ModelBackupsSettings({
       !cancelled &&
       generation === requestGenerationRef.current &&
       activeScopeRef.current === activeScopeKey &&
-      isSelectedSpace(spaceId, boundSpaceId);
+      isSelectedSpace(spaceId);
     confirmedRef.current = [];
     setState(loadingState(activeScopeKey));
     void (async () => {
       try {
-        if (!isSelectedSpace(spaceId, boundSpaceId)) {
+        if (!isSelectedSpace(spaceId)) {
           throw new Error(t`Space changed. Reopen Models to load its backup list.`);
         }
         await pendingSaves.get(activeScopeKey);
@@ -179,7 +175,7 @@ export function ModelBackupsSettings({
     const onScreen = () =>
       generation === requestGenerationRef.current &&
       activeScopeRef.current === activeScopeKey &&
-      isSelectedSpace(spaceId, boundSpaceId);
+      isSelectedSpace(spaceId);
     setState((previous) =>
       previous.scopeKey === activeScopeKey
         ? { ...previous, backups: choices, error: null }

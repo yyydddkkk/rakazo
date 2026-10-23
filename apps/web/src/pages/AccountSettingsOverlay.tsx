@@ -62,8 +62,6 @@ export type SettingsGeneralProps = {
   /** The user's saved IANA timezone, or null before one is set. */
   timezone?: string | null;
   onTimezoneChange?: (timezone: string) => Promise<void>;
-  messagingEnabled?: boolean;
-  onOpenMessaging?: () => void;
 };
 
 export function GeneralSettingsPanels({
@@ -73,8 +71,6 @@ export function GeneralSettingsPanels({
   onAvatarStyleChange,
   timezone = null,
   onTimezoneChange,
-  messagingEnabled = false,
-  onOpenMessaging,
 }: SettingsGeneralProps) {
   const { t } = useLingui();
   const account = accountDisplay({ name, email }, t`You`);
@@ -165,17 +161,6 @@ export function GeneralSettingsPanels({
 
       {accountSecurity?.hasPassword && accountSecurity.passwordChangeEnabled !== false ? (
         <ChangePasswordSection email={email} />
-      ) : null}
-
-      {messagingEnabled && onOpenMessaging ? (
-        <section className="rounded-xl border border-border px-4 py-4">
-          <h3 className="text-[15px] font-medium text-foreground">
-            <Trans>Messaging</Trans>
-          </h3>
-          <Button variant="secondary" className="mt-3 rounded-full" onClick={onOpenMessaging}>
-            <Trans>Manage messaging settings</Trans>
-          </Button>
-        </section>
       ) : null}
 
       <section className="rounded-xl border border-border px-4 py-4">

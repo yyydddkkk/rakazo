@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot, Group, SearchHit } from "@rakazo/contracts";
+import type { Bot, Group, SearchHit, Space } from "@rakazo/contracts";
 import {
   Button,
   InputGroup,
@@ -25,6 +25,7 @@ import { SpaceSearchResults } from "../SpaceSearch";
 import { ArchivedChats } from "./archived-chats";
 import { SidebarHeader } from "./sidebar-header";
 import { SidebarRoster } from "./sidebar-roster";
+import { SpaceSwitcher } from "./space-switcher";
 
 type RosterProps = Omit<ComponentProps<typeof SidebarRoster>, "mini" | "botsSidebarDensity">;
 
@@ -50,7 +51,7 @@ export function ShellSidebar({
   bots,
   setPanel,
   navigate,
-  setPickerInfoTopic,
+  setGroupInfoOpen,
   showSpaceSearch,
   searchHits,
   searchLoading,
@@ -66,7 +67,10 @@ export function ShellSidebar({
   userEmail,
   ticketBoardEnabled,
   openSettings,
-  setNewSpaceOpen,
+  spaces,
+  setSpaces,
+  currentSpaceId,
+  switchSpace,
   ...rosterProps
 }: RosterProps & {
   rpc: ReturnType<typeof createSpaceRpc>;
@@ -90,8 +94,11 @@ export function ShellSidebar({
   bots: Bot[];
   setPanel: (panel: Panel) => void;
   navigate: (path: string) => void;
-  setNewSpaceOpen: (open: boolean) => void;
-  setPickerInfoTopic: (topic: "group" | "space") => void;
+  setGroupInfoOpen: (open: boolean) => void;
+  spaces: Space[];
+  setSpaces: Dispatch<SetStateAction<Space[]>>;
+  currentSpaceId: string | null;
+  switchSpace: (spaceId: string) => void;
   showSpaceSearch: boolean;
   searchHits: SearchHit[];
   searchLoading: boolean;
@@ -155,8 +162,18 @@ export function ShellSidebar({
           setMobileSidebarOpen={setMobileSidebarOpen}
           setPanel={setPanel}
           navigate={navigate}
-          setNewSpaceOpen={setNewSpaceOpen}
-          setPickerInfoTopic={setPickerInfoTopic}
+          setGroupInfoOpen={setGroupInfoOpen}
+          spaceSwitcher={
+            <SpaceSwitcher
+              rpc={rpc}
+              spaces={spaces}
+              currentSpaceId={currentSpaceId}
+              mini={miniSidebar}
+              onSwitch={switchSpace}
+              setSpaces={setSpaces}
+              refresh={() => refreshBots()}
+            />
+          }
         />
         {miniSidebar ? (
           <IconTooltip label={t`Search`}>

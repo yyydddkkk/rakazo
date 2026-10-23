@@ -33,7 +33,7 @@ import { ChevronLeft, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IntegrationSetup } from "../components/integrations/IntegrationSetup";
 import { optionalCatalogFeedProbe } from "../lib/optional-catalog-feed";
-import { useSpaceRpc } from "../lib/space-rpc";
+import { rpc } from "../lib/rpc";
 import { errorText } from "../lib/user-error";
 
 type SourceKind = "treg" | "executor" | "mcp" | "api";
@@ -70,7 +70,6 @@ export function IntegrationsPanel({
   activeBotId?: string;
 }) {
   const { t } = useLingui();
-  const rpc = useSpaceRpc();
   const [setupOpen, setSetupOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(CONNECTION_CATALOG_PAGE_SIZE);

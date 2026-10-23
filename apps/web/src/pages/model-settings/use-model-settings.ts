@@ -34,7 +34,7 @@ import {
   runModelConnectionPreflight,
   unavailableSelectedModel,
 } from "../../lib/model-connection-preflight";
-import { useSpaceRpc } from "../../lib/space-rpc";
+import { rpc } from "../../lib/rpc";
 import { useModelOAuthSignIn } from "../../lib/use-model-oauth-signin";
 import { errorText } from "../../lib/user-error";
 
@@ -46,7 +46,6 @@ function connectionMaxTokensField(providerId: string, stored: number | undefined
 }
 
 export function useModelSettings(onClose: () => void) {
-  const rpc = useSpaceRpc();
   const { t } = useLingui();
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
   const [credentials, setCredentials] = useState<ModelCredential[]>([]);

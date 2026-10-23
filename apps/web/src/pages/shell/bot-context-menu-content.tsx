@@ -106,7 +106,7 @@ export function BotContextMenuContent({
       }}
       onRenameSection={(sectionId) => {
         const section = botSections.find((item) => item.id === sectionId);
-        if (section && spaceId) setRenameSectionTarget({ section, spaceId });
+        if (section) setRenameSectionTarget({ section });
         onClose();
       }}
       onEdit={() => {
