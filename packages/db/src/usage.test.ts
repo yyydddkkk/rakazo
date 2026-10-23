@@ -98,4 +98,39 @@ describe("usage ledger", () => {
     });
     expect(data).not.toHaveProperty("runId");
   });
+
+  it("deduplicates a repeated call after the database committed but its acknowledgement failed", async () => {
+    const persisted = new Set<string>();
+    let loseAcknowledgement = true;
+    const createMany = vi.fn(async ({ data, skipDuplicates }) => {
+      let count = 0;
+      for (const row of data) {
+        if (persisted.has(row.callId)) {
+          if (skipDuplicates) continue;
+          throw { code: "P2002" };
+        }
+        persisted.add(row.callId);
+        count++;
+      }
+      if (loseAcknowledgement) {
+        loseAcknowledgement = false;
+        throw new Error("connection closed after commit");
+      }
+      return { count };
+    });
+    const prisma = { usageRecord: { createMany } } as unknown as Pick<PrismaClient, "usageRecord">;
+    const event = {
+      type: "usage" as const,
+      provider: "fixture",
+      model: "test",
+      callId: "committed-call",
+      inputTokens: 10,
+      outputTokens: 2,
+    };
+    const attribution = { spaceId: "space-fixture", userId: "user-fixture", runId: "run-fixture" };
+    await expect(recordUsage(prisma, event, attribution)).rejects.toThrow("after commit");
+    await expect(recordUsage(prisma, event, attribution)).resolves.toEqual({ count: 0 });
+    expect(persisted).toEqual(new Set([event.callId]));
+    expect(createMany.mock.calls.map(([args]) => args.skipDuplicates)).toEqual([true, true]);
+  });
 });

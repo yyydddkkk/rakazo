@@ -58,7 +58,8 @@ async function runtime(scenario: string) {
 
 async function collect(runner: OmpRpcRuntime, input = request()): Promise<AgentRuntimeEvent[]> {
   const events: AgentRuntimeEvent[] = [];
-  for await (const event of runner.run(input, { spaceId: "space-fixture" })) events.push(event);
+  for await (const event of runner.run(input, { spaceId: "space-fixture", userId: "user-fixture" }))
+    events.push(event);
   return events;
 }
 
@@ -127,7 +128,7 @@ describe("OmpRpcRuntime v1", () => {
     const usage = events.filter((event) => event.type === "usage");
     expect(input.onUsage).toHaveBeenCalledTimes(2);
     expect(usage).toHaveLength(2);
-    expect(usage[0]).toMatchObject({
+    expect(usage.find((event) => event.inputTokens === 3)).toMatchObject({
       inputTokens: 3,
       outputTokens: 2,
       cacheReadTokens: 4,
@@ -165,7 +166,10 @@ describe("OmpRpcRuntime v1", () => {
     const input = request();
     const events: AgentRuntimeEvent[] = [];
     const pending = (async () => {
-      for await (const event of runner.run(input, { spaceId: "space-fixture" })) {
+      for await (const event of runner.run(input, {
+        spaceId: "space-fixture",
+        userId: "user-fixture",
+      })) {
         events.push(event);
         if (event.type === "usage") await runner.abort(input.runId);
       }
@@ -220,7 +224,7 @@ describe("OmpRpcRuntime v1", () => {
     async (scenario) => {
       const { runner } = await runtime(scenario);
       await expect(collect(runner)).rejects.toThrow(
-        scenario === "error" ? "omp prompt failed" : "transport limit",
+        scenario === "error" ? "omp prompt failed" : "Invalid omp RPC frame",
       );
     },
   );

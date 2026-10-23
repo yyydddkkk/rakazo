@@ -1,13 +1,26 @@
 /** Single-consumer queue for process bytes and translated runtime events. */
 export class OmpRpcQueue<T> {
-  private items: T[] = [];
+  private items: Array<{ value: T; bytes: number }> = [];
+  private bytes = 0;
   private wake?: () => void;
   private closed = false;
   private failure?: Error;
 
+  constructor(private capacity?: { items: number; bytes: number; size: (item: T) => number }) {}
+
   push(item: T) {
     if (this.closed) return;
-    this.items.push(item);
+    const bytes = this.capacity?.size(item) ?? 0;
+    if (
+      this.capacity &&
+      (this.items.length >= this.capacity.items || this.bytes + bytes > this.capacity.bytes)
+    ) {
+      const error = new Error("omp event buffer limit exceeded");
+      this.close(error);
+      throw error;
+    }
+    this.items.push({ value: item, bytes });
+    this.bytes += bytes;
     this.wake?.();
   }
 
@@ -21,7 +34,9 @@ export class OmpRpcQueue<T> {
   async *iterate(): AsyncIterable<T> {
     while (true) {
       if (this.items.length) {
-        yield this.items.shift()!;
+        const item = this.items.shift()!;
+        this.bytes -= item.bytes;
+        yield item.value;
       } else if (this.failure) {
         throw this.failure;
       } else if (this.closed) {

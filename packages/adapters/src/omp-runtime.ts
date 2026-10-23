@@ -1,7 +1,7 @@
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { StringDecoder } from "node:string_decoder";
 import type {
   AdapterContext,
   AgentRunRequest,
@@ -13,9 +13,12 @@ import { isBuiltinToolName } from "@rakazo/contracts";
 import { createStreamingRedactor, redactSecrets } from "@rakazo/core";
 import { stringify } from "yaml";
 import { isToolPauseResult } from "./approval-effect.js";
+import { OMP_MAX_FRAME_BYTES, OMP_MAX_REASSEMBLED_BYTES, OmpFrameDecoder } from "./omp-frame.js";
 import { OmpRpcQueue } from "./omp-rpc-queue.js";
 import type { OmpProcess, OmpTransport } from "./omp-transport.js";
 import { LocalOmpTransport, ompWorkspaceDirectory } from "./omp-transport.js";
+import type { OmpUsageRecovery } from "./omp-usage.js";
+import { OmpUsageJournal } from "./omp-usage.js";
 
 export const OMP_HOST_TOOL_NAMES: ReadonlySet<string> = new Set([
   "message_user",
@@ -42,6 +45,12 @@ export interface OmpRpcRuntimeOptions {
   workspaceRoot: string;
   executable?: string;
   transport?: OmpTransport;
+  recoverUsage?: OmpUsageRecovery;
+  startupTimeoutMs?: number;
+  commandTimeoutMs?: number;
+  abortWriteTimeoutMs?: number;
+  usageDeliveryTimeoutMs?: number;
+  settleTimeoutMs?: number;
 }
 
 type Frame = Record<string, unknown> & { type: string };
@@ -55,6 +64,20 @@ function record(value: unknown): Record<string, unknown> {
 
 function token(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function bounded<T>(work: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function historyPrompt(request: AgentRunRequest): string {
@@ -75,7 +98,7 @@ function historyPrompt(request: AgentRunRequest): string {
   ].join("\n\n");
 }
 
-/** Version-pinned v1 JSONL adapter. Chunked transport and durable recovery belong to stage 2b/3. */
+/** Version-pinned JSONL adapter; process state is ephemeral, usage accounting is durable. */
 export class OmpRpcRuntime implements AgentRuntime {
   private transport: OmpTransport;
   private running = new Map<string, () => Promise<void>>();
@@ -111,14 +134,39 @@ export class OmpRpcRuntime implements AgentRuntime {
       throw new Error("omp prototype currently supports text conversations");
     }
     if (context?.signal?.aborted) throw new Error("omp run aborted");
-    const events = new OmpRpcQueue<AgentRuntimeEvent>();
+    const events = new OmpRpcQueue<AgentRuntimeEvent>({
+      items: 2048,
+      bytes: OMP_MAX_REASSEMBLED_BYTES,
+      size: (event) => Buffer.byteLength(JSON.stringify(event)),
+    });
     let child: OmpProcess | undefined;
     let cancelled = false;
     let stopped = false;
+    let stopping: Promise<void> | undefined;
+    let failure: Error | undefined;
     let paused = false;
     let finished = false;
     let commandSequence = 0;
+    let maxInputBytes = OMP_MAX_FRAME_BYTES;
     let temporary: string | undefined;
+    const accounting = new Set<Promise<void>>();
+    const attemptId = randomUUID();
+    const journal = new OmpUsageJournal({
+      root: this.options.workspaceRoot,
+      scope:
+        context?.spaceId && context.userId
+          ? {
+              runId: request.runId,
+              botId: request.botId,
+              threadId: request.threadId,
+              spaceId: context.spaceId,
+              userId: context.userId,
+            }
+          : undefined,
+      onUsage: request.onUsage,
+      recoverUsage: this.options.recoverUsage,
+      deliveryTimeoutMs: this.options.usageDeliveryTimeoutMs,
+    });
     const secrets = [request.model.apiKey ?? ""].filter(Boolean);
     const safe = (text: string) => redactSecrets(text, secrets);
     const redactor = createStreamingRedactor(secrets);
@@ -134,13 +182,22 @@ export class OmpRpcRuntime implements AgentRuntime {
         }
         return value;
       };
-      events.push(sanitize(event) as AgentRuntimeEvent);
+      try {
+        events.push(sanitize(event) as AgentRuntimeEvent);
+      } catch (error) {
+        failure ??= new Error(
+          safe(error instanceof Error ? error.message : "omp event buffering failed"),
+        );
+        events.close(failure);
+        // Keep reading the current batch so already-delivered terminal usage can be journaled.
+        void stop().catch(() => undefined);
+      }
     };
     let writes = Promise.resolve();
     const send = (frame: Record<string, unknown>) => {
       const line = `${JSON.stringify(frame)}\n`;
-      if (Buffer.byteLength(line) > 1_048_576) {
-        return Promise.reject(new Error("omp v1 input exceeded the frame limit"));
+      if (Buffer.byteLength(line) > maxInputBytes) {
+        return Promise.reject(new Error("omp input exceeded the frame limit"));
       }
       const sent = writes.then(async () => {
         if (!child) throw new Error("omp process is unavailable");
@@ -149,17 +206,23 @@ export class OmpRpcRuntime implements AgentRuntime {
       writes = sent.catch(() => undefined);
       return sent;
     };
-    const stop = async () => {
-      if (stopped || !child) return;
+    const stop = (): Promise<void> => {
       stopped = true;
-      if (child) {
+      if (!child) return Promise.resolve();
+      const process = child;
+      stopping ??= (async () => {
         try {
-          await send({ type: "abort", id: "stop" });
+          await bounded(
+            send({ type: "abort", id: "stop" }),
+            this.options.abortWriteTimeoutMs ?? 250,
+            "omp abort write timed out",
+          );
         } catch {
           // Process exit may race cancellation; group termination remains authoritative.
         }
-        child.terminate();
-      }
+        await process.terminate();
+      })();
+      return stopping;
     };
     const abort = async () => {
       cancelled = true;
@@ -167,50 +230,107 @@ export class OmpRpcRuntime implements AgentRuntime {
       await stop();
     };
     this.running.set(request.runId, abort);
-    const onAbort = () => void abort();
+    const onAbort = () => void abort().catch(() => undefined);
     context?.signal?.addEventListener("abort", onAbort, { once: true });
 
     const produce = async () => {
       const tools = new Map(selectOmpHostTools(request.tools).map((tool) => [tool.name, tool]));
-      const pending = new Set<string>();
-      const completedCalls = new Set<string>();
+      const pending = new Map<string, { cancelled: boolean }>();
+      const completedCalls = new Map<string, Record<string, unknown>>();
+      const cancelledCalls = new Set<string>();
+      const hostIdentities = new Map<string, string>();
       const toolStarts = new Map<string, number>();
       const seenTools = new Set<string>();
       const seenMessages = new Set<string>();
+      const endedMessages = new Set<string>();
+      const startedMessages = new Set<string>();
       const streamed = new Map<string, string>();
       const subagents = new Map<string, { name: string; task: string }>();
+      const activeSubagents = new Set<string>();
+      const childMessages = new Map<string, { sequence: number; ended: boolean }>();
       let retrievalPending = false;
       let promptOutcome = false;
+      let promptSent = false;
+      let admitted = false;
+      let readingBatch = false;
       let settled = false;
+      let settleTimer: ReturnType<typeof setTimeout> | undefined;
+      let protocol: 1 | 2 = 1;
+      const decoder = new OmpFrameDecoder();
       const promptId = `${request.runId}:prompt`;
       const commandResponses = new Map<
         string,
-        { resolve: () => void; reject: (error: Error) => void }
+        { resolve: (frame: Frame) => void; reject: (error: Error) => void }
       >();
       const configure = async (type: string, data: Record<string, unknown> = {}) => {
+        if (stopped) throw new Error("omp session stopped during configuration");
         const id = `config-${++commandSequence}`;
-        const response = new Promise<void>((resolve, reject) => {
+        const response = new Promise<Frame>((resolve, reject) => {
           commandResponses.set(id, { resolve, reject });
         });
-        await send({ type, id, ...data });
-        await response;
+        try {
+          return await bounded(
+            Promise.all([send({ type, id, ...data }), response]).then(([, frame]) => frame),
+            this.options.commandTimeoutMs ?? 30_000,
+            "omp RPC command timed out",
+          );
+        } finally {
+          commandResponses.delete(id);
+        }
       };
       const maybeDone = () => {
-        if (!promptOutcome || !settled || pending.size || paused || cancelled || finished) return;
-        finished = true;
+        if (
+          !promptOutcome ||
+          !admitted ||
+          !settled ||
+          readingBatch ||
+          paused ||
+          cancelled ||
+          finished ||
+          failure
+        )
+          return;
+        if (pending.size || toolStarts.size || accounting.size || activeSubagents.size) {
+          settleTimer ??= setTimeout(
+            () => fail(new Error("omp session settled with unfinished work")),
+            this.options.settleTimeoutMs ?? 30_000,
+          );
+          return;
+        }
+        clearTimeout(settleTimer);
         const tail = redactor.finish();
         if (tail) emit({ type: "text", text: tail });
+        if (failure) return;
         emit({ type: "done" });
+        if (failure) return;
+        finished = true;
         events.close();
       };
       const fail = (error: unknown) => {
-        events.close(new Error(safe(error instanceof Error ? error.message : "omp RPC failed")));
-        void stop();
+        failure ??= new Error(safe(error instanceof Error ? error.message : "omp RPC failed"));
+        events.close(failure);
+        void stop().catch(() => undefined);
       };
       const hostCall = async (frame: Frame) => {
         const id = String(frame.id ?? "");
-        if (!id || pending.has(id) || completedCalls.has(id) || stopped) return;
-        pending.add(id);
+        if (!id) throw new Error("Invalid omp host tool request");
+        if (stopped || paused || finished) return;
+        const identity = createHash("sha256")
+          .update(JSON.stringify([frame.toolName, frame.arguments]))
+          .digest("hex");
+        const priorIdentity = hostIdentities.get(id);
+        if (priorIdentity && priorIdentity !== identity)
+          throw new Error("omp host request identity changed");
+        hostIdentities.set(id, identity);
+        if (cancelledCalls.has(id)) return;
+        const previous = completedCalls.get(id);
+        if (previous) {
+          await send(previous);
+          return;
+        }
+        if (pending.has(id)) return;
+        const call = { cancelled: false };
+        pending.set(id, call);
         const name = String(frame.toolName ?? "");
         const tool = tools.get(name);
         const executionId = safe(`${request.runId}:${String(frame.toolCallId ?? id)}`);
@@ -248,17 +368,29 @@ export class OmpRpcRuntime implements AgentRuntime {
             return;
           }
           const structured = record(result);
+          const detail =
+            structured.kind === "agent_tool_result" ? record(structured.details) : structured;
+          const isError =
+            (detail.error !== undefined && detail.error !== null) || detail.isError === true;
+          if (isError) failure = new Error("omp host tool reported an error");
           const response =
             structured.kind === "agent_tool_result" && Array.isArray(structured.content)
               ? { content: structured.content, details: structured.details }
               : { content: [{ type: "text", text: JSON.stringify(result ?? null) }], details: {} };
-          if (!stopped && pending.has(id)) {
-            await send({ type: "host_tool_result", id, result: response });
+          if (!stopped && !call.cancelled) {
+            const reply = {
+              type: "host_tool_result",
+              id,
+              result: response,
+              ...(isError ? { isError: true } : {}),
+            };
+            completedCalls.set(id, reply);
+            await send(reply);
           }
         } catch (error) {
           failure = error;
-          if (!stopped && pending.has(id)) {
-            await send({
+          if (!stopped && !call.cancelled) {
+            const reply = {
               type: "host_tool_result",
               id,
               isError: true,
@@ -271,11 +403,12 @@ export class OmpRpcRuntime implements AgentRuntime {
                 ],
                 details: {},
               },
-            });
+            };
+            completedCalls.set(id, reply);
+            await send(reply);
           }
         } finally {
           pending.delete(id);
-          completedCalls.add(id);
           try {
             await request.onToolCompleted?.({
               name: safe(name),
@@ -290,10 +423,12 @@ export class OmpRpcRuntime implements AgentRuntime {
           maybeDone();
         }
       };
-      const usage = async (frame: Frame, agentId?: string) => {
+      const usage = (frame: Frame, agentId?: string) => {
         const message = record(frame.message);
         if (message.role !== "assistant") return;
-        const id = `${agentId ?? "main"}:${String(frame.messageId ?? message.responseId ?? message.timestamp ?? "")}`;
+        const messageId = frame.messageId ?? message.responseId ?? message.timestamp;
+        if (messageId === undefined) throw new Error("omp usage message identity is missing");
+        const id = `${agentId ?? "main"}:${String(messageId)}`;
         if (seenMessages.has(id)) return;
         seenMessages.add(id);
         const measured = record(message.usage);
@@ -306,9 +441,13 @@ export class OmpRpcRuntime implements AgentRuntime {
         );
         const event: UsageEvent = {
           type: "usage",
-          provider: safe(request.model.provider),
-          model: safe(request.model.id),
-          callId: safe(`${request.runId}:${id}`),
+          provider: safe(
+            typeof message.provider === "string" && message.provider !== "rakazo"
+              ? message.provider
+              : request.model.provider,
+          ),
+          model: safe(typeof message.model === "string" ? message.model : request.model.id),
+          callId: `${request.runId}:omp:${attemptId}:${randomUUID()}`,
           operationKind: agentId
             ? "subagent"
             : (request.usageOperationKind ?? "answer") === "answer" &&
@@ -324,44 +463,106 @@ export class OmpRpcRuntime implements AgentRuntime {
           reasoningTokens: token(measured.reasoningTokens),
           totalTokens: token(measured.totalTokens),
           costUsd: null,
-          usageSource: "omp-rpc-v1",
+          usageSource: `omp-rpc-v${protocol}`,
           costSource: null,
         };
         if (!agentId) retrievalPending = retrieval;
-        await request.onUsage?.(event);
-        emit({ ...event, ...(request.onUsage ? { accounted: true } : {}) });
+        // The stdout reader must keep servicing aborts and host calls while the ledger is slow.
+        const work = journal
+          .record(event)
+          .then((recorded) => {
+            if (recorded) emit(recorded);
+          })
+          .catch((error: unknown) => {
+            // Consumer accounting is an additional retry, never the sole durable recovery path.
+            try {
+              emit(event);
+            } catch {
+              // A full/closed consumer queue cannot invalidate the durable outbox.
+            }
+            fail(error);
+          })
+          .finally(() => {
+            accounting.delete(work);
+            try {
+              maybeDone();
+            } catch (error) {
+              fail(error);
+            }
+          });
+        accounting.add(work);
       };
       const handle = async (frame: Frame) => {
         if (frame.type === "response") {
           const id = String(frame.id ?? "");
           const response = commandResponses.get(id);
-          commandResponses.delete(id);
-          if (frame.success !== true) throw new Error("omp rejected an RPC command");
-          response?.resolve();
-          if (id === promptId && record(frame.data).agentInvoked === false) {
-            promptOutcome = true;
-            settled = true;
-            maybeDone();
+          if (!response && id !== promptId && frame.command !== "parse") return;
+          if (frame.success !== true) {
+            const error = new Error("omp rejected an RPC command");
+            response?.reject(error);
+            throw error;
           }
+          response?.resolve(frame);
+          if (id === promptId) {
+            if (!promptSent) throw new Error("Unexpected omp prompt acknowledgement");
+            admitted = true;
+            if (record(frame.data).agentInvoked === false) {
+              promptOutcome = true;
+              settled = true;
+            }
+          }
+        } else if (
+          !promptSent &&
+          [
+            "agent_start",
+            "message_start",
+            "message_update",
+            "message_end",
+            "host_tool_call",
+            "tool_execution_start",
+            "prompt_result",
+          ].includes(frame.type)
+        ) {
+          throw new Error("omp agent activity arrived before the prompt");
+        } else if (frame.type === "agent_start") {
+          settled = false;
+          clearTimeout(settleTimer);
+          settleTimer = undefined;
         } else if (frame.type === "host_tool_call") {
           void hostCall(frame).catch(fail);
         } else if (frame.type === "host_tool_cancel") {
-          pending.delete(String(frame.targetId));
+          const targetId = String(frame.targetId);
+          cancelledCalls.add(targetId);
+          const call = pending.get(targetId);
+          if (call) call.cancelled = true;
         } else if (frame.type === "message_start" && record(frame.message).role === "assistant") {
+          if (cancelled || stopped) return;
+          const id = String(frame.messageId ?? "");
+          if (!id) throw new Error("omp message identity is missing");
+          if (startedMessages.has(id) || endedMessages.has(id)) return;
+          startedMessages.add(id);
           const tail = redactor.finish();
           if (tail) emit({ type: "text", text: tail });
           emit({ type: "turn" });
         } else if (frame.type === "message_update") {
+          if (cancelled || stopped) return;
           const update = record(frame.assistantMessageEvent);
           if (update.type === "text_delta" && typeof update.delta === "string") {
-            const id = String(frame.messageId);
+            const id = String(frame.messageId ?? "");
+            if (!id) throw new Error("omp message identity is missing");
+            if (endedMessages.has(id)) throw new Error("omp updated a completed message");
             streamed.set(id, (streamed.get(id) ?? "") + update.delta);
             const text = redactor.push(update.delta);
             if (text) emit({ type: "text", text });
           }
         } else if (frame.type === "message_end") {
           const message = record(frame.message);
-          if (message.role === "assistant" && !streamed.has(String(frame.messageId))) {
+          if (message.role !== "assistant") return;
+          const id = String(frame.messageId ?? "");
+          if (!id) throw new Error("omp message identity is missing");
+          if (endedMessages.has(id)) return;
+          endedMessages.add(id);
+          if (!cancelled && !stopped && !streamed.has(id)) {
             const text = (Array.isArray(message.content) ? message.content : [])
               .map(record)
               .filter((part) => part.type === "text")
@@ -369,9 +570,11 @@ export class OmpRpcRuntime implements AgentRuntime {
               .join("");
             if (text) emit({ type: "text", text: safe(text) });
           }
-          await usage(frame);
-          if (message.stopReason === "error") throw new Error("omp model call failed");
+          usage(frame);
+          if (message.stopReason === "error" && !cancelled && !paused)
+            throw new Error("omp model call failed");
         } else if (frame.type === "tool_execution_start") {
+          if (stopped || cancelled) return;
           const id = String(frame.toolCallId);
           if (!seenTools.has(id)) {
             seenTools.add(id);
@@ -383,24 +586,28 @@ export class OmpRpcRuntime implements AgentRuntime {
               executionId: `${request.runId}:${id}`,
             });
           }
-        } else if (frame.type === "tool_execution_end" && !tools.has(String(frame.toolName))) {
+        } else if (frame.type === "tool_execution_end") {
           const id = String(frame.toolCallId);
           const started = toolStarts.get(id);
           toolStarts.delete(id);
-          if (started !== undefined) {
+          if (started !== undefined && !tools.has(String(frame.toolName))) {
             try {
-              await request.onToolCompleted?.({
-                name: safe(String(frame.toolName)),
-                executionId: safe(`${request.runId}:${id}`),
-                durationMs: Date.now() - started,
-                ...(frame.isError ? { error: new Error("omp native tool failed") } : {}),
-              });
+              void Promise.resolve(
+                request.onToolCompleted?.({
+                  name: safe(String(frame.toolName)),
+                  executionId: safe(`${request.runId}:${id}`),
+                  durationMs: Date.now() - started,
+                  ...(frame.isError ? { error: new Error("omp native tool failed") } : {}),
+                }),
+              ).catch(() => undefined);
             } catch {
               // Native tool auditing is best effort, just like host tool auditing.
             }
           }
         } else if (frame.type === "prompt_result") {
           if (frame.id !== promptId) return;
+          if (cancelled || paused) return;
+          if (!admitted) throw new Error("omp prompt result preceded its acknowledgement");
           if (frame.status !== "completed")
             throw new Error(frame.status === "aborted" ? "omp run aborted" : "omp prompt failed");
           promptOutcome = true;
@@ -408,9 +615,12 @@ export class OmpRpcRuntime implements AgentRuntime {
           // pinned protocol. Keep one completion boundary for agent-invoking work.
           maybeDone();
         } else if (frame.type === "session_settled") {
+          if (cancelled || paused) return;
+          if (!promptSent) return; // Quiescence from startup is not this prompt's completion.
+          if (!promptOutcome) throw new Error("omp session settled before the prompt result");
           settled = true;
-          maybeDone();
         } else if (frame.type === "subagent_lifecycle") {
+          if (stopped || cancelled) return;
           const payload = record(frame.payload);
           const id = String(payload.id);
           const info = subagents.get(id) ?? {
@@ -418,6 +628,8 @@ export class OmpRpcRuntime implements AgentRuntime {
             task: String(payload.description ?? ""),
           };
           subagents.set(id, info);
+          if (payload.status === "started") activeSubagents.add(id);
+          else activeSubagents.delete(id);
           emit({
             type: "subagent",
             agentId: `${request.runId}:${id}`,
@@ -432,7 +644,22 @@ export class OmpRpcRuntime implements AgentRuntime {
         } else if (frame.type === "subagent_event") {
           const payload = record(frame.payload);
           const event = record(payload.event);
-          if (event.type === "message_end") await usage(event as Frame, String(payload.id));
+          const agentId = String(payload.id);
+          if (event.type === "message_start" && record(event.message).role === "assistant") {
+            const current = childMessages.get(agentId);
+            if (!current || current.ended)
+              childMessages.set(agentId, { sequence: (current?.sequence ?? 0) + 1, ended: false });
+          }
+          if (event.type === "message_end" && record(event.message).role === "assistant") {
+            const current = childMessages.get(agentId);
+            usage(
+              current
+                ? { ...event, type: "message_end", messageId: `child-${current.sequence}` }
+                : (event as Frame),
+              agentId,
+            );
+            if (current) current.ended = true;
+          }
         } else if (frame.type === "rpc_chunk" || frame.type === "rpc_frame_error") {
           throw new Error("omp v1 frame exceeded the prototype transport limit");
         } else if (frame.type === "notice" && frame.level === "error") {
@@ -442,6 +669,8 @@ export class OmpRpcRuntime implements AgentRuntime {
         }
       };
       try {
+        await journal.drain();
+        if (stopped || cancelled) return;
         const providerApis: Record<string, string> = {
           "openai-compatible": "openai-completions",
           openrouter: "openai-completions",
@@ -549,44 +778,63 @@ export class OmpRpcRuntime implements AgentRuntime {
             request.model.id,
           ],
         });
-        if (cancelled) {
+        if (cancelled || stopped || failure) {
           await stop();
           return;
         }
         const startupTimeout = setTimeout(
           () => fail(new Error("omp RPC startup timed out")),
-          30_000,
+          this.options.startupTimeoutMs ?? 30_000,
         );
         let ready = false;
-        const decoder = new StringDecoder("utf8");
-        let buffer = "";
         try {
           for await (const chunk of child.events) {
-            if (paused || cancelled || finished) break;
-            if (chunk.type === "exit")
-              throw new Error("omp process exited before the session settled");
+            if (chunk.type === "exit") {
+              decoder.finish();
+              if (!finished && !paused && !cancelled && !failure)
+                throw new Error("omp process exited before the session settled");
+              break;
+            }
             if (chunk.type === "stderr") continue;
-            buffer += decoder.write(Buffer.from(chunk.data));
-            let newline = buffer.indexOf("\n");
-            while (newline >= 0) {
-              const line = buffer.slice(0, newline);
-              buffer = buffer.slice(newline + 1);
-              if (Buffer.byteLength(line) > 1_048_576)
-                throw new Error("omp v1 output exceeded the frame limit");
-              if (line.trim()) {
-                let parsed: unknown;
-                try {
-                  parsed = JSON.parse(line);
-                } catch {
-                  throw new Error("Invalid omp JSONL frame");
-                }
-                const frame = record(parsed);
-                if (typeof frame.type !== "string") throw new Error("Invalid omp RPC frame");
+            readingBatch = true;
+            try {
+              for (const frame of decoder.push(chunk.data)) {
                 if (frame.type === "ready") {
                   if (ready || frame.protocolVersion !== 1)
                     throw new Error("Unsupported omp RPC protocol");
+                  if (stopped || cancelled) continue;
                   ready = true;
+                  const physical = frame.maxFrameBytes ?? OMP_MAX_FRAME_BYTES;
+                  const logical = frame.maxReassembledFrameBytes ?? OMP_MAX_REASSEMBLED_BYTES;
+                  if (
+                    typeof physical !== "number" ||
+                    !Number.isSafeInteger(physical) ||
+                    physical < 1 ||
+                    typeof logical !== "number" ||
+                    !Number.isSafeInteger(logical) ||
+                    logical < 1
+                  )
+                    throw new Error("Invalid omp RPC framing limits");
+                  maxInputBytes = Math.min(physical, OMP_MAX_FRAME_BYTES);
+                  decoder.configure({
+                    maxFrameBytes: maxInputBytes,
+                    maxReassembledFrameBytes: Math.min(logical, OMP_MAX_REASSEMBLED_BYTES),
+                  });
                   void (async () => {
+                    if (
+                      Array.isArray(frame.supportedProtocolVersions) &&
+                      frame.supportedProtocolVersions.includes(2)
+                    ) {
+                      // The ack and first chunk may share an OS read. Decode v2 before sending,
+                      // but wait for the correlated ack before any further commands or prompt.
+                      decoder.configure({ protocolVersion: 2 });
+                      const negotiated = await configure("negotiate_protocol", {
+                        protocolVersion: 2,
+                      });
+                      if (record(negotiated.data).protocolVersion !== 2)
+                        throw new Error("omp v2 negotiation failed");
+                      protocol = 2;
+                    }
                     await configure("set_host_tools", {
                       tools: [...tools.values()].map((tool) => ({
                         name: tool.name,
@@ -601,21 +849,25 @@ export class OmpRpcRuntime implements AgentRuntime {
                       level: request.model.thinkingLevel ?? "off",
                     });
                     clearTimeout(startupTimeout);
+                    if (stopped) return;
+                    promptSent = true;
                     await send({ type: "prompt", id: promptId, message: historyPrompt(request) });
                   })().catch(fail);
                 } else {
                   await handle(frame as Frame);
                 }
               }
-              newline = buffer.indexOf("\n");
+            } finally {
+              readingBatch = false;
             }
-            if (Buffer.byteLength(buffer) > 1_048_576)
-              throw new Error("omp v1 output exceeded the frame limit");
+            maybeDone();
           }
+          decoder.finish();
           if (!finished && !paused && !cancelled)
             throw new Error("omp RPC stream closed before completion");
         } finally {
           clearTimeout(startupTimeout);
+          clearTimeout(settleTimer);
           for (const response of commandResponses.values())
             response.reject(new Error("omp session closed"));
         }
@@ -624,16 +876,32 @@ export class OmpRpcRuntime implements AgentRuntime {
       }
     };
     const work = produce();
+    let cleanupFailed = false;
     try {
       yield* events.iterate();
     } finally {
       context?.signal?.removeEventListener("abort", onAbort);
-      if (!finished) await stop();
-      else child?.closeStdin();
-      await work;
-      await child?.exited;
-      this.running.delete(request.runId);
-      if (temporary) await rm(temporary, { recursive: true, force: true });
+      try {
+        if (!finished && !paused && !failure) cancelled = true; // Consumer return()/disconnect.
+        if (!finished)
+          await stop().catch(() => {
+            cleanupFailed = true;
+          });
+        const disposing = child?.dispose().catch(() => {
+          cleanupFailed = true;
+        });
+        await work;
+        await disposing;
+        // A cancelled startup may have acquired its child after cleanup began.
+        await child?.dispose().catch(() => {
+          cleanupFailed = true;
+        });
+        await Promise.all(accounting);
+      } finally {
+        this.running.delete(request.runId);
+        if (temporary) await rm(temporary, { recursive: true, force: true });
+      }
     }
+    if (cleanupFailed) throw new Error("omp process cleanup failed");
   }
 }

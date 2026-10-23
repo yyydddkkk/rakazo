@@ -79,6 +79,7 @@ export * from "./model-selection.js";
 export * from "./model-vision.js";
 export * from "./none-sandbox.js";
 export * from "./omp-runtime.js";
+export * from "./omp-usage-recovery.js";
 export * from "./openai-compatible-url.js";
 export * from "./page-browser-session.js";
 export * from "./parallel-web.js";

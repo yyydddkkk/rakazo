@@ -14,6 +14,7 @@ import {
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
+  createOmpUsageRecovery,
   createPostgresReconciliationLeadership,
   createRoutineRetryNoticeReconciler,
   createRunExecutor,
@@ -103,7 +104,9 @@ async function main() {
     defaultRuntime: process.env.AGENT_RUNTIME,
     dataDir,
     piSessionRoot: resolvePiSessionRoot(dataDir),
+    recoverUsage: createOmpUsageRecovery(prisma),
   });
+  await selection.recoverPendingUsage();
   const { runtime } = selection;
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey, configured: deploymentModelConfigured } =

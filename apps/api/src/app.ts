@@ -27,6 +27,7 @@ import {
   createMessagingContextLoader,
   createMessagingExternalConversationHistory,
   createMessagingExternalConversationSender,
+  createOmpUsageRecovery,
   createRunExecutor,
   createRunSecretWriter,
   createSandboxProvider,
@@ -325,7 +326,9 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     defaultRuntime: env.agentRuntime,
     dataDir: env.dataDir,
     piSessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
+    recoverUsage: createOmpUsageRecovery(prisma),
   });
+  if (!runtimeOverride) await selection.recoverPendingUsage();
   const runtime = runtimeOverride ?? selection.runtime;
   const auth = createAuth(prisma, {
     breachedPasswordCheck: env.breachedPasswordCheck,
