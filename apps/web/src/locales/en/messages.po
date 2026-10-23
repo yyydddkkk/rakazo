@@ -298,6 +298,10 @@ msgstr "About {label}"
 msgid "About groups"
 msgstr "About groups"
 
+#: src/pages/shell/bot-picker.tsx
+msgid "About spaces"
+msgstr "About spaces"
+
 #: src/components/integrations/IntegrationSetup.tsx
 #: src/pages/McpServersOverlay.tsx
 msgid "Access token (optional)"
@@ -316,11 +320,16 @@ msgid "Account menu for {name}"
 msgstr "Account menu for {name}"
 
 #. placeholder {0}: bot.name
+#. placeholder {0}: group.spaceName
 #. placeholder {0}: section.name
 #: src/pages/BotContextMenu.tsx
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Actions for {0}"
 msgstr "Actions for {0}"
+
+#: src/pages/shell/space-dialogs.tsx
+msgid "Actions for space"
+msgstr "Actions for space"
 
 #: src/pages/RoutineEditor.tsx
 msgid "Active"
@@ -1637,11 +1646,16 @@ msgstr "Create new Bot"
 msgid "Create new Group"
 msgstr "Create new Group"
 
+#: src/pages/shell/bot-picker.tsx
+msgid "Create new Space"
+msgstr "Create new Space"
+
 #: src/pages/RoutineEditor.tsx
 msgid "Create Routine"
 msgstr "Create Routine"
 
 #: src/components/AskCard.tsx
+#: src/pages/shell/dialogs.tsx
 msgid "Create space"
 msgstr "Create space"
 
@@ -1688,6 +1702,10 @@ msgstr "Current password"
 #: src/pages/shell/bot-credentials.tsx
 msgid "Custom header"
 msgstr "Custom header"
+
+#: src/pages/shell/dialogs.tsx
+msgid "Customer support"
+msgstr "Customer support"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Customize bot avatar"
@@ -1778,7 +1796,7 @@ msgstr "Delete memories too"
 msgid "Delete section"
 msgstr "Delete section"
 
-#: src/pages/shell/space-switcher.tsx
+#: src/pages/shell/space-dialogs.tsx
 msgid "Delete space"
 msgstr "Delete space"
 
@@ -2776,7 +2794,6 @@ msgid "New skill"
 msgstr "New skill"
 
 #: src/pages/shell/dialogs.tsx
-#: src/pages/shell/space-switcher.tsx
 msgid "New space"
 msgstr "New space"
 
@@ -2981,12 +2998,21 @@ msgstr "On a schedule"
 msgid "on the 1st at {0}"
 msgstr "on the 1st at {0}"
 
+#: src/pages/shell/space-dialogs.tsx
+msgid "Only empty spaces can be deleted. Delete its bots and groups first."
+msgstr "Only empty spaces can be deleted. Delete its bots and groups first."
+
 #: src/components/markdown-link-prompt.tsx
 #: src/pages/ScratchpadSection.tsx
 #: src/pages/shell/computer-panel.tsx
 #: src/pages/shell/message-view.tsx
 msgid "Open"
 msgstr "Open"
+
+#. placeholder {0}: group.title
+#: src/pages/shell/sidebar-roster.tsx
+msgid "Open {0}"
+msgstr "Open {0}"
 
 #. placeholder {0}: oauth.verificationUri.replace(/^https:\/\//, "")
 #: src/pages/model-settings/connection-controls.tsx
@@ -3182,6 +3208,10 @@ msgstr "Priority"
 #: src/pages/shell/bot-panel.tsx
 msgid "Private"
 msgstr "Private"
+
+#: src/pages/shell/dialogs.tsx
+msgid "Private workspace with its own bots and groups."
+msgstr "Private workspace with its own bots and groups."
 
 #: src/components/teach/TeachRecordingChrome.tsx
 msgid "Protected input"
@@ -3398,7 +3428,7 @@ msgid "Rename section"
 msgstr "Rename section"
 
 #: src/pages/shell/dialogs.tsx
-#: src/pages/shell/space-switcher.tsx
+#: src/pages/shell/space-dialogs.tsx
 msgid "Rename space"
 msgstr "Rename space"
 
@@ -3742,6 +3772,7 @@ msgstr "Server URL"
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/shell/shell-side-panel.tsx
+#: src/pages/shell/space-dialogs.tsx
 msgid "Settings"
 msgstr "Settings"
 
@@ -3863,6 +3894,7 @@ msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
 
 #: src/lib/identity-display.ts
+#: src/pages/SettingsOverlay.tsx
 msgid "Space"
 msgstr "Space"
 
@@ -3877,6 +3909,10 @@ msgstr "Space changed. Reopen Models to save its backup list."
 #: src/pages/shell/bot-panel.tsx
 msgid "Space default"
 msgstr "Space default"
+
+#: src/pages/shell/dialogs.tsx
+msgid "Spaces"
+msgstr "Spaces"
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Start recording"

@@ -76,8 +76,8 @@ export function ShellDialogs({
   setCommandPaletteOpen: (open: boolean) => void;
   bots: Bot[];
   onSelectBot: (id: string) => void;
-  pickerInfoTopic: "group" | null;
-  setPickerInfoTopic: (topic: "group" | null) => void;
+  pickerInfoTopic: "group" | "space" | null;
+  setPickerInfoTopic: (topic: "group" | "space" | null) => void;
   clearTarget: ChatTarget | null;
   setClearTarget: (target: ChatTarget | null) => void;
   confirmClear: (target: ChatTarget) => Promise<void>;
@@ -178,7 +178,9 @@ export function ShellDialogs({
         onSelectBot={onSelectBot}
       />
 
-      {pickerInfoTopic ? <PickerInfoDialog onClose={() => setPickerInfoTopic(null)} /> : null}
+      {pickerInfoTopic ? (
+        <PickerInfoDialog topic={pickerInfoTopic} onClose={() => setPickerInfoTopic(null)} />
+      ) : null}
 
       {clearTarget ? (
         <ClearConversationDialog

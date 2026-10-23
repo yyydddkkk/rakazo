@@ -5,6 +5,7 @@ import type { Bot, BotSection, Group, Me, Space, ThreadSnapshot } from "@rakazo/
 import { nestRosterByParent } from "@rakazo/core";
 import {
   BotAvatar,
+  Button,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -14,8 +15,8 @@ import {
   ContextMenuTrigger,
   GroupAvatar,
 } from "@rakazo/ui-web";
-import { ChevronDown, CircleAlert, Pencil, Trash2 } from "lucide-react";
-import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { ChevronDown, CircleAlert, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import { Suspense } from "react";
 import { IconTooltip } from "../../components/IconTooltip";
 import type { BotsSidebarDensity } from "../../lib/bots-sidebar-density-pref";
@@ -33,11 +34,14 @@ export function SidebarRoster({
   collapsedRosterParents,
   bootstrapMe,
   botSections,
+  spaces,
   rosterDropKey,
   setRosterDropKey,
   rosterDropAction,
   applyRosterDrop,
   openSpaceChat,
+  spaceMenuAnchor,
+  setSpaceMenu,
   setRenameSectionTarget,
   setDeleteSectionTarget,
   toggleSidebarSection,
@@ -64,11 +68,14 @@ export function SidebarRoster({
   collapsedRosterParents: ReadonlySet<string>;
   bootstrapMe: Pick<Me, "spaceId"> | null | undefined;
   botSections: BotSection[];
+  spaces: Space[];
   rosterDropKey: string | null;
   setRosterDropKey: (key: string | null) => void;
   rosterDropAction: (target: RosterDropTarget, sameParent: boolean) => RosterDropAction | null;
   applyRosterDrop: (target: RosterDropTarget, sameParent: boolean, botIds: string[]) => void;
   openSpaceChat: (spaceId: string, path: string) => void;
+  spaceMenuAnchor: RefObject<HTMLElement | null>;
+  setSpaceMenu: (menu: { id: string; position: { x: number; y: number } }) => void;
   setRenameSectionTarget: (target: { section: BotSection; spaceId: string }) => void;
   setDeleteSectionTarget: (target: { section: BotSection; spaceId: string }) => void;
   toggleSidebarSection: (key: string) => void;
@@ -109,14 +116,19 @@ export function SidebarRoster({
           nestedRows.flatMap((row) =>
             row.item.kind === "bot" && row.parentId === parentId ? [row.item.chat.id] : [],
           );
+        const hasSpaceActions = group.canOpenSpaceSettings;
         const headerDropTarget: RosterDropTarget | null =
           group.spaceId === bootstrapMe?.spaceId &&
+          !group.emptySpaceId &&
           (group.sectionId || group.key.endsWith("unassigned"))
             ? { kind: "section", sectionId: group.sectionId }
             : null;
         const headerDropKey = `header:${group.key}`;
         const section = group.sectionId
-          ? botSections.find((item) => item.id === group.sectionId)
+          ? (group.spaceId === bootstrapMe?.spaceId
+              ? botSections
+              : (spaces.find((space) => space.id === group.spaceId)?.botSections ?? [])
+            ).find((item) => item.id === group.sectionId)
           : undefined;
         return (
           <Collapsible
@@ -128,12 +140,16 @@ export function SidebarRoster({
             data-sidebar-group={group.key}
             className={`flex flex-col gap-0.5 ${mini && groupIndex > 0 ? "mt-2 border-t border-sidebar-border pt-2" : ""}`}
           >
-            {!mini && group.title ? (
+            {!mini && (group.title || hasSpaceActions) ? (
               // biome-ignore lint/a11y/useSemanticElements: groups sidebar controls, not form fields; Move to remains the keyboard alternative.
               <div
                 role="group"
                 data-roster-drop={rosterDropKey === headerDropKey ? "true" : undefined}
-                className={`flex items-center pt-3 pb-0.5 rounded-lg ${rosterDropKey === headerDropKey ? "bg-sidebar-accent" : ""}`}
+                className={`${
+                  group.title && hasSpaceActions
+                    ? "grid pt-3 pb-0.5"
+                    : `flex items-center pt-3 pb-0.5${group.title ? "" : " justify-end"}`
+                } rounded-lg ${rosterDropKey === headerDropKey ? "bg-sidebar-accent" : ""}`}
                 onDragOver={(event) => {
                   if (!headerDropTarget || !rosterDropAction(headerDropTarget, false)) return;
                   event.preventDefault();
@@ -150,24 +166,57 @@ export function SidebarRoster({
                 }}
               >
                 {group.title ? (
+                  // Prefer the section menu over the space menu when both apply;
+                  // the dedicated space-actions button still opens the space menu.
                   <ContextMenu disabled={!section}>
                     <ContextMenuTrigger
-                      render={<CollapsibleTrigger />}
-                      className={`flex min-w-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring flex-1`}
-                      onContextMenu={section ? (event) => event.currentTarget.focus() : undefined}
-                      aria-label={collapsed ? t`Expand ${group.title}` : t`Collapse ${group.title}`}
+                      render={
+                        group.emptySpaceId ? <button type="button" /> : <CollapsibleTrigger />
+                      }
+                      className={`flex min-w-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring ${hasSpaceActions ? "col-start-1 row-start-1 w-full pe-8" : "flex-1"}`}
+                      onClick={() => {
+                        if (group.emptySpaceId) {
+                          openSpaceChat(group.emptySpaceId, "/onboarding");
+                        }
+                      }}
+                      onContextMenu={
+                        section
+                          ? (event) => event.currentTarget.focus()
+                          : hasSpaceActions
+                            ? (event) => {
+                                event.preventDefault();
+                                spaceMenuAnchor.current = event.currentTarget;
+                                setSpaceMenu({
+                                  id: group.spaceId,
+                                  position: { x: event.clientX, y: event.clientY },
+                                });
+                              }
+                            : undefined
+                      }
+                      aria-label={
+                        group.emptySpaceId
+                          ? t`Open ${group.title}`
+                          : collapsed
+                            ? t`Expand ${group.title}`
+                            : t`Collapse ${group.title}`
+                      }
                     >
                       <span className="flex min-w-0 items-center gap-1.5 truncate">
+                        {group.showLock ? (
+                          <Lock size={11} strokeWidth={2} aria-hidden="true" />
+                        ) : null}
                         <span className="truncate">{group.title}</span>
                       </span>
-                      <ChevronDown
-                        size={14}
-                        strokeWidth={1.8}
-                        className={
-                          collapsed ? "-rotate-90 transition-transform" : "transition-transform"
-                        }
-                        aria-hidden="true"
-                      />
+                      {group.emptySpaceId ? null : (
+                        <ChevronDown
+                          size={14}
+                          strokeWidth={1.8}
+                          className={
+                            collapsed ? "-rotate-90 transition-transform" : "transition-transform"
+                          }
+                          aria-hidden="true"
+                        />
+                      )}
                     </ContextMenuTrigger>
                     {section ? (
                       <ContextMenuContent
@@ -194,6 +243,28 @@ export function SidebarRoster({
                       </ContextMenuContent>
                     ) : null}
                   </ContextMenu>
+                ) : null}
+                {hasSpaceActions ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className={
+                      group.title
+                        ? "col-start-1 row-start-1 justify-self-end self-center"
+                        : undefined
+                    }
+                    aria-label={t`Actions for ${group.spaceName}`}
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      spaceMenuAnchor.current = event.currentTarget;
+                      setSpaceMenu({
+                        id: group.spaceId,
+                        position: { x: rect.left, y: rect.bottom },
+                      });
+                    }}
+                  >
+                    <MoreHorizontal size={14} aria-hidden="true" />
+                  </Button>
                 ) : null}
               </div>
             ) : null}

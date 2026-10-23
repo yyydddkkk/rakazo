@@ -30,6 +30,34 @@ vi.mock("@rakazo/ui-web", () => ({
     "children"
   >) => <div {...props}>{children}</div>,
   DialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
+  OptionSelect: ({
+    options,
+    value,
+    onValueChange,
+    "data-testid": testId,
+  }: {
+    options: readonly { value: string; label: string }[];
+    value: string;
+    onValueChange: (value: string) => void;
+    "data-testid"?: string;
+  }) => (
+    <div>
+      <button type="button" data-testid={testId}>
+        {options.find((option) => option.value === value)?.label}
+      </button>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="option"
+          aria-selected={option.value === value}
+          onClick={() => onValueChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("./AccountSettingsOverlay", () => ({
@@ -37,7 +65,7 @@ vi.mock("./AccountSettingsOverlay", () => ({
   GeneralSettingsPanels: () => null,
   UsageSettingsPanel: () => null,
 }));
-vi.mock("../lib/rpc", () => ({ rpc: {} }));
+vi.mock("../lib/rpc", () => ({ rpc: {}, rpcForSpace: () => ({}) }));
 vi.mock("./MemorySettingsOverlay", () => ({ MemorySettingsOverlay: () => null }));
 vi.mock("./ModelSettingsOverlay", () => ({ ModelSettingsOverlay: () => null }));
 vi.mock("../components/ComputersUnavailableHint", () => ({
@@ -47,6 +75,7 @@ vi.mock("../components/ComputersUnavailableHint", () => ({
 import { SettingsOverlay } from "./SettingsOverlay";
 
 const acme = { id: "space-a", name: "Acme" };
+const spaces = [acme, { id: "space-b", name: "Beta" }];
 
 async function render(props: Partial<React.ComponentProps<typeof SettingsOverlay>>) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -81,9 +110,51 @@ async function render(props: Partial<React.ComponentProps<typeof SettingsOverlay
   };
 }
 
+it("names the space a space-scoped section acts on and switches it in place", async () => {
+  const onSpaceChange = vi.fn();
+  const { container, cleanup } = await render({
+    space: acme,
+    spaces,
+    onSpaceChange,
+    initialSection: "models",
+  });
+  try {
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="settings-space"]');
+    if (!trigger) throw new Error("Missing space switcher");
+    expect(trigger.textContent).toBe("Acme");
+
+    const options = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    expect(options.map((option) => option.textContent)).toEqual(["Acme", "Beta"]);
+
+    await act(async () => options[1]?.click());
+
+    expect(onSpaceChange).toHaveBeenCalledWith("space-b");
+  } finally {
+    await cleanup();
+  }
+});
+
+it("shows the space name without a switcher when there is only one space", async () => {
+  const { container, cleanup } = await render({
+    space: acme,
+    spaces: [acme],
+    onSpaceChange: vi.fn(),
+    initialSection: "models",
+  });
+  try {
+    const label = container.querySelector('[data-testid="settings-space"]');
+    expect(label?.tagName).toBe("P");
+    expect(label?.textContent).toBe("Acme");
+  } finally {
+    await cleanup();
+  }
+});
+
 it("shows no space picker on sections that are not per space", async () => {
   const { container, cleanup } = await render({
     space: acme,
+    spaces,
+    onSpaceChange: vi.fn(),
     initialSection: "general",
   });
   try {

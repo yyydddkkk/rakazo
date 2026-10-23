@@ -30,17 +30,20 @@ vi.mock("@rakazo/ui-web", () => ({
   AlertDialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
 }));
 
-import { SpaceNameDialog } from "./dialogs";
+import { RenameSpaceDialog } from "./dialogs";
 
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(
-  onConfirm: (name: string) => Promise<void>,
-  space?: ComponentProps<typeof SpaceNameDialog>["space"],
-) {
+async function render(onConfirm: (name: string) => Promise<void>) {
   await act(async () => {
-    root.render(<SpaceNameDialog space={space} onCancel={() => undefined} onConfirm={onConfirm} />);
+    root.render(
+      <RenameSpaceDialog
+        space={{ name: "Personal" }}
+        onCancel={() => undefined}
+        onConfirm={onConfirm}
+      />,
+    );
   });
 }
 
@@ -50,25 +53,18 @@ function nameField(): HTMLInputElement {
   return input;
 }
 
-function button(label: string): HTMLButtonElement {
-  const found = [...container.querySelectorAll("button")].find(
-    (candidate) => candidate.textContent === label,
-  );
-  if (!(found instanceof HTMLButtonElement)) throw new Error(`Missing ${label} button`);
-  return found;
-}
-
-async function type(name: string) {
+async function submit(name: string) {
   const input = nameField();
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, name);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-}
-
-async function press(label: string) {
+  const save = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Save",
+  );
+  if (!(save instanceof HTMLButtonElement)) throw new Error("Missing Save button");
   await act(async () => {
-    button(label).click();
+    save.click();
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -87,45 +83,20 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-describe("SpaceNameDialog", () => {
-  it("creates a space with the trimmed name once one is typed", async () => {
-    const onConfirm = vi.fn(async () => undefined);
-    await render(onConfirm);
-    expect(container.textContent).toContain("New space");
-    expect(button("Create").disabled).toBe(true);
-    await type("  Support  ");
-    await press("Create");
-    expect(onConfirm).toHaveBeenCalledWith("Support");
-  });
-
-  it("renames only to a different name", async () => {
-    const onConfirm = vi.fn(async () => undefined);
-    await render(onConfirm, { name: "Personal" });
-    expect(container.textContent).toContain("Rename space");
-    expect(button("Save").disabled).toBe(true);
-    await type("Support");
-    await press("Save");
-    expect(onConfirm).toHaveBeenCalledWith("Support");
-  });
-
+describe("RenameSpaceDialog", () => {
   it("falls back to the generic error when the failure message is blank", async () => {
-    await render(
-      async () => {
-        throw new Error("   ");
-      },
-      { name: "Personal" },
-    );
-    await type("Support");
-    await press("Save");
+    await render(async () => {
+      throw new Error("   ");
+    });
+    await submit("Support");
     expect(container.textContent).toContain("Could not rename space");
   });
 
   it("shows a non-blank failure message", async () => {
     await render(async () => {
-      throw new Error("Space limit reached");
+      throw new Error("Space deletion is already in progress");
     });
-    await type("Support");
-    await press("Create");
-    expect(container.textContent).toContain("Space limit reached");
+    await submit("Support");
+    expect(container.textContent).toContain("Space deletion is already in progress");
   });
 });

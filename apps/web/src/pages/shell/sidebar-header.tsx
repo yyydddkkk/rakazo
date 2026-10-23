@@ -2,7 +2,6 @@ import { useLingui } from "@lingui/react/macro";
 import type { Bot } from "@rakazo/contracts";
 import { Button, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
 import { Bell, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { IconTooltip } from "../../components/IconTooltip";
 import type { Panel } from "../../lib/right-panel-state";
@@ -17,8 +16,8 @@ export function SidebarHeader({
   setMobileSidebarOpen,
   setPanel,
   navigate,
+  setNewSpaceOpen,
   setPickerInfoTopic,
-  spaceSwitcher,
 }: {
   mini?: boolean;
   activityMode: boolean;
@@ -28,17 +27,16 @@ export function SidebarHeader({
   setMobileSidebarOpen: (open: boolean) => void;
   setPanel: (panel: Panel) => void;
   navigate: (path: string) => void;
-  setPickerInfoTopic: (topic: "group") => void;
-  spaceSwitcher?: ReactNode;
+  setNewSpaceOpen: (open: boolean) => void;
+  setPickerInfoTopic: (topic: "group" | "space") => void;
 }) {
   const { t } = useLingui();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const toggleLabel = mini ? t`Show bots` : t`Minimize bots`;
   return (
     <div
-      className={`flex items-center pb-3 pt-4 ${mini ? "flex-col gap-3 px-1" : "justify-between gap-2 px-[18px]"}`}
+      className={`flex items-center pb-3 pt-4 ${mini ? "flex-col gap-3 px-1" : "justify-end px-[18px]"}`}
     >
-      {mini ? null : <div className="-ms-2 flex min-w-0">{spaceSwitcher}</div>}
       <div className={`relative flex items-center ${mini ? "flex-col gap-1" : "gap-2.5"}`}>
         <IconTooltip label={t`Activity`}>
           <Button
@@ -111,10 +109,20 @@ export function SidebarHeader({
                   setMobileSidebarOpen(false);
                   setPanel("create-group");
                 }}
+                onCreateSpace={() => {
+                  setCreateMenuOpen(false);
+                  setMobileSidebarOpen(false);
+                  setNewSpaceOpen(true);
+                }}
                 onShowGroupInfo={() => {
                   setCreateMenuOpen(false);
                   setMobileSidebarOpen(false);
                   setPickerInfoTopic("group");
+                }}
+                onShowSpaceInfo={() => {
+                  setCreateMenuOpen(false);
+                  setMobileSidebarOpen(false);
+                  setPickerInfoTopic("space");
                 }}
               />
             </PopoverContent>

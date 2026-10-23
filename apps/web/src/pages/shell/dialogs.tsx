@@ -21,7 +21,7 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from "@rakazo/ui-web";
-import { Users } from "lucide-react";
+import { Lock, Users } from "lucide-react";
 import { useId, useState } from "react";
 import { errorText } from "../../lib/user-error";
 
@@ -34,23 +34,88 @@ function closeUnlessBusy(busy: boolean, onCancel: () => void) {
   };
 }
 
-/** Names a new space, or renames `space` when given. */
-export function SpaceNameDialog({
-  space,
+export function NewSpaceDialog({
   onCancel,
   onConfirm,
 }: {
-  space?: { name: string };
   onCancel: () => void;
   onConfirm: (name: string) => Promise<void>;
 }) {
   const { t } = useLingui();
   const nameId = useId();
-  const [name, setName] = useState(space?.name ?? "");
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const create = () => {
+    const trimmed = name.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    setError(null);
+    void onConfirm(trimmed).catch((reason: unknown) => {
+      setError(errorText(reason, t`Could not create space`));
+      setSaving(false);
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={closeUnlessBusy(saving, onCancel)}>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2.5">
+            <Lock
+              size={17}
+              strokeWidth={1.8}
+              className="text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Trans>New space</Trans>
+          </DialogTitle>
+        </DialogHeader>
+        <label htmlFor={nameId} className="block text-[13.5px] text-foreground/75">
+          <Trans>Name</Trans>
+          <Input
+            id={nameId}
+            maxLength={60}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") create();
+            }}
+            placeholder={t`Customer support`}
+            className="mt-2"
+          />
+        </label>
+        {error ? <p className="text-[13.5px] text-destructive">{error}</p> : null}
+        <DialogFooter>
+          <Button variant="outline" disabled={saving} onClick={onCancel}>
+            <Trans>Cancel</Trans>
+          </Button>
+          <Button disabled={saving || !name.trim()} onClick={create}>
+            {saving ? <Trans>Creating…</Trans> : <Trans>Create space</Trans>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function RenameSpaceDialog({
+  space,
+  onCancel,
+  onConfirm,
+}: {
+  space: { name: string };
+  onCancel: () => void;
+  onConfirm: (name: string) => Promise<void>;
+}) {
+  const { t } = useLingui();
+  const nameId = useId();
+  const [name, setName] = useState(space.name);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const trimmed = name.trim();
-  const unchanged = trimmed === space?.name;
+  const unchanged = trimmed === space.name;
 
   return (
     <Dialog open onOpenChange={closeUnlessBusy(saving, onCancel)}>
@@ -64,7 +129,9 @@ export function SpaceNameDialog({
             setError(null);
             void onConfirm(trimmed).catch((err: unknown) => {
               setError(
-                errorText(err, space ? t`Could not rename space` : t`Could not create space`),
+                err instanceof Error && err.message.trim()
+                  ? err.message
+                  : t`Could not rename space`,
               );
               setSaving(false);
             });
@@ -72,7 +139,7 @@ export function SpaceNameDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              {space ? <Trans>Rename space</Trans> : <Trans>New space</Trans>}
+              <Trans>Rename space</Trans>
             </DialogTitle>
           </DialogHeader>
           <label htmlFor={nameId} className="block text-[13.5px] text-foreground/75">
@@ -92,13 +159,7 @@ export function SpaceNameDialog({
               <Trans>Cancel</Trans>
             </Button>
             <Button type="submit" disabled={saving || !trimmed || unchanged}>
-              {saving ? (
-                <Trans>Saving…</Trans>
-              ) : space ? (
-                <Trans>Save</Trans>
-              ) : (
-                <Trans>Create</Trans>
-              )}
+              {saving ? <Trans>Saving…</Trans> : <Trans>Save</Trans>}
             </Button>
           </DialogFooter>
         </form>
@@ -107,7 +168,13 @@ export function SpaceNameDialog({
   );
 }
 
-export function PickerInfoDialog({ onClose }: { onClose: () => void }) {
+export function PickerInfoDialog({
+  topic,
+  onClose,
+}: {
+  topic: "group" | "space";
+  onClose: () => void;
+}) {
   return (
     <Dialog
       open
@@ -118,19 +185,32 @@ export function PickerInfoDialog({ onClose }: { onClose: () => void }) {
       <DialogContent data-testid="picker-info-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
-            <Users
-              size={17}
-              strokeWidth={1.8}
-              className="text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Trans>Groups</Trans>
+            {topic === "group" ? (
+              <Users
+                size={17}
+                strokeWidth={1.8}
+                className="text-muted-foreground"
+                aria-hidden="true"
+              />
+            ) : (
+              <Lock
+                size={17}
+                strokeWidth={1.8}
+                className="text-muted-foreground"
+                aria-hidden="true"
+              />
+            )}
+            {topic === "group" ? <Trans>Groups</Trans> : <Trans>Spaces</Trans>}
           </DialogTitle>
           <DialogDescription>
-            <Trans>
-              Shared chat with {GROUP_MEMBER_MIN}-{GROUP_MEMBER_MAX} bots. They all reply in the
-              same thread.
-            </Trans>
+            {topic === "group" ? (
+              <Trans>
+                Shared chat with {GROUP_MEMBER_MIN}-{GROUP_MEMBER_MAX} bots. They all reply in the
+                same thread.
+              </Trans>
+            ) : (
+              <Trans>Private workspace with its own bots and groups.</Trans>
+            )}
           </DialogDescription>
         </DialogHeader>
       </DialogContent>

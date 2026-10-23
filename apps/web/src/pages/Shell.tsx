@@ -48,7 +48,12 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import type { ArtifactTarget } from "../lib/artifact-open";
 import { authClient } from "../lib/auth";
-import { takeInitialBootstrap } from "../lib/bootstrap";
+import {
+  discardPrimedBootstrap,
+  primeSpaceBootstrap,
+  takeInitialBootstrap,
+} from "../lib/bootstrap";
+import { initialBootstrapTarget } from "../lib/bootstrap-target";
 import type { BotsSidebarDensity } from "../lib/bots-sidebar-density-pref";
 import {
   getBotsSidebarDensity,
@@ -76,9 +81,15 @@ import {
   rightPanelStorageKey,
   writeRightPanelState,
 } from "../lib/right-panel-state";
-import { createSpaceRpc, selectedSpaceId } from "../lib/rpc";
+import { createSpaceRpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
 import { guardShellNavigate } from "../lib/shell-navigation";
+import {
+  markShellReady,
+  remountShellForSpace,
+  spaceSwitchDecision,
+  useSpaceEpoch,
+} from "../lib/space-switch";
 import {
   activeThreadRuns,
   computerPanelNeedsScreen,
@@ -107,6 +118,7 @@ import { ShellSettingsOverlays } from "./shell/shell-settings-overlays";
 import { ShellSidePanel } from "./shell/shell-side-panel";
 import { ShellSidebar } from "./shell/shell-sidebar";
 import { BotsSidebarLayout } from "./shell/sidebar-layout";
+import { SpaceDialogs } from "./shell/space-dialogs";
 import { sidebarGroupsForSpaces } from "./shell/space-sidebar";
 import { applyThreadEvent, firstThreadRoute, threadSnapshotSignal } from "./shell/thread-helpers";
 import { Transcript } from "./shell/transcript";
@@ -126,6 +138,12 @@ import { useSidebarExpansion } from "./shell/use-sidebar-expansion";
 import { useSpaceSearch } from "./shell/use-space-search";
 
 export function ShellPage() {
+  // A new key per space switch, so nothing from the previous space survives it.
+  const spaceEpoch = useSpaceEpoch();
+  return <SpaceShell key={spaceEpoch} />;
+}
+
+function SpaceShell() {
   const { t } = useLingui();
   const { botId, groupId } = useParams();
   const [rpc] = useState(() => createSpaceRpc(selectedSpaceId()));
@@ -318,7 +336,8 @@ export function ShellPage() {
   const focusPromptBotIdRef = useRef<string | null>(null);
   const isMobileSidebar = useIsMobile();
   const miniSidebar = botsSidebarCollapsed && !isMobileSidebar;
-  const [pickerInfoTopic, setPickerInfoTopic] = useState<"group" | null>(null);
+  const [newSpaceOpen, setNewSpaceOpen] = useState(false);
+  const [pickerInfoTopic, setPickerInfoTopic] = useState<"group" | "space" | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const {
@@ -334,6 +353,18 @@ export function ShellPage() {
   const [botMenu, setBotMenu] = useState<{ kind: "bot" | "group"; id: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Bot | null>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
+  const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<Space | null>(null);
+  const [renameSpaceTarget, setRenameSpaceTarget] = useState<Space | null>(null);
+  const [spaceMenu, setSpaceMenu] = useState<{
+    id: string;
+    position: { x: number; y: number };
+  } | null>(null);
+  const spaceMenuAnchor = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (spaceMenu || !spaceMenuAnchor.current) return;
+    spaceMenuAnchor.current.focus();
+    spaceMenuAnchor.current = null;
+  }, [spaceMenu]);
   const [clearTarget, setClearTarget] = useState<ChatTarget | null>(null);
   const [newSectionTarget, setNewSectionTarget] = useState<ChatTarget | null>(null);
   const [renameSectionTarget, setRenameSectionTarget] = useState<SectionTarget | null>(null);
@@ -345,7 +376,21 @@ export function ShellPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [initialBotsLoaded, setInitialBotsLoaded] = useState(false);
   const [bootstrapMe, setBootstrapMe] = useState<Me | null>();
-  const settingsSpace = spaces.find((space) => space.id === bootstrapMe?.spaceId) ?? null;
+  const currentSpaceId = selectedSpaceId() ?? bootstrapMe?.spaceId ?? null;
+  // null: settings follow the space the app is showing.
+  const [settingsSpaceId, setSettingsSpaceId] = usePreloadRecoveryState<string | null>(
+    "settingsSpaceId",
+    null,
+  );
+  const settingsSpace =
+    spaces.find((space) => space.id === (settingsSpaceId ?? currentSpaceId)) ?? null;
+  // Never fall back to another space's settings when the edited space goes away.
+  const settingsSpaceGone = initialBotsLoaded && settingsSpaceId !== null && !settingsSpace;
+  useEffect(() => {
+    if (!settingsSpaceGone) return;
+    setSettingsOpen(false);
+    setSettingsSpaceId(null);
+  }, [settingsSpaceGone]);
   const { showComputerRecoveryHint, holdComputerRecovery, releaseComputerRecovery } =
     useComputerRecoveryHold(bootstrapMe?.sandboxProvider, panel);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
@@ -1023,9 +1068,9 @@ export function ShellPage() {
   const sidebarSpaces = useMemo(
     () =>
       spaces.length > 0
-        ? spaces
-            .filter((space) => space.id === bootstrapMe?.spaceId)
-            .map((space) => ({ ...space, bots, groups, botSections }))
+        ? spaces.map((space) =>
+            space.id === bootstrapMe?.spaceId ? { ...space, bots, groups, botSections } : space,
+          )
         : bootstrapMe
           ? [
               {
@@ -1033,6 +1078,8 @@ export function ShellPage() {
                 name: "Personal",
                 isDefault: true,
                 hasContent: true,
+                canRename: false,
+                canDelete: false,
                 bots,
                 groups,
                 botSections,
@@ -1049,12 +1096,66 @@ export function ShellPage() {
       }),
     [sidebarSpaces, query, miniSidebar, t],
   );
-  const openSpaceChat = useCallback(
-    (_spaceId: string, path: string) => {
-      setMobileSidebarOpen(false);
-      navigate(path);
+  const spaceSwitchRequest = useRef(0);
+  useEffect(
+    () => () => {
+      // A switch still loading when this shell goes away (another page, or a
+      // newer switch) must not pull the user back to its space afterwards.
+      spaceSwitchRequest.current += 1;
     },
-    [navigate],
+    [],
+  );
+  const openSpaceChat = useCallback(
+    (spaceId: string, path: string) => {
+      setMobileSidebarOpen(false);
+      const request = ++spaceSwitchRequest.current;
+      const previousEffective = selectedSpaceId() ?? bootstrapMe?.spaceId;
+      // Persist the active space (including primary) so RPC headers match the chat.
+      if (previousEffective === spaceId) {
+        if (selectSpace(spaceId)) navigate(path);
+        return;
+      }
+      const reload = () => {
+        if (selectSpace(spaceId)) window.location.assign(path);
+      };
+      // Another space is an auth boundary: its bootstrap is loaded first, under that
+      // space's header, then the shell remounts so none of this space's state survives.
+      // A page outside the shell still reloads.
+      const target = initialBootstrapTarget(path);
+      if (!target) {
+        reload();
+        return;
+      }
+      const startedAt = window.location.pathname;
+      const current = () =>
+        spaceSwitchDecision(
+          request === spaceSwitchRequest.current,
+          startedAt,
+          window.location.pathname,
+        ) === "commit";
+      const primed = primeSpaceBootstrap(spaceId, target.botId);
+      primed.then(
+        () => {
+          if (!current()) {
+            discardPrimedBootstrap(primed);
+            return;
+          }
+          remountShellForSpace(() => {
+            if (!current() || !selectSpace(spaceId)) {
+              discardPrimedBootstrap(primed);
+              return false;
+            }
+            navigate(path);
+            return true;
+          });
+        },
+        () => {
+          discardPrimedBootstrap(primed);
+          if (current()) reload();
+        },
+      );
+    },
+    [bootstrapMe?.spaceId, navigate],
   );
   const {
     draggedBotId,
@@ -1325,6 +1426,7 @@ export function ShellPage() {
       markAfterPaint("rk:renderer:thread-painted");
     }
     if (shellReady) {
+      markShellReady();
       markOnce("rk:renderer:shell-ready");
       markAfterPaint("rk:renderer:shell-painted");
     }
@@ -1467,8 +1569,16 @@ export function ShellPage() {
   }
 
   function openSettings(section: SettingsSection = "general") {
+    setSettingsSpaceId(null);
     setSettingsSection(section);
     setSettingsOpen(true);
+  }
+
+  // Space-scoped sections bind their own rpc client to this space, so another
+  // space's settings open in place without switching the app or reloading.
+  function openSpaceSettings(spaceId: string) {
+    openSettings("models");
+    setSettingsSpaceId(spaceId);
   }
 
   async function createBot(input: {
@@ -1948,7 +2058,7 @@ export function ShellPage() {
         setPluginsOpen={setPluginsOpen}
         openSettings={openSettings}
         spaces={spaces}
-        currentSpaceId={bootstrapMe?.spaceId}
+        setNewSpaceOpen={setNewSpaceOpen}
         sidebarGroups={sidebarGroups}
         collapsedSidebarSections={collapsedSidebarSections}
         collapsedRosterParents={collapsedRosterParents}
@@ -1959,6 +2069,8 @@ export function ShellPage() {
         rosterDropAction={rosterDropAction}
         applyRosterDrop={applyRosterDrop}
         openSpaceChat={openSpaceChat}
+        spaceMenuAnchor={spaceMenuAnchor}
+        setSpaceMenu={setSpaceMenu}
         setRenameSectionTarget={setRenameSectionTarget}
         setDeleteSectionTarget={setDeleteSectionTarget}
         toggleSidebarSection={toggleSidebarSection}
@@ -1979,6 +2091,7 @@ export function ShellPage() {
 
       {/* Keep the composer's z-index inside the chat so phone overlays like the side panel cover it. */}
       <main
+        data-space-switch="main"
         aria-hidden={mobileSidebarOpen || undefined}
         inert={mobileSidebarOpen}
         className="isolate flex min-w-0 flex-1 flex-col bg-background"
@@ -2177,14 +2290,35 @@ export function ShellPage() {
         setMessagingSettingsOpen={setMessagingSettingsOpen}
       />
 
+      <SpaceDialogs
+        rpc={rpc}
+        spaces={spaces}
+        setSpaces={setSpaces}
+        spaceMenu={spaceMenu}
+        setSpaceMenu={setSpaceMenu}
+        newSpaceOpen={newSpaceOpen}
+        setNewSpaceOpen={setNewSpaceOpen}
+        renameSpaceTarget={renameSpaceTarget}
+        setRenameSpaceTarget={setRenameSpaceTarget}
+        deleteSpaceTarget={deleteSpaceTarget}
+        setDeleteSpaceTarget={setDeleteSpaceTarget}
+        currentSpaceId={bootstrapMe?.spaceId}
+        isAlive={() => alive.current}
+        setPanel={setPanel}
+        refreshBots={refreshBots}
+        openSpaceSettings={openSpaceSettings}
+      />
+
       <ShellSettingsOverlays
         rpc={rpc}
-        settingsOpen={settingsOpen}
+        settingsOpen={settingsOpen && (settingsSpaceId === null || settingsSpace !== null)}
         setSettingsOpen={setSettingsOpen}
         settingsSection={settingsSection}
         setSettingsSection={setSettingsSection}
         setMessagingSettingsOpen={setMessagingSettingsOpen}
         space={settingsSpace}
+        spaces={spaces}
+        onSpaceChange={setSettingsSpaceId}
         userName={userName}
         userEmail={session.data?.user.email}
         usage={usage}

@@ -21,6 +21,8 @@ export function ShellSettingsOverlays({
   setSettingsSection,
   setMessagingSettingsOpen,
   space,
+  spaces,
+  onSpaceChange,
   userName,
   userEmail,
   usage,
@@ -40,6 +42,8 @@ export function ShellSettingsOverlays({
   setSettingsSection: (section: SettingsSection) => void;
   setMessagingSettingsOpen: (open: boolean) => void;
   space: Space | null;
+  spaces: Space[];
+  onSpaceChange: (spaceId: string) => void;
   userName: string;
   userEmail: string | undefined;
   usage: ComponentProps<typeof SettingsOverlay>["usage"];
@@ -57,6 +61,8 @@ export function ShellSettingsOverlays({
       {settingsOpen ? (
         <SettingsOverlay
           space={space}
+          spaces={spaces}
+          onSpaceChange={onSpaceChange}
           name={userName}
           email={userEmail}
           usage={usage}

@@ -1,6 +1,13 @@
 import { useLingui } from "@lingui/react/macro";
 import type { AvatarStyle } from "@rakazo/contracts";
-import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  OptionSelect,
+} from "@rakazo/ui-web";
 import {
   Brain,
   ChevronLeft,
@@ -33,7 +40,7 @@ export type SettingsSection =
   | "usage"
   | "computer";
 
-/** Sections whose settings belong to the space. */
+/** Sections whose settings belong to a space; only these show the space picker. */
 const SPACE_SECTIONS: ReadonlySet<SettingsSection> = new Set(["models", "memory", "confirmations"]);
 
 type NavItem = {
@@ -44,6 +51,8 @@ type NavItem = {
 
 export function SettingsOverlay({
   space,
+  spaces = [],
+  onSpaceChange,
   email,
   name,
   usage,
@@ -60,8 +69,10 @@ export function SettingsOverlay({
   onOpenMessaging,
   onClose,
 }: {
-  /** The space the per-space sections act on. */
+  /** The space the per-space sections act on; it need not be the selected space. */
   space?: { id: string; name: string } | null;
+  spaces?: { id: string; name: string }[];
+  onSpaceChange?: (spaceId: string) => void;
   email?: string | null;
   name: string;
   usage?: {
@@ -267,6 +278,22 @@ export function SettingsOverlay({
                 <DialogTitle className="text-2xl font-medium text-foreground">
                   {sectionTitle}
                 </DialogTitle>
+                {!spaceScoped ? null : space && spaces.length > 1 && onSpaceChange ? (
+                  <OptionSelect
+                    className="w-56"
+                    data-testid="settings-space"
+                    aria-label={t`Space`}
+                    options={spaces.map((option) => ({ value: option.id, label: option.name }))}
+                    value={space.id}
+                    onValueChange={(next) => {
+                      if (next !== space.id) onSpaceChange(next);
+                    }}
+                  />
+                ) : space ? (
+                  <p data-testid="settings-space" className="text-sm text-muted-foreground">
+                    {space.name}
+                  </p>
+                ) : null}
               </div>
               <DialogClose
                 aria-label={closeLabel}

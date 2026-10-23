@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot, Group, SearchHit, Space } from "@rakazo/contracts";
+import type { Bot, Group, SearchHit } from "@rakazo/contracts";
 import {
   Button,
   InputGroup,
@@ -25,7 +25,6 @@ import { SpaceSearchResults } from "../SpaceSearch";
 import { ArchivedChats } from "./archived-chats";
 import { SidebarHeader } from "./sidebar-header";
 import { SidebarRoster } from "./sidebar-roster";
-import { SpaceSwitcher } from "./space-switcher";
 
 type RosterProps = Omit<ComponentProps<typeof SidebarRoster>, "mini" | "botsSidebarDensity">;
 
@@ -69,12 +68,9 @@ export function ShellSidebar({
   ticketBoardEnabled,
   setPluginsOpen,
   openSettings,
-  spaces,
-  currentSpaceId,
+  setNewSpaceOpen,
   ...rosterProps
 }: RosterProps & {
-  spaces: Space[];
-  currentSpaceId: string | undefined;
   rpc: ReturnType<typeof createSpaceRpc>;
   isMobileSidebar: boolean;
   mobileSidebarOpen: boolean;
@@ -96,7 +92,8 @@ export function ShellSidebar({
   bots: Bot[];
   setPanel: (panel: Panel) => void;
   navigate: (path: string) => void;
-  setPickerInfoTopic: (topic: "group") => void;
+  setNewSpaceOpen: (open: boolean) => void;
+  setPickerInfoTopic: (topic: "group" | "space") => void;
   showSpaceSearch: boolean;
   searchHits: SearchHit[];
   searchLoading: boolean;
@@ -139,6 +136,7 @@ export function ShellSidebar({
         collapsible={isMobileSidebar ? "none" : "icon"}
         side={document.documentElement.dir === "rtl" ? "right" : "left"}
         data-testid="bots-sidebar"
+        data-space-switch="sidebar"
         inert={isMobileSidebar && !mobileSidebarOpen ? true : undefined}
         aria-hidden={isMobileSidebar && !mobileSidebarOpen ? true : undefined}
         data-bots-sidebar-density={botsSidebarDensity}
@@ -161,17 +159,8 @@ export function ShellSidebar({
           setMobileSidebarOpen={setMobileSidebarOpen}
           setPanel={setPanel}
           navigate={navigate}
+          setNewSpaceOpen={setNewSpaceOpen}
           setPickerInfoTopic={setPickerInfoTopic}
-          spaceSwitcher={
-            currentSpaceId ? (
-              <SpaceSwitcher
-                rpc={rpc}
-                spaces={spaces}
-                currentSpaceId={currentSpaceId}
-                refresh={() => refreshBots()}
-              />
-            ) : null
-          }
         />
         {miniSidebar ? (
           <IconTooltip label={t`Search`}>
