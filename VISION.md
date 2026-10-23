@@ -1,69 +1,53 @@
 # Vision
 
-Rakazo is a single-user, web-only self-hosted home for AI teammates that persist, use computers, and finish work beyond a single chat.
-It serves people who want capable agents without surrendering their choice of models, infrastructure, or where their data lives.
-It owns exactly one thing: the durable home in which each AI teammate's identity, conversation, memory, routines, and computer remain available over time.
+Rakazo is a single-user, web-only self-hosted agent factory.
+Define, generate, run, observe, and orchestrate persistent agents while retaining control of their data, state, models, and infrastructure.
 
-## Persistent teammates, not disposable chats
+## Bots are persistent agents
 
-A bot is a continuing identity with one visible conversation and durable working state.
-A bot works in the background, returns with a result, and asks for help only when it needs information, judgment, authorization, or protected input.
-Useful work lands in the destination where it belongs instead of ending as an unsupported claim in chat.
-Changes that reduce bots to prompt presets or isolated one-off tasks work against the product.
+A bot has a durable identity, instructions, conversation, memory, routines, and working state.
+Bots can be created for distinct roles, organized into fleets and groups, and coordinated through messages, handoffs, and child agents.
+The factory makes a growing collection of agents manageable: the operator can see what is running, inspect results, and intervene when needed.
+Useful work lands in its intended destination and remains verifiable beyond a single chat.
+
+## Spaces isolate agent clusters
+
+One user owns one Organization and can create several Spaces.
+Each Space is a data and authorization boundary for its agent cluster, conversations, files, memory, computers, and integrations.
+Collaboration within a Space does not implicitly grant access across Spaces.
+Shared computers support collaboration; private computers provide stronger separation when a bot's work requires it.
+
+## Executors and workflows are replaceable
+
+Pi and the experimental Oh My Pi (omp) implement the shared AgentRuntime contract.
+Rakazo owns durable product state, orchestration, and product tools; executors supply their agent loop and native capabilities.
+Product tools follow Rakazo approval policy. Executor-native tools may intentionally execute outside that policy, with their host permissions and isolation boundaries made explicit.
+Secrets remain protected in every executor's logs, events, and persisted state.
+
+Skills, plugins, and reusable prompt or plugin stacks such as pstack should let operators adopt and adapt other people's workflows.
+Compatibility is verified per executor rather than assumed across all stacks.
+Cloud execution and cluster control are long-term goals, built on the same durable bot identities and replaceable execution boundaries.
 
 ## Ownership includes choice
 
 The complete core product runs on infrastructure controlled by its operator under an open-source license.
 No hosted vendor is required for models, computers, memory, integrations, or another core workflow.
-External services remain optional choices behind provider-neutral contracts, and new providers reuse shared contracts and deterministic offline conformance tests.
-Bot state remains inspectable, exportable, recoverable, and portable across provider failure or replacement.
+External services remain optional behind provider-neutral interfaces; new providers reuse shared contracts and deterministic offline conformance tests.
+Bot data and state remain inspectable, exportable, recoverable, and portable across provider failure or replacement.
 
-## One user, one web interface
+## Web is the only frontend
 
-The operator signs in with an email and password and works in one or more Spaces through the web UI.
-Shared behavior, orchestration, contracts, and reusable interface logic live in shared packages.
-Space and Organization remain data and authorization boundaries; the operator owns every Space in the one Organization, without multi-user management.
-Lark exposes the same bots and durable state through shared product contracts.
+The operator works through the web UI; integrations connect to shared product contracts.
+Frontends express intent and render state while shared packages and the backend own orchestration, authorization, validation, retries, recovery, and provider translation.
+The interface shows useful progress, results, and requests for help. Advanced controls appear when relevant, and copy stays minimal.
+A pending question or approval card remains answerable without preventing the user from chatting or starting other work.
 
-## Computers are durable places
+## Trust and scope
 
-A computer is persistent working state even when its underlying process, container, or virtual machine is suspended or replaced.
-A Team Computer shares files, installed tools, and a canonical browser identity among bots inside the same trust boundary.
-Rakazo gives each concurrently active Team bot a separate live desktop and browser process when the provider supports it, and unsupported providers expose the limitation instead of silently coupling control.
-Browser sign-ins are checkpointed into the shared identity and become available to desktops opened or restarted after that checkpoint.
-Concurrent Chromium processes do not write directly to one profile directory, and generation fencing prevents older desktops from overwriting newer shared state.
-A Private Computer remains the explicit choice when files, browser identity, or working state must not be shared with other bots.
-Computer resources start lazily and are released when inactive so configured capacity does not become permanently reserved memory.
-User takeover grants exclusive control of one bot's screen without unnecessarily blocking other bots on their own screens.
+Authentication, secret handling, sandbox boundaries, host commands, and integrations are security-sensitive product behavior.
+Important effects are verified independently, recovery preserves known-good state, and core tests remain deterministic and offline by default.
+A trusted host or third-party destination is not isolated from data deliberately sent to it.
 
-## Calm on the surface, rigorous underneath
-
-Chat shows the bot's response, useful progress, results, and genuine requests for help rather than its internal tool lifecycle.
-The interface removes explanatory copy and persistent chrome unless they change a decision, and advanced capability appears progressively when relevant.
-Frontends express intent and render state while the backend owns orchestration, authorization, validation, retries, recovery, and provider translation.
-Routines remain scheduled prompts rather than becoming a visual workflow language.
-Implementation complexity is acceptable only when it protects a real boundary or makes the user experience simpler and more reliable.
-
-## Trust is explicit and verified
-
-Spaces are authorization boundaries across which private chats, files, memory, computers, and integrations do not mix implicitly.
-Consequential actions respect explicit approval policy, and uncertain automated review fails toward asking rather than silently acting.
-Authentication, secret handling, sandbox boundaries, host commands, and integrations are treated as security-sensitive product behavior.
-Important effects are verified independently, recovery preserves known-good user state, and core tests remain deterministic and offline by default.
-
-## Current decisions
-
-This file records current product truth rather than an append-only decision log, and Git history preserves decisions that are later replaced.
-A pending question or approval card never blocks a chat: the user can always keep chatting and new work still runs, and the card stays answerable until someone replies.
-One bot has one continuous visible thread because continuity is part of its identity, while internal runs and attempts remain implementation detail.
-Team Computers share a persisted browser identity and isolate simultaneous live desktops when supported because shared login state and safe concurrency are both required.
-Private Computers isolate the entire working home because some trust boundaries must be stronger than collaboration convenience.
-Connections belong to the user or space rather than requiring repetitive per-bot setup because bots differ through role and state, not account plumbing.
-
-## Scope
-
-Rakazo is not a model provider, a hosted-only service, a general virtual-machine manager, a visual workflow builder, or a CI system.
-Rakazo does not promise that a trusted host computer or third-party destination is isolated from data deliberately sent to it.
-Implementation plans and technical documentation explain mechanics, but this file is authoritative when product direction conflicts with an older plan.
-A change aligns when it strengthens persistent useful work, user ownership, safe autonomy, shared product behavior, or calm interaction without weakening an explicit boundary.
-A change should be resisted when it creates mandatory lock-in, exposes internal machinery as user burden, weakens ownership or isolation, or adds capability without a durable place in a bot's work.
+Rakazo is not a model provider, a hosted-only service, or a general virtual-machine manager.
+Changes should strengthen persistent agent work, reusable workflows, orchestration, user ownership, or safe collaboration while preserving explicit boundaries.
+This file records current product direction; implementation plans explain mechanics, and Git history preserves superseded decisions.

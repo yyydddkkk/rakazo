@@ -1,8 +1,10 @@
 # Rakazo
 
-Rakazo is a single-user, web-only self-hosted home for persistent AI teammates.
+Rakazo is a single-user, web-only self-hosted agent factory.
+Define, run, observe, and orchestrate persistent bots in isolated Spaces.
 Run the API, worker, web UI, PostgreSQL, and Docker computers on infrastructure you control.
-Connect your own models through Pi; external services remain optional.
+Use replaceable executors (Pi or the experimental Oh My Pi), reuse Skills and workflows,
+and coordinate bots through fleet tools and group chats. External services remain optional.
 
 ## Features
 
